@@ -1,0 +1,248 @@
+{
+  "info": {
+    "_postman_id": "12345678-1234-1234-1234-123456789012",
+    "name": "Luminari GraphRAG Demo (Authenticated)",
+    "description": "Demonstration of the Luminari MUD Hybrid Graph RAG System combining semantic search with knowledge graph traversal. Uses API key authentication.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-API-Key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{SAGE_MCP_KEY}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "SAGE_API_KEY",
+      "value": "your-sage-api-key-here",
+      "type": "string",
+      "description": "API key for direct API access"
+    },
+    {
+      "key": "SAGE_MCP_KEY",
+      "value": "your-sage-mcp-key-here",
+      "type": "string",
+      "description": "API key for MCP operations"
+    },
+    {
+      "key": "base_url",
+      "value": "https://luminarimud.com/sage",
+      "type": "string",
+      "description": "Base URL for Luminari Sage API"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. GraphRAG Query - Void's Wake",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/mcp/tools/call",
+          "host": ["{{base_url}}"],
+          "path": ["mcp", "tools", "call"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"query_lore\",\n  \"arguments\": {\n    \"query\": \"What is Void's Wake? Tell me about this mysterious location\",\n    \"max_results\": 4,\n    \"threshold\": 0.2\n  }\n}"
+        },
+        "description": "Demonstrates hybrid RAG: semantic search + graph traversal for rich context about Void's Wake location"
+      }
+    },
+    {
+      "name": "2. GraphRAG Query - Forgotten Tide Pirates",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/mcp/tools/call",
+          "host": ["{{base_url}}"],
+          "path": ["mcp", "tools", "call"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"query_lore\",\n  \"arguments\": {\n    \"query\": \"Tell me about the Forgotten Tide pirate faction and their operations\",\n    \"max_results\": 3,\n    \"threshold\": 0.3\n  }\n}"
+        },
+        "description": "Shows how GraphRAG finds relevant text chunks AND discovers related entities through graph connections"
+      }
+    },
+    {
+      "name": "3. Entity Search - Find Void Witch",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/mcp/tools/call",
+          "host": ["{{base_url}}"],
+          "path": ["mcp", "tools", "call"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"search_entities\",\n  \"arguments\": {\n    \"query\": \"Void Witch\",\n    \"limit\": 3\n  }\n}"
+        },
+        "description": "Find entities in the knowledge graph by name or description"
+      }
+    },
+    {
+      "name": "4. Entity Details - Void's Wake Location",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/mcp/tools/call",
+          "host": ["{{base_url}}"],
+          "path": ["mcp", "tools", "call"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"get_entity_details\",\n  \"arguments\": {\n    \"entity_id\": \"40dd54d0-e6f0-43a1-a8ad-2e5c9dc17c14\"\n  }\n}"
+        },
+        "description": "Get comprehensive details about Void's Wake including properties and metadata"
+      }
+    },
+    {
+      "name": "5. Entity Relationships - Void's Wake (Thin List)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/mcp/tools/call",
+          "host": ["{{base_url}}"],
+          "path": ["mcp", "tools", "call"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"get_entity_relationships\",\n  \"arguments\": {\n    \"entity_id\": \"40dd54d0-e6f0-43a1-a8ad-2e5c9dc17c14\"\n  }\n}"
+        },
+        "description": "Lightweight list of 82 relationships for Void's Wake. Shows relationship IDs and basic info - use get_relationship_details for full properties."
+      }
+    },
+    {
+      "name": "5b. Relationship Details - Deep Dive",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/mcp/tools/call",
+          "host": ["{{base_url}}"],
+          "path": ["mcp", "tools", "call"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"get_relationship_details\",\n  \"arguments\": {\n    \"relationship_id\": 894\n  }\n}"
+        },
+        "description": "Get full details for relationship ID 894 (Void's Wake → Black Bitch). Shows progressive enhancement: list → details."
+      }
+    },
+    {
+      "name": "6. Entity Details - Forgotten Tide Faction",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/mcp/tools/call",
+          "host": ["{{base_url}}"],
+          "path": ["mcp", "tools", "call"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"get_entity_details\",\n  \"arguments\": {\n    \"entity_id\": \"b32e2a43-91a1-444a-a1bf-0a6c4b916aa4\"\n  }\n}"
+        },
+        "description": "Get details about the Forgotten Tide pirate organization"
+      }
+    },
+    {
+      "name": "7. System Stats - Knowledge Base Overview",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/mcp/tools/call",
+          "host": ["{{base_url}}"],
+          "path": ["mcp", "tools", "call"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"get_lore_stats\",\n  \"arguments\": {}\n}"
+        },
+        "description": "Shows the scale of the knowledge base: document counts, entity counts, relationship counts"
+      }
+    },
+    {
+      "name": "8. Advanced GraphRAG - Timeline Query",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/mcp/tools/call",
+          "host": ["{{base_url}}"],
+          "path": ["mcp", "tools", "call"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"query_lore\",\n  \"arguments\": {\n    \"query\": \"What are the major historical ages and timeline events in Lumia?\",\n    \"max_results\": 5,\n    \"threshold\": 0.2\n  }\n}"
+        },
+        "description": "Demonstrates GraphRAG on timeline/historical data with entity relationship discovery"
+      }
+    }
+  ]
+}

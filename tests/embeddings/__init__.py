@@ -1,0 +1,1 @@
+"""Embedding tests module."""

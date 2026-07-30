@@ -1,0 +1,384 @@
+{
+  "info": {
+    "_postman_id": "87654321-4321-4321-4321-210987654321",
+    "name": "Luminari Sage Chat Agent",
+    "description": "Interactive chat agent for exploring Luminari MUD lore through natural conversation with streaming responses, conversation management, and authentication.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-API-Key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{SAGE_API_KEY}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "SAGE_API_KEY",
+      "value": "your-sage-api-key-here",
+      "type": "string",
+      "description": "API key for chat agent and API access"
+    },
+    {
+      "key": "base_url",
+      "value": "https://luminarimud.com/sage",
+      "type": "string",
+      "description": "Base URL for Luminari Sage API"
+    },
+    {
+      "key": "conversation_id",
+      "value": "",
+      "type": "string",
+      "description": "Current conversation ID (auto-populated)"
+    },
+    {
+      "key": "stream_id",
+      "value": "",
+      "type": "string",
+      "description": "Current stream ID (auto-populated)"
+    }
+  ],
+  "item": [
+    {
+      "name": "🏥 Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/health",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "health"]
+        },
+        "description": "Check API health status - no authentication required"
+      },
+      "response": []
+    },
+    {
+      "name": "💬 Start Chat Conversation",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const response = pm.response.json();",
+              "    pm.collectionVariables.set('conversation_id', response.conversation_id);",
+              "    pm.collectionVariables.set('stream_id', response.stream_id);",
+              "    console.log('Conversation ID:', response.conversation_id);",
+              "    console.log('Stream ID:', response.stream_id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"Tell me about Paladine, the god of good dragons. What role does he play in Luminari lore?\",\n  \"user_id\": \"demo_user\",\n  \"metadata\": {\n    \"source\": \"postman_demo\",\n    \"session_type\": \"exploration\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat/message",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "chat", "message"]
+        },
+        "description": "Start a new conversation with the chat agent. Returns conversation ID and streaming URL."
+      },
+      "response": []
+    },
+    {
+      "name": "📖 Ask About Specific Lore",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const response = pm.response.json();",
+              "    pm.collectionVariables.set('conversation_id', response.conversation_id);",
+              "    pm.collectionVariables.set('stream_id', response.stream_id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"What can you tell me about Void's Wake? I heard it's connected to some dark magic and a mysterious witch.\",\n  \"user_id\": \"demo_user\",\n  \"conversation_id\": \"{{conversation_id}}\",\n  \"metadata\": {\n    \"intent\": \"exploration\",\n    \"topic\": \"locations\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat/message",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "chat", "message"]
+        },
+        "description": "Continue conversation asking about Void's Wake location and related lore."
+      },
+      "response": []
+    },
+    {
+      "name": "🏴‍☠️ Ask About Factions",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const response = pm.response.json();",
+              "    pm.collectionVariables.set('conversation_id', response.conversation_id);",
+              "    pm.collectionVariables.set('stream_id', response.stream_id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"Tell me about the pirate factions in Luminari. Who are the Forgotten Tide and what makes them special?\",\n  \"user_id\": \"demo_user\",\n  \"conversation_id\": \"{{conversation_id}}\",\n  \"metadata\": {\n    \"intent\": \"comparison\",\n    \"topic\": \"factions\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat/message",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "chat", "message"]
+        },
+        "description": "Ask about pirate factions and the Forgotten Tide organization."
+      },
+      "response": []
+    },
+    {
+      "name": "📜 Request Lore Story",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const response = pm.response.json();",
+              "    pm.collectionVariables.set('conversation_id', response.conversation_id);",
+              "    pm.collectionVariables.set('stream_id', response.stream_id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"Can you tell me a story about the ancient conflicts between the gods of light and darkness? How did these conflicts shape the world of Luminari?\",\n  \"user_id\": \"demo_user\",\n  \"conversation_id\": \"{{conversation_id}}\",\n  \"metadata\": {\n    \"intent\": \"story\",\n    \"topic\": \"mythology\",\n    \"narrative_style\": \"epic\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat/message",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "chat", "message"]
+        },
+        "description": "Request a narrative story about divine conflicts and world-shaping events."
+      },
+      "response": []
+    },
+    {
+      "name": "🔍 Complex Lore Query",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const response = pm.response.json();",
+              "    pm.collectionVariables.set('conversation_id', response.conversation_id);",
+              "    pm.collectionVariables.set('stream_id', response.stream_id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"How do the different magical systems in Luminari interact with each other? For example, how does divine magic from the gods relate to arcane magic and the mysterious void magic?\",\n  \"user_id\": \"demo_user\",\n  \"conversation_id\": \"{{conversation_id}}\",\n  \"metadata\": {\n    \"intent\": \"comparison\",\n    \"topic\": \"magic_systems\",\n    \"complexity\": \"advanced\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat/message",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "chat", "message"]
+        },
+        "description": "Ask a complex question comparing different magical systems and their interactions."
+      },
+      "response": []
+    },
+    {
+      "name": "📋 List Conversations",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat/conversations?user_id=demo_user&limit=10",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "chat", "conversations"],
+          "query": [
+            {
+              "key": "user_id",
+              "value": "demo_user",
+              "description": "Filter conversations by user"
+            },
+            {
+              "key": "limit",
+              "value": "10",
+              "description": "Maximum conversations to return"
+            }
+          ]
+        },
+        "description": "List recent conversations for a user with pagination support."
+      },
+      "response": []
+    },
+    {
+      "name": "💬 Get Conversation History",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat/conversations/{{conversation_id}}?limit=50",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "chat", "conversations", "{{conversation_id}}"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "50",
+              "description": "Maximum messages to return"
+            }
+          ]
+        },
+        "description": "Retrieve full conversation history with messages and metadata."
+      },
+      "response": []
+    },
+    {
+      "name": "🗑️ Delete Conversation",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat/conversations/{{conversation_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "chat", "conversations", "{{conversation_id}}"]
+        },
+        "description": "Delete a conversation and all its messages permanently."
+      },
+      "response": []
+    },
+    {
+      "name": "🧹 Cleanup Expired Streams",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/chat/cleanup",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "chat", "cleanup"]
+        },
+        "description": "Clean up expired streaming sessions (maintenance endpoint)."
+      },
+      "response": []
+    },
+    {
+      "name": "📊 System Statistics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/stats",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "stats"]
+        },
+        "description": "Get knowledge base statistics including documents, entities, and relationships."
+      },
+      "response": []
+    },
+    {
+      "name": "🔍 Search Entities",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/entities/search?query=Paladine&limit=10",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "entities", "search"],
+          "query": [
+            {
+              "key": "query",
+              "value": "Paladine",
+              "description": "Search term for entities"
+            },
+            {
+              "key": "limit",
+              "value": "10",
+              "description": "Maximum results to return"
+            },
+            {
+              "key": "entity_type",
+              "value": "",
+              "description": "Filter by entity type (optional)",
+              "disabled": true
+            }
+          ]
+        },
+        "description": "Search for entities in the knowledge graph by name or description."
+      },
+      "response": []
+    }
+  ]
+}

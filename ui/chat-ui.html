@@ -1,0 +1,2411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luminari Sage Chat</title>
+    <!-- vis.js Network Graph Library -->
+    <script
+        type="text/javascript"
+        src="https://unpkg.com/vis-network@10.1.0/standalone/umd/vis-network.min.js"
+        integrity="sha384-Kp7cMaDnHOrgpE8FT6l7tUuGIo7kBcBVcttockpXN/whrsQBcy9ZcpKmr/1a/nMo"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+    ></script>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --primary-dark: #357abd;
+            --secondary-color: #f39c12;
+            --background-color: #f8f9fa;
+            --surface-color: #ffffff;
+            --text-color: #2c3e50;
+            --text-muted: #6c757d;
+            --border-color: #e9ecef;
+            --error-color: #e74c3c;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --shadow: 0 2px 10px rgba(0,0,0,0.1);
+            --shadow-hover: 0 4px 20px rgba(0,0,0,0.15);
+            --border-radius: 12px;
+            --transition: all 0.3s ease;
+        }
+
+        [data-theme="dark"] {
+            --background-color: #1a1a1a;
+            --surface-color: #2d2d2d;
+            --text-color: #e9ecef;
+            --text-muted: #adb5bd;
+            --border-color: #495057;
+            --shadow: 0 2px 10px rgba(0,0,0,0.3);
+            --shadow-hover: 0 4px 20px rgba(0,0,0,0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            transition: var(--transition);
+            min-height: 100vh;
+            position: relative;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 20% 20%, rgba(74, 144, 226, 0.18), transparent 55%),
+                radial-gradient(circle at 80% 0%, rgba(243, 156, 18, 0.15), transparent 60%),
+                radial-gradient(circle at 50% 100%, rgba(39, 174, 96, 0.18), transparent 65%);
+            z-index: -1;
+            transition: var(--transition);
+        }
+
+        [data-theme="dark"] body::before {
+            background:
+                radial-gradient(circle at 20% 20%, rgba(74, 144, 226, 0.2), transparent 55%),
+                radial-gradient(circle at 80% 0%, rgba(155, 89, 182, 0.18), transparent 60%),
+                radial-gradient(circle at 50% 100%, rgba(241, 196, 15, 0.15), transparent 70%);
+            opacity: 0.7;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--surface-color);
+            box-shadow: var(--shadow);
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .theme-toggle, .settings-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 1rem;
+        }
+
+        .theme-toggle:hover, .settings-btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--error-color);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: var(--success-color);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .settings-panel {
+            background: var(--surface-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 1.5rem;
+            display: none;
+        }
+
+        .settings-panel.open {
+            display: block;
+        }
+
+        .settings-row {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .settings-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .form-group {
+            flex: 1;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--surface-color);
+            color: var(--text-color);
+            font-size: 0.9rem;
+            transition: var(--transition);
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+
+        .endpoint-warning {
+            display: block;
+            color: var(--warning-color);
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+            padding: 0.25rem 0.5rem;
+            background: rgba(243, 156, 18, 0.1);
+            border-radius: 4px;
+            border-left: 3px solid var(--warning-color);
+        }
+
+        .api-key-notice {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            margin-top: 0.25rem;
+            font-style: italic;
+        }
+
+        .clear-key-btn {
+            background: var(--error-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: var(--transition);
+        }
+
+        .clear-key-btn:hover {
+            background: #c0392b;
+            transform: translateY(-1px);
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .message {
+            display: flex;
+            gap: 1rem;
+            max-width: 85%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, var(--secondary-color), #e67e22);
+            color: white;
+        }
+
+        .message.assistant .message-avatar {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+        }
+
+        .message-content {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            position: relative;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            border: none;
+        }
+
+        .message.assistant .message-content {
+            border-left: 4px solid rgba(74, 144, 226, 0.4);
+        }
+
+        .message-content:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .message-content .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: currentColor;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            opacity: 0;
+            transition: var(--transition);
+        }
+
+        .message-content:hover .copy-btn {
+            opacity: 1;
+        }
+
+        .message-content .copy-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .thinking {
+            font-style: italic;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .suggested-questions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .suggested-question {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: var(--transition);
+        }
+
+        .suggested-question:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .input-container {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border-color);
+            background: var(--surface-color);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+
+        .input-group {
+            flex: 1;
+        }
+
+        .chat-input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--surface-color);
+            color: var(--text-color);
+            font-size: 1rem;
+            resize: vertical;
+            min-height: 60px;
+            max-height: 150px;
+            transition: var(--transition);
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+
+        .send-btn, .clear-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 1rem 1.5rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+
+        .send-btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .send-btn:disabled {
+            background: var(--text-muted);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .clear-btn {
+            background: var(--warning-color);
+        }
+
+        .clear-btn:hover {
+            background: #e67e22;
+        }
+
+        .error-message {
+            background: var(--error-color);
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .loading-indicator {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .loading-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .loading-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            animation: loadingBounce 1.4s infinite ease-in-out;
+        }
+
+        .loading-dot:nth-child(1) { animation-delay: -0.32s; }
+        .loading-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes loadingBounce {
+            0%, 80%, 100% {
+                transform: scale(0);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .typing-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 6px;
+            vertical-align: baseline;
+        }
+
+        .typing-indicator.hidden {
+            display: none;
+        }
+
+        .typing-indicator .typing-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            animation: loadingBounce 1.4s infinite ease-in-out;
+        }
+
+        .typing-indicator .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        .metadata {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .entities, .sources {
+            margin-top: 0.5rem;
+        }
+
+        .entity-tag, .source-tag {
+            display: inline-block;
+            background: var(--primary-color);
+            color: white;
+            padding: 0.2rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            margin: 0.2rem 0.2rem 0.2rem 0;
+        }
+
+        /* Reasoning Analysis Styles */
+        .reasoning-analysis {
+            background: linear-gradient(to right, rgba(74, 144, 226, 0.05), rgba(74, 144, 226, 0.02));
+            border: 1px solid var(--primary-color);
+            border-radius: var(--border-radius);
+            margin-top: 1rem;
+            overflow: hidden;
+        }
+
+        .reasoning-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .reasoning-header:hover {
+            background: var(--primary-dark);
+        }
+
+        .reasoning-content {
+            padding: 1rem;
+            display: block;
+        }
+
+        .reasoning-analysis:not(.expanded) .reasoning-content {
+            display: none;
+        }
+
+        .reasoning-analysis.expanded .reasoning-header::after {
+            content: '▼';
+        }
+
+        .reasoning-header::after {
+            content: '▶';
+            font-size: 0.8rem;
+        }
+
+        .reasoning-section {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: var(--surface-color);
+            border-radius: 8px;
+        }
+
+        .reasoning-section h5 {
+            color: var(--primary-color);
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .contribution-bars {
+            margin-top: 0.5rem;
+        }
+
+        .contribution-bar {
+            margin-bottom: 0.5rem;
+        }
+
+        .contribution-bar span {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .bar-container {
+            width: 100%;
+            height: 20px;
+            background: var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 0.25rem;
+        }
+
+        .bar {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .text-bar {
+            background: linear-gradient(to right, #3498db, #2980b9);
+        }
+
+        .graph-bar {
+            background: linear-gradient(to right, #27ae60, #229954);
+        }
+
+        .primary-sources-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .primary-sources-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            background: var(--background-color);
+            border-radius: 6px;
+            margin-bottom: 0.25rem;
+            font-size: 0.75rem;
+        }
+
+        .source-id {
+            font-family: monospace;
+            color: var(--text-muted);
+        }
+
+        .source-similarity {
+            color: var(--primary-color);
+        }
+
+        .source-contribution {
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+
+        .source-contribution.high---primary-source {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .source-contribution.medium---supporting-context {
+            background: var(--warning-color);
+            color: white;
+        }
+
+        .source-contribution.low {
+            background: var(--text-muted);
+            color: white;
+        }
+
+        .used-entities, .used-relationships {
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+
+        .used-relationships ul {
+            margin: 0.5rem 0 0 1rem;
+            padding: 0;
+        }
+
+        /* Make search details less obtrusive */
+        .search-details {
+            background: rgba(0, 0, 0, 0.02);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: var(--border-radius);
+            margin-top: 1rem;
+            overflow: hidden;
+            opacity: 0.8;
+            font-size: 0.85rem;
+        }
+
+        .search-details-header {
+            background: var(--text-muted);
+            color: white;
+            padding: 0.5rem 1rem;
+            font-weight: 500;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        .search-details-content {
+            padding: 0.75rem;
+            display: none; /* Hidden by default */
+        }
+
+        .search-details.expanded .search-details-content {
+            display: block;
+        }
+
+        .search-section {
+            margin-bottom: 1rem;
+            background: var(--surface-color);
+            border-radius: 8px;
+            padding: 0.5rem;
+        }
+
+        .search-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .search-section h4 {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            opacity: 0.8;
+            user-select: none;
+            padding: 0.5rem;
+            background: var(--surface-color);
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .search-section h4:hover {
+            background: rgba(100, 108, 255, 0.1);
+        }
+
+        .search-section h4::before {
+            content: '▶';
+            display: inline-block;
+            transition: transform 0.2s;
+            font-size: 0.7rem;
+        }
+
+        .search-section.expanded h4::before {
+            transform: rotate(90deg);
+        }
+
+        .search-section-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .search-section.expanded .search-section-content {
+            max-height: 2000px;
+        }
+
+        .episode-item, .entity-item, .relationship-item {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.8rem;
+        }
+
+        .episode-item:last-child, .entity-item:last-child, .relationship-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .episode-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .episode-title {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .similarity-score {
+            background: var(--success-color);
+            color: white;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+
+        .episode-ids {
+            font-family: monospace;
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .episode-preview {
+            color: var(--text-color);
+            line-height: 1.4;
+        }
+
+        .entity-name {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .entity-type {
+            background: var(--secondary-color);
+            color: white;
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            font-size: 0.6rem;
+            margin-left: 0.5rem;
+        }
+
+        .relationship-arrow {
+            color: var(--primary-color);
+            font-weight: bold;
+            margin: 0 0.5rem;
+        }
+
+        .relationship-props {
+            color: var(--text-muted);
+            font-style: italic;
+            margin-top: 0.3rem;
+            font-size: 0.7rem;
+        }
+
+        .toggle-details {
+            background: none;
+            border: none;
+            color: var(--primary-color);
+            cursor: pointer;
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+
+        /* Graph Visualization Styles */
+        .network-graph-container {
+            width: 100%;
+            height: 400px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--surface-color);
+            position: relative;
+            margin-top: 0.5rem;
+        }
+
+        .graph-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 100;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .graph-control-btn {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: var(--transition);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .graph-control-btn:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .graph-legend {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(255,255,255,0.95);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.5rem;
+            font-size: 0.7rem;
+            max-width: 200px;
+        }
+
+        [data-theme="dark"] .graph-legend {
+            background: rgba(45,45,45,0.95);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+
+        .toggle-details:hover {
+            background: var(--background-color);
+        }
+
+        .details-collapsed {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                height: 100vh;
+                border-radius: 0;
+            }
+
+            .header {
+                border-radius: 0;
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 1.25rem;
+            }
+
+            .header-controls {
+                gap: 0.5rem;
+            }
+
+            .settings-row {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .input-row {
+                flex-direction: column;
+                gap: 0.5rem;
+                align-items: stretch;
+            }
+
+            .message {
+                max-width: 95%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🧙‍♂️ Luminari Sage</h1>
+            <div class="header-controls">
+                <div class="connection-status">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span id="statusText">Disconnected</span>
+                </div>
+                <button class="settings-btn" id="settingsBtn" title="Settings">⚙️</button>
+                <button class="theme-toggle" id="themeToggle" title="Toggle Theme">🌙</button>
+            </div>
+        </header>
+
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-row">
+                <div class="form-group">
+                    <label for="apiEndpoint">API Endpoint</label>
+                    <input type="text" id="apiEndpoint" value="http://localhost:8003" placeholder="http://localhost:8003">
+                    <small id="endpointWarning" class="endpoint-warning" style="display:none;">Remote API endpoints must use HTTPS</small>
+                </div>
+                <div class="form-group">
+                    <label for="apiKey">API Key</label>
+                    <div style="display:flex;gap:0.5rem;">
+                        <input type="password" id="apiKey" placeholder="Enter your SAGE_API_KEY" style="flex:1;">
+                        <button type="button" id="clearApiKey" class="clear-key-btn" title="Clear API Key">Clear</button>
+                    </div>
+                    <small class="api-key-notice">API key stays in memory only and is cleared on reload</small>
+                </div>
+                <div class="form-group">
+                    <label for="engineSelect">Engine</label>
+                    <select id="engineSelect">
+                        <option value="langchain" selected>LangChain</option>
+                        <option value="legacy">Legacy</option>
+                    </select>
+                </div>
+                <div class="form-group" style="display:flex;align-items:flex-end;">
+                    <label style="display:flex;align-items:center;gap:6px;margin:0;">
+                        <input type="checkbox" id="traceCheckbox" style="margin-right:6px;"> Trace
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="message assistant">
+                    <div class="message-avatar">🧙‍♂️</div>
+                    <div class="message-content">
+                        <p>Welcome to Luminari Sage! I'm your guide to the rich fantasy world of Luminari MUD.</p>
+                        <p>Ask me about deities, locations, magic, history, or any aspect of the lore you'd like to explore.</p>
+                        <div class="suggested-questions">
+                            <button class="suggested-question" onclick="sendMessage('Tell me about the Void\'s Wake')">Tell me about the Void's Wake</button>
+                            <button class="suggested-question" onclick="sendMessage('What are the ages of Luminari?')">What are the ages of Luminari?</button>
+                            <button class="suggested-question" onclick="sendMessage('Tell me about the Knights')">Tell me about the Knights</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-container">
+                <div class="input-row">
+                    <div class="input-group">
+                        <textarea class="chat-input" id="chatInput" placeholder="Ask about Luminari lore..." rows="2"></textarea>
+                    </div>
+                    <button class="send-btn" id="sendBtn">Send</button>
+                    <button class="clear-btn" id="clearBtn">Clear</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class LuminariChat {
+            constructor() {
+                this.messages = document.getElementById('messages');
+                this.chatInput = document.getElementById('chatInput');
+                this.sendBtn = document.getElementById('sendBtn');
+                this.clearBtn = document.getElementById('clearBtn');
+                this.errorMessage = document.getElementById('errorMessage');
+                this.statusDot = document.getElementById('statusDot');
+                this.statusText = document.getElementById('statusText');
+                this.settingsPanel = document.getElementById('settingsPanel');
+                this.settingsBtn = document.getElementById('settingsBtn');
+                this.themeToggle = document.getElementById('themeToggle');
+                this.apiEndpoint = document.getElementById('apiEndpoint');
+                this.apiKey = document.getElementById('apiKey');
+                this.engineSelect = document.getElementById('engineSelect');
+                this.traceCheckbox = document.getElementById('traceCheckbox');
+                this.initialMessagesHTML = this.messages.innerHTML;
+
+                this.currentUserId = 'web-user-' + Math.random().toString(36).substr(2, 9);
+                this.conversationId = null;
+                this.isStreaming = false;
+                this.currentEventSource = null;
+
+                this.initializeEventListeners();
+                this.loadSettings();
+                this.updateConnectionStatus();
+            }
+
+            initializeEventListeners() {
+                this.sendBtn = document.getElementById('sendBtn');
+                this.clearBtn = document.getElementById('clearBtn');
+
+                // Send message on Enter (Shift+Enter for new line)
+                this.chatInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.handleSendMessage();
+                    }
+                });
+
+                // Settings panel toggle
+                this.settingsBtn.addEventListener('click', () => {
+                    this.settingsPanel.classList.toggle('open');
+                });
+
+                // Theme toggle
+                this.themeToggle.addEventListener('click', () => {
+                    this.toggleTheme();
+                });
+
+                // Save settings on change
+                this.apiEndpoint.addEventListener('change', () => this.saveSettings());
+                this.apiEndpoint.addEventListener('input', () => this.checkEndpointSecurity());
+                this.apiKey.addEventListener('change', () => this.saveSettings());
+                if (this.engineSelect) this.engineSelect.addEventListener('change', () => this.saveSettings());
+                if (this.traceCheckbox) this.traceCheckbox.addEventListener('change', () => this.saveSettings());
+
+                // Clear API key button
+                const clearKeyBtn = document.getElementById('clearApiKey');
+                if (clearKeyBtn) {
+                    clearKeyBtn.addEventListener('click', () => this.clearApiKey());
+                }
+
+                // Back/forward cache can preserve form controls after navigation.
+                // Clear the credential whenever the document leaves the active page.
+                window.addEventListener('pagehide', () => this.clearApiKey());
+
+                this.sendBtn.addEventListener('click', () => this.handleSendMessage());
+                this.clearBtn.addEventListener('click', () => this.handleClear());
+
+                // Auto-resize textarea
+                this.chatInput.addEventListener('input', () => {
+                    this.chatInput.style.height = 'auto';
+                    this.chatInput.style.height = this.chatInput.scrollHeight + 'px';
+                });
+            }
+
+            loadSettings() {
+                // Load non-sensitive settings from localStorage
+                const saved = localStorage.getItem('luminari-chat-settings');
+                if (saved) {
+                    try {
+                        const settings = JSON.parse(saved);
+                        this.apiEndpoint.value = settings.apiEndpoint || 'http://localhost:8003';
+                        if (settings.engine && this.engineSelect) this.engineSelect.value = settings.engine;
+                        if (typeof settings.trace === 'boolean' && this.traceCheckbox) this.traceCheckbox.checked = settings.trace;
+                    } catch {
+                        localStorage.removeItem('luminari-chat-settings');
+                    }
+                }
+
+                // Remove values written by older versions. Credentials are now
+                // kept only in this page's password input and never persisted.
+                sessionStorage.removeItem('luminari-api-key');
+                this.apiKey.value = '';
+
+                // Load theme
+                const theme = localStorage.getItem('luminari-chat-theme') || 'light';
+                document.body.setAttribute('data-theme', theme);
+                this.themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+
+                // Check endpoint security
+                this.checkEndpointSecurity();
+            }
+
+            saveSettings() {
+                // Save non-sensitive settings to localStorage (persists across sessions)
+                const settings = {
+                    apiEndpoint: this.apiEndpoint.value,
+                    engine: this.engineSelect ? this.engineSelect.value : 'langchain',
+                    trace: this.traceCheckbox ? this.traceCheckbox.checked : false
+                    // NOTE: API key intentionally NOT saved to localStorage for security
+                };
+                localStorage.setItem('luminari-chat-settings', JSON.stringify(settings));
+
+                this.checkEndpointSecurity();
+                this.updateConnectionStatus();
+            }
+
+            getValidatedEndpoint() {
+                const rawEndpoint = this.apiEndpoint.value.trim();
+                if (!rawEndpoint) {
+                    throw new Error('Enter an API endpoint');
+                }
+
+                let endpoint;
+                try {
+                    endpoint = new URL(rawEndpoint);
+                } catch {
+                    throw new Error('Enter a valid API endpoint URL');
+                }
+
+                if (!['http:', 'https:'].includes(endpoint.protocol)) {
+                    throw new Error('The API endpoint must use HTTP or HTTPS');
+                }
+                if (endpoint.username || endpoint.password) {
+                    throw new Error('Do not put credentials in the API endpoint URL');
+                }
+
+                const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1']);
+                if (endpoint.protocol !== 'https:' && !loopbackHosts.has(endpoint.hostname)) {
+                    throw new Error('Remote API endpoints must use HTTPS');
+                }
+
+                return endpoint.toString().replace(/\/$/, '');
+            }
+
+            checkEndpointSecurity() {
+                const warning = document.getElementById('endpointWarning');
+                if (!warning || !this.apiEndpoint.value.trim()) {
+                    if (warning) warning.style.display = 'none';
+                    return false;
+                }
+
+                try {
+                    this.getValidatedEndpoint();
+                    warning.style.display = 'none';
+                    return true;
+                } catch (error) {
+                    warning.textContent = error.message;
+                    warning.style.display = 'block';
+                    return false;
+                }
+            }
+
+            clearApiKey() {
+                this.apiKey.value = '';
+                this.updateConnectionStatus();
+            }
+
+            toggleTheme() {
+                const current = document.body.getAttribute('data-theme') || 'light';
+                const newTheme = current === 'light' ? 'dark' : 'light';
+                document.body.setAttribute('data-theme', newTheme);
+                this.themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+                localStorage.setItem('luminari-chat-theme', newTheme);
+            }
+
+            updateConnectionStatus() {
+                const hasEndpoint = this.checkEndpointSecurity();
+                const hasKey = this.apiKey.value.trim();
+
+                if (hasEndpoint && hasKey) {
+                    this.statusDot.classList.add('connected');
+                    this.statusText.textContent = 'Ready';
+                } else {
+                    this.statusDot.classList.remove('connected');
+                    this.statusText.textContent = 'Configuration needed';
+                }
+            }
+
+            showError(message, duration = 5000) {
+                this.errorMessage.textContent = message;
+                this.errorMessage.classList.add('show');
+                setTimeout(() => {
+                    this.errorMessage.classList.remove('show');
+                }, duration);
+            }
+
+            hideError() {
+                this.errorMessage.classList.remove('show');
+            }
+
+            addMessage(type, content, metadata = null) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${type}`;
+
+                const avatar = document.createElement('div');
+                avatar.className = 'message-avatar';
+                avatar.textContent = type === 'user' ? '👤' : '🧙‍♂️';
+
+                const messageContent = document.createElement('div');
+                messageContent.className = 'message-content';
+
+                // Add copy button
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'copy-btn';
+                copyBtn.textContent = 'Copy';
+                messageContent.appendChild(copyBtn);
+
+                // Format content
+                const contentP = document.createElement('p');
+                contentP.innerHTML = this.formatContent(content);
+                messageContent.appendChild(contentP);
+                copyBtn.onclick = () => this.copyToClipboard(contentP.textContent.trim() || content);
+
+                // Add metadata if available
+                if (metadata) {
+                    const metadataDiv = document.createElement('div');
+                    metadataDiv.className = 'metadata';
+
+                    if (metadata.entities && metadata.entities.length > 0) {
+                        const entitiesDiv = document.createElement('div');
+                        entitiesDiv.className = 'entities';
+                        entitiesDiv.innerHTML = '<strong>Entities found:</strong> ';
+                        metadata.entities.forEach(entity => {
+                            const tag = document.createElement('span');
+                            tag.className = 'entity-tag';
+                            tag.textContent = `${entity.name} (${entity.type})`;
+                            entitiesDiv.appendChild(tag);
+                        });
+                        metadataDiv.appendChild(entitiesDiv);
+                    }
+
+                    if (metadata.sources && metadata.sources.length > 0) {
+                        const sourcesDiv = document.createElement('div');
+                        sourcesDiv.className = 'sources';
+                        sourcesDiv.innerHTML = '<strong>Sources:</strong> ';
+                        metadata.sources.forEach((source, index) => {
+                            const tag = document.createElement('span');
+                            tag.className = 'source-tag';
+                            tag.textContent = `Source ${index + 1} (${source.similarity.toFixed(2)})`;
+                            tag.title = source.text_preview;
+                            sourcesDiv.appendChild(tag);
+                        });
+                        metadataDiv.appendChild(sourcesDiv);
+                    }
+
+                    if (metadata.suggested_questions && metadata.suggested_questions.length > 0) {
+                        const suggestionsDiv = document.createElement('div');
+                        suggestionsDiv.className = 'suggested-questions';
+                        metadata.suggested_questions.forEach(question => {
+                            const btn = document.createElement('button');
+                            btn.className = 'suggested-question';
+                            btn.textContent = question;
+                            btn.onclick = () => this.sendMessage(question);
+                            suggestionsDiv.appendChild(btn);
+                        });
+                        metadataDiv.appendChild(suggestionsDiv);
+                    }
+
+                    messageContent.appendChild(metadataDiv);
+                }
+
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(messageContent);
+                this.messages.appendChild(messageDiv);
+
+                this.scrollToBottom();
+                return messageDiv;
+            }
+
+            formatContent(content) {
+                const escaped = this.escapeHtml(content);
+                // Enhanced markdown formatting - process headers from smallest to largest to avoid conflicts
+                return escaped
+                    .replace(/^##### (.*$)/gim, '<h5 style="color: var(--primary-color); margin: 0.8rem 0 0.4rem 0; font-size: 0.95rem;">$1</h5>')
+                    .replace(/^#### (.*$)/gim, '<h4 style="color: var(--primary-color); margin: 0.9rem 0 0.45rem 0; font-size: 1rem;">$1</h4>')
+                    .replace(/^### (.*$)/gim, '<h3 style="color: var(--primary-color); margin: 1rem 0 0.5rem 0; font-size: 1.1rem;">$1</h3>')
+                    .replace(/^## (.*$)/gim, '<h2 style="color: var(--primary-color); margin: 1.2rem 0 0.6rem 0; font-size: 1.3rem;">$1</h2>')
+                    .replace(/^# (.*$)/gim, '<h1 style="color: var(--primary-color); margin: 1.5rem 0 0.8rem 0; font-size: 1.5rem;">$1</h1>')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/`(.*?)`/g, '<code style="background: var(--background-color); padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace;">$1</code>')
+                    .replace(/\n/g, '<br>');
+            }
+
+            escapeHtml(value) {
+                return String(value ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            safeNumber(value, fallback = 0) {
+                const number = Number(value);
+                return Number.isFinite(number) ? number : fallback;
+            }
+
+            copyToClipboard(text) {
+                navigator.clipboard.writeText(text).then(() => {
+                    // Could show a toast notification here
+                }).catch(() => {
+                    this.showError('Could not copy text to the clipboard');
+                });
+            }
+
+            scrollToBottom() {
+                this.messages.scrollTop = this.messages.scrollHeight;
+            }
+
+            async handleSendMessage() {
+                const message = this.chatInput.value.trim();
+                if (!message || this.isStreaming) return;
+
+                await this.sendMessage(message);
+                this.chatInput.value = '';
+                this.chatInput.style.height = 'auto';
+            }
+
+            async sendMessage(message) {
+                if (!this.apiKey.value.trim()) {
+                    this.showError('Please enter your API key in settings');
+                    this.settingsPanel.classList.add('open');
+                    return;
+                }
+
+                let endpoint;
+                try {
+                    endpoint = this.getValidatedEndpoint();
+                } catch (error) {
+                    this.showError(error.message);
+                    this.settingsPanel.classList.add('open');
+                    return;
+                }
+
+                this.hideError();
+                this.isStreaming = true;
+                this.sendBtn.disabled = true;
+
+                // Add user message
+                this.addMessage('user', message);
+
+                try {
+                    // Create conversation
+                    const response = await fetch(`${endpoint}/api/v1/chat/message`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-API-Key': this.apiKey.value
+                        },
+                        body: JSON.stringify({
+                            message: message,
+                            user_id: this.currentUserId,
+                            conversation_id: this.conversationId,
+                            engine: this.engineSelect ? this.engineSelect.value : 'langchain'
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    if (data.conversation_id) {
+                        this.conversationId = data.conversation_id;
+                    }
+
+                    // Start streaming
+                    await this.streamResponse(data.stream_id);
+
+                } catch {
+                    this.showError('Failed to send message');
+                    this.addMessage('assistant', '❌ The request failed. Please try again.');
+                } finally {
+                    this.isStreaming = false;
+                    this.sendBtn.disabled = false;
+                }
+            }
+
+            async streamResponse(streamId) {
+                const assistantMessage = this.addMessage('assistant', '');
+                const contentP = assistantMessage.querySelector('p');
+                const typingIndicator = document.createElement('span');
+                typingIndicator.className = 'typing-indicator hidden';
+                typingIndicator.innerHTML = `
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                `;
+                contentP.appendChild(typingIndicator);
+                const showTypingIndicator = () => {
+                    typingIndicator.classList.remove('hidden');
+                    contentP.appendChild(typingIndicator);
+                };
+                const hideTypingIndicator = () => {
+                    typingIndicator.classList.add('hidden');
+                    if (typingIndicator.parentNode) {
+                        typingIndicator.parentNode.removeChild(typingIndicator);
+                    }
+                };
+
+                // Add loading indicator
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'loading-indicator';
+                loadingDiv.innerHTML = `
+                    <span>Thinking</span>
+                    <div class="loading-dots">
+                        <div class="loading-dot"></div>
+                        <div class="loading-dot"></div>
+                        <div class="loading-dot"></div>
+                    </div>
+                `;
+                contentP.appendChild(loadingDiv);
+
+                let fullContent = '';
+                let currentThinking = '';
+                let entities = [];
+                let sources = [];
+                let suggestedQuestions = [];
+                let searchDetails = null;
+                let reasoningData = null;
+
+                try {
+                    const endpoint = this.getValidatedEndpoint();
+                    // Use fetch() instead of EventSource to support custom headers
+                        const traceParam = (this.engineSelect && this.engineSelect.value === 'langchain' && this.traceCheckbox && this.traceCheckbox.checked) ? '?trace=1' : '';
+                        const response = await fetch(`${endpoint}/api/v1/chat/stream/${encodeURIComponent(streamId)}${traceParam}`, {
+                        headers: {
+                            'X-API-Key': this.apiKey.value,
+                            'Accept': 'text/event-stream',
+                            'Cache-Control': 'no-cache'
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); // Keep incomplete line in buffer
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+
+                                    switch (data.type) {
+                                        case 'status':
+                                            currentThinking = data.content;
+                                            loadingDiv.querySelector('span').textContent = currentThinking;
+                                            break;
+
+                                        case 'tool_status':
+                                            // Display tool status messages in the loading indicator
+                                            if (data.message && loadingDiv && loadingDiv.querySelector) {
+                                                loadingDiv.querySelector('span').textContent = data.message;
+                                            }
+                                            break;
+                                        case 'route':
+                                            if (!assistantMessage.querySelector('.engine-route')) {
+                                                const er = document.createElement('div');
+                                                er.className='engine-route';
+                                                er.style.cssText='font-size:0.65rem;opacity:0.75;margin-bottom:4px;';
+                                                er.textContent = `[${data.engine||'engine'}:${data.route} conf=${(data.confidence||0).toFixed(2)}]`;
+                                                contentP.prepend(er);
+                                            }
+                                            break;
+                                        case 'token':
+                                            if (loadingDiv.parentNode) loadingDiv.remove();
+                                            fullContent += data.content;
+                                            contentP.innerHTML = this.formatContent(fullContent);
+                                            showTypingIndicator();
+                                            this.scrollToBottom();
+                                            break;
+                                        case 'final':
+                                            if (loadingDiv.parentNode) loadingDiv.remove();
+                                            // Check for content field from ReAct service or answer field from other services
+                                            if (data.content) {
+                                                fullContent = data.content;
+                                            } else if (data.answer) {
+                                                fullContent = data.answer;
+                                            } else if (!fullContent) {
+                                                // Fallback for routes that might not have answer field
+                                                if (data.plan) {
+                                                    fullContent = '\n\nQuest Plan:\n' + JSON.stringify(data.plan, null, 2);
+                                                } else if (data.narrative) {
+                                                    // This should not happen as narrative route provides answer field
+                                                    fullContent = data.narrative.scene || JSON.stringify(data.narrative, null, 2);
+                                                }
+                                            }
+
+                                            const formattedContent = this.formatContent(fullContent);
+                                            contentP.innerHTML = formattedContent;
+                                            hideTypingIndicator();
+                                            this.scrollToBottom();
+                                            return;
+
+                                        case 'content':
+                                            if (loadingDiv.parentNode) {
+                                                loadingDiv.remove();
+                                            }
+                                            fullContent += data.content;
+                                            contentP.innerHTML = this.formatContent(fullContent);
+                                            showTypingIndicator();
+                                            this.scrollToBottom();
+                                            break;
+
+                                        case 'search_details':
+                                            searchDetails = data.data;
+                                            break;
+
+                                        case 'reasoning':
+                                            reasoningData = data.data;
+                                            break;
+
+                                        case 'follow_up_questions':
+                                            suggestedQuestions = data.data.suggested_questions || [];
+                                            break;
+
+                                        case 'complete':
+                                            if (loadingDiv.parentNode) {
+                                                loadingDiv.remove();
+                                            }
+                                            hideTypingIndicator();
+
+                                            // Add reasoning analysis if available
+                                            if (reasoningData) {
+                                                this.addReasoningAnalysisToMessage(assistantMessage, reasoningData);
+                                            }
+
+                                            // Add search details if available
+                                            if (searchDetails) {
+                                                this.addSearchDetailsToMessage(assistantMessage, searchDetails);
+                                            }
+
+                                            // Add follow-up questions
+                                            if (suggestedQuestions.length > 0) {
+                                                this.addSuggestionsToMessage(assistantMessage, suggestedQuestions);
+                                            }
+
+                                            this.scrollToBottom();
+                                            return; // Exit the streaming loop
+
+                                        case 'error':
+                                            if (loadingDiv.parentNode) {
+                                                loadingDiv.remove();
+                                            }
+                                            contentP.innerHTML = this.formatContent(`❌ ${data.content}`);
+                                            this.showError(data.content);
+                                            return; // Exit the streaming loop
+
+                                        case 'tool_call':
+                                        case 'tool_result':
+                                            break;
+
+                                        // ReAct service events
+                                        case 'reasoning':
+                                            // Show reasoning step as a status update
+                                            if (loadingDiv.parentNode) {
+                                                loadingDiv.textContent = data.content || 'Reasoning...';
+                                            }
+                                            break;
+
+                                        case 'tool_use':
+                                            // Show tool being used
+                                            if (loadingDiv.parentNode) {
+                                                loadingDiv.textContent = data.status || `Using ${data.tool}...`;
+                                            }
+                                            break;
+
+                                        case 'observation':
+                                            // Show observation as status
+                                            if (loadingDiv.parentNode) {
+                                                loadingDiv.textContent = data.content || 'Processing observation...';
+                                            }
+                                            break;
+
+                                        default:
+                                            break;
+                                    }
+                                } catch {
+                                    // Ignore malformed events without exposing raw stream data.
+                                }
+                            }
+                        }
+                    }
+
+                } catch {
+                    if (loadingDiv.parentNode) {
+                        loadingDiv.remove();
+                    }
+                    hideTypingIndicator();
+                    contentP.textContent = '❌ The response stream failed. Please try again.';
+                    this.showError('Streaming failed');
+                }
+            }
+
+            handleClear() {
+                this.messages.innerHTML = this.initialMessagesHTML;
+                this.conversationId = null;
+            }
+
+            addReasoningAnalysisToMessage(messageDiv, reasoningData) {
+                const messageContent = messageDiv.querySelector('.message-content');
+
+                const analysisDiv = document.createElement('div');
+                analysisDiv.className = 'reasoning-analysis';
+
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'reasoning-header';
+                headerDiv.innerHTML = `📊 Response Construction Analysis`;
+                headerDiv.onclick = () => {
+                    analysisDiv.classList.toggle('expanded');
+                };
+                analysisDiv.appendChild(headerDiv);
+
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'reasoning-content';
+
+                // Search Strategy
+                const strategyDiv = document.createElement('div');
+                strategyDiv.className = 'reasoning-section';
+                strategyDiv.innerHTML = `
+                    <h5>🔍 Search Strategy</h5>
+                    <p>${this.escapeHtml(reasoningData.search_strategy)}</p>
+                `;
+                contentDiv.appendChild(strategyDiv);
+
+                // Contribution Analysis
+                const contributionDiv = document.createElement('div');
+                contributionDiv.className = 'reasoning-section';
+                const boundedPercent = (value, fallback) =>
+                    Math.min(100, Math.max(0, this.safeNumber(value, fallback)));
+                const graphPercent = boundedPercent(
+                    reasoningData.graph_enhancement?.graph_contribution_percent,
+                    0
+                );
+                const textPercent = boundedPercent(
+                    reasoningData.graph_enhancement?.text_contribution_percent,
+                    100
+                );
+                const subgraphPercent = boundedPercent(
+                    reasoningData.graph_enhancement?.subgraph_contribution_percent,
+                    0
+                );
+
+                let contributionBars = [];
+                if (textPercent > 0) {
+                    contributionBars.push(`
+                        <div class="contribution-bar">
+                            <span>Text Episodes: ${textPercent}%</span>
+                            <div class="bar-container">
+                                <div class="bar text-bar" style="width: ${textPercent}%"></div>
+                            </div>
+                        </div>`);
+                }
+                if (graphPercent > 0) {
+                    contributionBars.push(`
+                        <div class="contribution-bar">
+                            <span>Graph Entities: ${graphPercent}%</span>
+                            <div class="bar-container">
+                                <div class="bar graph-bar" style="width: ${graphPercent}%"></div>
+                            </div>
+                        </div>`);
+                }
+                if (subgraphPercent > 0) {
+                    contributionBars.push(`
+                        <div class="contribution-bar">
+                            <span>Subgraph Structure: ${subgraphPercent}%</span>
+                            <div class="bar-container">
+                                <div class="bar subgraph-bar" style="width: ${subgraphPercent}%; background: linear-gradient(to right, #9b59b6, #8e44ad);"></div>
+                            </div>
+                        </div>`);
+                }
+
+                contributionDiv.innerHTML = `
+                    <h5>📈 Data Source Contribution</h5>
+                    <div class="contribution-bars">
+                        ${contributionBars.join('')}
+                    </div>
+                `;
+                contentDiv.appendChild(contributionDiv);
+
+                // Primary Sources
+                if (reasoningData.primary_sources && reasoningData.primary_sources.length > 0) {
+                    const sourcesDiv = document.createElement('div');
+                    sourcesDiv.className = 'reasoning-section';
+                    let sourcesHtml = '<h5>📚 Primary Sources</h5><ul class="primary-sources-list">';
+                    reasoningData.primary_sources.forEach(src => {
+                        const episodeId = this.escapeHtml(String(src.episode_id ?? '').substring(0, 8));
+                        const similarity = this.safeNumber(src.similarity).toFixed(3);
+                        const contribution = this.escapeHtml(src.contribution);
+                        const contributionClass = String(src.contribution ?? '')
+                            .toLowerCase()
+                            .replace(/[^a-z0-9_-]+/g, '-');
+                        sourcesHtml += `
+                            <li>
+                                <span class="source-id">Episode ${episodeId}...</span>
+                                <span class="source-similarity">Similarity: ${similarity}</span>
+                                <span class="source-contribution ${contributionClass}">${contribution}</span>
+                            </li>
+                        `;
+                    });
+                    sourcesHtml += '</ul>';
+                    sourcesDiv.innerHTML = sourcesHtml;
+                    contentDiv.appendChild(sourcesDiv);
+                }
+
+                // Graph Enhancement Details
+                if (reasoningData.graph_enhancement) {
+                    const graphDiv = document.createElement('div');
+                    graphDiv.className = 'reasoning-section';
+                    let graphHtml = '<h5>🔗 Graph Enhancement</h5>';
+
+                    // Subgraph Analysis
+                    if (reasoningData.graph_enhancement.subgraphs_identified?.length > 0) {
+                        graphHtml += '<div class="subgraph-analysis"><strong>Connected Subgraphs Identified:</strong>';
+                        graphHtml += '<div class="subgraph-list">';
+                        reasoningData.graph_enhancement.subgraphs_identified.forEach(sg => {
+                            const keyEntities = (sg.key_entities || [])
+                                .slice(0, 3)
+                                .map(entity => this.escapeHtml(entity))
+                                .join(', ');
+                            graphHtml += `
+                                <div class="subgraph-item" style="margin: 0.5rem 0; padding: 0.5rem; background: rgba(155, 89, 182, 0.1); border-left: 3px solid #9b59b6;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                        <strong>Subgraph #${this.escapeHtml(sg.rank)}</strong>
+                                        <span style="color: #9b59b6;">Score: ${this.escapeHtml(sg.total_score)}</span>
+                                    </div>
+                                    <div style="font-size: 0.9em; color: #666;">
+                                        ${this.escapeHtml(sg.size)} entities, ${this.escapeHtml(sg.edges)} relationships
+                                    </div>
+                                    <div style="font-size: 0.85em; margin-top: 0.25rem;">
+                                        <span style="color: #3498db;">Relevance: ${this.escapeHtml(sg.semantic_relevance)}</span> |
+                                        <span style="color: #2ecc71;">Connectivity: ${this.escapeHtml(sg.connectivity)}</span>
+                                    </div>
+                                    ${sg.key_entities?.length > 0 ? `
+                                        <div style="font-size: 0.85em; margin-top: 0.25rem; color: #555;">
+                                            Key entities: ${keyEntities}${sg.key_entities.length > 3 ? '...' : ''}
+                                        </div>
+                                    ` : ''}
+                                </div>`;
+                        });
+                        graphHtml += '</div></div>';
+                    }
+
+                    if (reasoningData.graph_enhancement.entities_used?.length > 0) {
+                        graphHtml += '<div class="used-entities"><strong>Entities Used:</strong> ';
+                        graphHtml += reasoningData.graph_enhancement.entities_used
+                            .map(entity => this.escapeHtml(entity))
+                            .join(', ');
+                        graphHtml += '</div>';
+                    }
+
+                    if (reasoningData.graph_enhancement.relationships_leveraged?.length > 0) {
+                        graphHtml += '<div class="used-relationships"><strong>Relationships:</strong><ul>';
+                        reasoningData.graph_enhancement.relationships_leveraged.slice(0, 5).forEach(rel => {
+                            graphHtml += `<li>${this.escapeHtml(rel)}</li>`;
+                        });
+                        if (reasoningData.graph_enhancement.relationships_leveraged.length > 5) {
+                            graphHtml += `<li>...and ${reasoningData.graph_enhancement.relationships_leveraged.length - 5} more</li>`;
+                        }
+                        graphHtml += '</ul></div>';
+                    }
+
+                    graphDiv.innerHTML = graphHtml;
+                    contentDiv.appendChild(graphDiv);
+                }
+
+                // Decision Points
+                if (reasoningData.decision_points && reasoningData.decision_points.length > 0) {
+                    const decisionsDiv = document.createElement('div');
+                    decisionsDiv.className = 'reasoning-section';
+                    let decisionsHtml = '<h5>🎯 Decision Points</h5><ul>';
+                    reasoningData.decision_points.forEach(dp => {
+                        decisionsHtml += `<li>${this.escapeHtml(dp)}</li>`;
+                    });
+                    decisionsHtml += '</ul>';
+                    decisionsDiv.innerHTML = decisionsHtml;
+                    contentDiv.appendChild(decisionsDiv);
+                }
+
+                analysisDiv.appendChild(contentDiv);
+                messageContent.appendChild(analysisDiv);
+            }
+
+            addSearchDetailsToMessage(messageDiv, searchDetails) {
+                const messageContent = messageDiv.querySelector('.message-content');
+
+                const detailsDiv = document.createElement('div');
+                detailsDiv.className = 'search-details';
+
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'search-details-header';
+                const summary = searchDetails.summary || {};
+                headerDiv.textContent = `📚 Search Results: ${this.safeNumber(summary.episodes)} episodes, ${this.safeNumber(summary.entities)} entities, ${this.safeNumber(summary.relationships)} relationships`;
+                headerDiv.onclick = () => {
+                    detailsDiv.classList.toggle('expanded');
+                };
+                detailsDiv.appendChild(headerDiv);
+
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'search-details-content';
+
+                // Episodes section (more compact)
+                if (searchDetails.sources && searchDetails.sources.length > 0) {
+                    const episodesSection = document.createElement('div');
+                    episodesSection.className = 'search-section';
+
+                    const episodesHeader = document.createElement('h4');
+                    episodesHeader.textContent = '📄 Episodes Found (' + searchDetails.sources.length + ')';
+                    episodesHeader.onclick = () => {
+                        episodesSection.classList.toggle('expanded');
+                    };
+                    episodesSection.appendChild(episodesHeader);
+
+                    const episodesContent = document.createElement('div');
+                    episodesContent.className = 'search-section-content';
+
+                    searchDetails.sources.forEach(source => {
+                        const episodeItem = document.createElement('div');
+                        episodeItem.className = 'episode-item';
+                        episodeItem.style.cssText = 'padding: 0.5rem; margin-bottom: 0.5rem;';
+
+                        // Compact header with just similarity
+                        const episodeHeader = document.createElement('div');
+                        const similarity = this.safeNumber(source.similarity);
+                        episodeHeader.innerHTML = `
+                            <span style="color: var(--primary-color); font-weight: bold;">${(similarity * 100).toFixed(0)}%</span>
+                            <span style="color: var(--text-muted); margin-left: 0.5rem; font-size: 0.85rem;">Episode ${this.escapeHtml(source.episode_number)}</span>
+                        `;
+                        episodeItem.appendChild(episodeHeader);
+
+                        // Truncate preview for compactness
+                        const preview = source.preview || '';
+                        const truncated = preview.length > 150 ? preview.substring(0, 150) + '...' : preview;
+
+                        const episodePreview = document.createElement('div');
+                        episodePreview.className = 'episode-preview';
+                        episodePreview.style.cssText = 'font-size: 0.9rem; line-height: 1.4; margin-top: 0.25rem; color: var(--text-color);';
+                        episodePreview.textContent = truncated;
+
+                        // Click to expand/collapse
+                        if (preview.length > 150) {
+                            episodeItem.style.cursor = 'pointer';
+                            episodeItem.title = 'Click to expand/collapse';
+                            episodeItem.onclick = () => {
+                                if (episodePreview.textContent.endsWith('...')) {
+                                    episodePreview.textContent = preview;
+                                } else {
+                                    episodePreview.textContent = truncated;
+                                }
+                            };
+                        }
+
+                        episodeItem.appendChild(episodePreview);
+                        episodesContent.appendChild(episodeItem);
+                    });
+
+                    episodesSection.appendChild(episodesContent);
+                    contentDiv.appendChild(episodesSection);
+                }
+
+                // Entities section
+                if (searchDetails.entities && searchDetails.entities.length > 0) {
+                    const entitiesSection = document.createElement('div');
+                    entitiesSection.className = 'search-section';
+
+                    const entitiesHeader = document.createElement('h4');
+                    entitiesHeader.textContent = '🏛️ Entities (' + searchDetails.entities.length + ')';
+                    entitiesHeader.onclick = () => {
+                        entitiesSection.classList.toggle('expanded');
+                    };
+                    entitiesSection.appendChild(entitiesHeader);
+
+                    const entitiesContent = document.createElement('div');
+                    entitiesContent.className = 'search-section-content';
+
+                    searchDetails.entities.forEach(entity => {
+                        const entityItem = document.createElement('div');
+                        entityItem.className = 'entity-item';
+                        entityItem.innerHTML = `
+                            <span class="entity-name">${this.escapeHtml(entity.name)}</span>
+                            <span class="entity-type">${this.escapeHtml(entity.type)}</span>
+                            <div style="margin-top: 0.3rem; color: var(--text-muted); font-size: 0.75rem;">
+                                ${this.escapeHtml(entity.description)}
+                            </div>
+                        `;
+                        entitiesContent.appendChild(entityItem);
+                    });
+
+                    entitiesSection.appendChild(entitiesContent);
+                    contentDiv.appendChild(entitiesSection);
+                }
+
+                // Relationships section
+                if (searchDetails.relationships && searchDetails.relationships.length > 0) {
+                    const relationshipsSection = document.createElement('div');
+                    relationshipsSection.className = 'search-section';
+
+                    const relationshipsHeader = document.createElement('h4');
+                    relationshipsHeader.textContent = '🔗 Relationships (' + searchDetails.relationships.length + ')';
+                    relationshipsHeader.onclick = () => {
+                        relationshipsSection.classList.toggle('expanded');
+                    };
+                    relationshipsSection.appendChild(relationshipsHeader);
+
+                    const relationshipsContent = document.createElement('div');
+                    relationshipsContent.className = 'search-section-content';
+
+                    searchDetails.relationships.forEach(rel => {
+                        const relItem = document.createElement('div');
+                        relItem.className = 'relationship-item';
+                        relItem.innerHTML = `
+                            <div>
+                                <strong>${this.escapeHtml(rel.source)}</strong>
+                                <span class="relationship-arrow">→</span>
+                                <strong>${this.escapeHtml(rel.target)}</strong>
+                                <span style="color: var(--text-muted); margin-left: 0.5rem;">(${this.escapeHtml(rel.type)})</span>
+                            </div>
+                        `;
+
+                        if (rel.properties && Object.keys(rel.properties).length > 0) {
+                            const propsDiv = document.createElement('div');
+                            propsDiv.className = 'relationship-props';
+                            const propsText = Object.entries(rel.properties)
+                                .map(([key, value]) => `${key}: ${value}`)
+                                .join(', ');
+                            propsDiv.textContent = propsText;
+                            relItem.appendChild(propsDiv);
+                        }
+
+                        relationshipsContent.appendChild(relItem);
+                    });
+
+                    relationshipsSection.appendChild(relationshipsContent);
+                    contentDiv.appendChild(relationshipsSection);
+                }
+
+                // Knowledge Graph section
+                if ((searchDetails.entities && searchDetails.entities.length > 0) ||
+                    (searchDetails.relationships && searchDetails.relationships.length > 0)) {
+                    const graphSection = document.createElement('div');
+                    graphSection.className = 'search-section';
+
+                    const graphHeader = document.createElement('h4');
+                    const nodeCount = (searchDetails.entities || []).length;
+                    const edgeCount = (searchDetails.relationships || []).length;
+                    graphHeader.innerHTML = `🕸️ Knowledge Graph (${nodeCount} nodes, ${edgeCount} edges)`;
+                    graphHeader.onclick = () => {
+                        graphSection.classList.toggle('expanded');
+                        // Initialize graph when first expanded
+                        if (graphSection.classList.contains('expanded') && !graphSection.dataset.graphInitialized) {
+                            // Pass subgraph data if available
+                            const subgraphData = searchDetails.metadata?.subgraph_analysis || null;
+                            setTimeout(() => createNetworkGraph(searchDetails, graphSection.querySelector('.network-graph-container'), subgraphData), 100);
+                            graphSection.dataset.graphInitialized = 'true';
+                        }
+                    };
+                    graphSection.appendChild(graphHeader);
+
+                    const graphContent = document.createElement('div');
+                    graphContent.className = 'search-section-content';
+
+                    const graphContainer = document.createElement('div');
+                    graphContainer.className = 'network-graph-container';
+                    graphContainer.id = `graph-${Date.now()}`; // Unique ID for each graph
+
+                    graphContent.appendChild(graphContainer);
+                    graphSection.appendChild(graphContent);
+                    contentDiv.appendChild(graphSection);
+                }
+
+                detailsDiv.appendChild(contentDiv);
+                messageContent.appendChild(detailsDiv);
+            }
+
+            addSuggestionsToMessage(messageDiv, suggestedQuestions) {
+                const messageContent = messageDiv.querySelector('.message-content');
+
+                const suggestionsDiv = document.createElement('div');
+                suggestionsDiv.className = 'suggested-questions';
+                suggestionsDiv.style.marginTop = '1rem';
+
+                suggestedQuestions.forEach(question => {
+                    const btn = document.createElement('button');
+                    btn.className = 'suggested-question';
+                    btn.textContent = question;
+                    btn.onclick = () => this.sendMessage(question);
+                    suggestionsDiv.appendChild(btn);
+                });
+
+                messageContent.appendChild(suggestionsDiv);
+            }
+
+            clearMessages() {
+                this.handleClear();
+            }
+        }
+
+        // Global functions for button clicks
+        let chat;
+
+        function sendMessage(message) {
+            if (chat) {
+                chat.sendMessage(message);
+            }
+        }
+
+        function handleSendMessage() {
+            if (chat) {
+                chat.handleSendMessage();
+            }
+        }
+
+        function clearMessages() {
+            if (chat) {
+                chat.clearMessages();
+            }
+        }
+
+        // Graph Visualization Function
+        function createNetworkGraph(searchDetails, container, subgraphData = null) {
+            if (!container || !window.vis) return;
+
+            const escapeGraphHtml = (value) => String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+
+            // Clear any existing graph
+            container.innerHTML = '';
+
+            // Transform entities to nodes
+            const nodes = new vis.DataSet();
+            const entityMap = new Map();
+            const nodeIds = new Set();
+
+            // Build subgraph membership map
+            const entitySubgraphMap = new Map();
+            const subgraphColors = ['#e8daef', '#d5e8d4', '#ffe6cc', '#f8cecc', '#dae8fc'];
+
+            if (subgraphData?.ranked_subgraphs) {
+                subgraphData.ranked_subgraphs.forEach((sg, idx) => {
+                    const color = subgraphColors[idx % subgraphColors.length];
+                    if (sg.subgraph?.nodes) {
+                        sg.subgraph.nodes.forEach(node => {
+                            const nodeId = node.name || node.stable_id;
+                            if (nodeId) {
+                                entitySubgraphMap.set(nodeId, {
+                                    subgraphIndex: idx,
+                                    color: color,
+                                    score: sg.scores?.total_score || 0
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+
+            // Color schemes for different entity types
+            const typeColors = {
+                'person': '#3498db',      // Blue
+                'location': '#2ecc71',    // Green
+                'organization': '#e67e22', // Orange
+                'event': '#9b59b6',       // Purple
+                'concept': '#e74c3c',     // Red
+                'artifact': '#f39c12',    // Yellow
+                'unknown': '#95a5a6'      // Gray
+            };
+
+            // Add entity nodes
+            if (searchDetails.entities) {
+                searchDetails.entities.forEach(entity => {
+                    // Use name as primary ID for better visualization
+                    const entityId = entity.name;
+                    entityMap.set(entityId, entity);
+                    // Also map by stable_id if it exists
+                    if (entity.stable_id) {
+                        entityMap.set(entity.stable_id, entity);
+                    }
+                    nodeIds.add(entityId);
+
+                    const nodeType = (entity.type || 'unknown').toLowerCase();
+                    const typeColor = typeColors[nodeType] || typeColors['unknown'];
+
+                    // Check if entity belongs to a subgraph
+                    const subgraphInfo = entitySubgraphMap.get(entityId) || entitySubgraphMap.get(entity.stable_id);
+
+                    nodes.add({
+                        id: entityId,
+                        label: entity.name,
+                        title: `<b>${escapeGraphHtml(entity.name)}</b><br/><i>${escapeGraphHtml(entity.type)}</i><br/>${escapeGraphHtml(entity.description || 'No description')}${subgraphInfo ? '<br/><b>Subgraph #' + (subgraphInfo.subgraphIndex + 1) + '</b> (score: ' + Number(subgraphInfo.score).toFixed(2) + ')' : ''}`,
+                        color: {
+                            background: subgraphInfo ? subgraphInfo.color : typeColor,
+                            border: typeColor,
+                            highlight: {
+                                background: subgraphInfo ? subgraphInfo.color : typeColor,
+                                border: '#2c3e50'
+                            }
+                        },
+                        shape: 'dot',
+                        size: subgraphInfo ? 25 : 20,
+                        borderWidth: subgraphInfo ? 3 : 2,
+                        font: {
+                            color: '#2c3e50',
+                            size: 12,
+                            bold: subgraphInfo ? true : false
+                        }
+                    });
+                });
+            }
+
+            // Transform relationships to edges
+            const edges = new vis.DataSet();
+
+            // Relationship type colors and styles
+            const relTypeStyles = {
+                'AlliedWith': { color: '#27ae60', dashes: false },         // Green solid
+                'OpposedTo': { color: '#e74c3c', dashes: false },         // Red solid
+                'TransformedInto': { color: '#9b59b6', dashes: [5, 5] },  // Purple dashed
+                'CREATES': { color: '#3498db', dashes: false },           // Blue solid
+                'MENTIONS': { color: '#95a5a6', dashes: [2, 2] },         // Gray dotted
+                'RELATES_TO': { color: '#7f8c8d', dashes: false },        // Dark gray
+                'default': { color: '#95a5a6', dashes: false }            // Default gray
+            };
+
+            if (searchDetails.relationships) {
+                // Create lookup maps for entity resolution - always resolve to names
+                const entityByStableId = new Map();
+                const entityByName = new Map();
+                const stableIdToName = new Map();  // Map UUIDs to names
+
+                if (searchDetails.entities) {
+                    searchDetails.entities.forEach(entity => {
+                        // Always use name as the target node ID
+                        const nodeId = entity.name;
+                        // Map by stable_id to name
+                        if (entity.stable_id) {
+                            entityByStableId.set(entity.stable_id, nodeId);
+                            stableIdToName.set(entity.stable_id, entity.name);
+                        }
+                        // Map by name to itself
+                        if (entity.name) {
+                            entityByName.set(entity.name, nodeId);
+                        }
+                    });
+                }
+
+                searchDetails.relationships.forEach(rel => {
+                    // Resolve source and target IDs
+                    let sourceId = rel.source;
+                    let targetId = rel.target;
+
+                    // Try to resolve source
+                    if (entityByStableId.has(rel.source)) {
+                        sourceId = entityByStableId.get(rel.source);
+                    } else if (entityByName.has(rel.source)) {
+                        sourceId = entityByName.get(rel.source);
+                    }
+
+                    // Try to resolve target
+                    if (entityByStableId.has(rel.target)) {
+                        targetId = entityByStableId.get(rel.target);
+                    } else if (entityByName.has(rel.target)) {
+                        targetId = entityByName.get(rel.target);
+                    } else if (rel.target_name && entityByName.has(rel.target_name)) {
+                        targetId = entityByName.get(rel.target_name);
+                    }
+
+                    // Add missing nodes if they don't exist (placeholder nodes for relationships)
+                    if (!nodeIds.has(sourceId)) {
+                        // Try to get a name for the source
+                        let sourceLabel = sourceId;
+                        if (stableIdToName.has(rel.source)) {
+                            sourceLabel = stableIdToName.get(rel.source);
+                        } else if (sourceId.length > 30) {
+                            // If it's a UUID, truncate it
+                            sourceLabel = sourceId.substring(0, 8) + '...';
+                        }
+
+                        nodes.add({
+                            id: sourceId,
+                            label: sourceLabel,
+                            title: `Entity: ${escapeGraphHtml(sourceLabel)}`,
+                            color: {
+                                background: '#cccccc',
+                                border: '#999999'
+                            },
+                            shape: 'dot',
+                            size: 15,
+                            font: {
+                                color: '#666666',
+                                size: 10
+                            }
+                        });
+                        nodeIds.add(sourceId);
+                    }
+
+                    if (!nodeIds.has(targetId)) {
+                        // Use target_name if available, otherwise try to resolve or truncate
+                        let targetLabel = rel.target_name || targetId;
+                        if (!rel.target_name && stableIdToName.has(rel.target)) {
+                            targetLabel = stableIdToName.get(rel.target);
+                        } else if (!rel.target_name && targetId.length > 30) {
+                            // If it's a UUID, truncate it
+                            targetLabel = targetId.substring(0, 8) + '...';
+                        }
+
+                        nodes.add({
+                            id: targetId,
+                            label: targetLabel,
+                            title: `Entity: ${escapeGraphHtml(targetLabel)}`,
+                            color: {
+                                background: '#cccccc',
+                                border: '#999999'
+                            },
+                            shape: 'dot',
+                            size: 15,
+                            font: {
+                                color: '#666666',
+                                size: 10
+                            }
+                        });
+                        nodeIds.add(rel.target);
+                    }
+
+                    // Now both nodes should exist
+                    if (nodeIds.has(rel.source) && nodeIds.has(rel.target)) {
+                        const style = relTypeStyles[rel.type] || relTypeStyles['default'];
+
+                        // Build tooltip with semantic properties
+                        let tooltip = `<b>${escapeGraphHtml(rel.type)}</b>`;
+                        if (rel.properties && Object.keys(rel.properties).length > 0) {
+                            tooltip += '<br/><br/><i>Properties:</i>';
+                            for (const [key, value] of Object.entries(rel.properties)) {
+                                // Skip internal fields
+                                if (!key.endsWith('_embedding') && !['fact_embedding', 'uuid', 'created_at'].includes(key)) {
+                                    tooltip += `<br/>• ${escapeGraphHtml(key)}: ${escapeGraphHtml(value)}`;
+                                }
+                            }
+                        }
+
+                        // Determine edge width based on strength
+                        let width = 1;
+                        if (rel.properties && rel.properties.strength) {
+                            const strength = rel.properties.strength;
+                            if (strength === 'strong') width = 3;
+                            else if (strength === 'moderate') width = 2;
+                            else if (strength === 'weak') width = 1;
+                        }
+
+                        edges.add({
+                            from: sourceId,
+                            to: targetId,
+                            label: rel.type,
+                            title: tooltip,
+                            color: style.color,
+                            dashes: style.dashes,
+                            width: width,
+                            arrows: {
+                                to: {
+                                    enabled: true,
+                                    scaleFactor: 0.8
+                                }
+                            },
+                            font: {
+                                size: 10,
+                                color: '#7f8c8d',
+                                strokeWidth: 3,
+                                strokeColor: '#ffffff'
+                            }
+                        });
+                    }
+                });
+            }
+
+            // Create network
+            const data = { nodes: nodes, edges: edges };
+
+            const options = {
+                physics: {
+                    enabled: true,
+                    barnesHut: {
+                        gravitationalConstant: -8000,
+                        centralGravity: 0.3,
+                        springLength: 95,
+                        springConstant: 0.04,
+                        damping: 0.09
+                    }
+                },
+                interaction: {
+                    hover: true,
+                    tooltipDelay: 200,
+                    hideEdgesOnDrag: true
+                },
+                layout: {
+                    improvedLayout: true
+                }
+            };
+
+            const network = new vis.Network(container, data, options);
+
+            // Add controls
+            const controls = document.createElement('div');
+            controls.className = 'graph-controls';
+
+            const physicsBtn = document.createElement('button');
+            physicsBtn.className = 'graph-control-btn';
+            physicsBtn.textContent = '🔄 Physics On';
+            physicsBtn.onclick = () => {
+                const isEnabled = network.physics.options.enabled;
+                network.physics.options.enabled = !isEnabled;
+                physicsBtn.textContent = isEnabled ? '🔄 Physics Off' : '🔄 Physics On';
+                network.startSimulation();
+            };
+            controls.appendChild(physicsBtn);
+
+            const fitBtn = document.createElement('button');
+            fitBtn.className = 'graph-control-btn';
+            fitBtn.textContent = '🎯 Fit';
+            fitBtn.onclick = () => {
+                network.fit({ animation: true });
+            };
+            controls.appendChild(fitBtn);
+
+            container.appendChild(controls);
+
+            // Add legend
+            const legend = document.createElement('div');
+            legend.className = 'graph-legend';
+            legend.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 0.5rem;">Entity Types</div>
+                ${Object.entries(typeColors).map(([type, color]) => `
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: ${color}"></div>
+                        <span>${type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                    </div>
+                `).join('')}
+            `;
+            container.appendChild(legend);
+
+            // Fit the graph after a short delay
+            setTimeout(() => network.fit(), 500);
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            chat = new LuminariChat();
+        });
+    </script>
+</body>
+</html>

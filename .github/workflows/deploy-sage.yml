@@ -1,0 +1,186 @@
+name: Deploy Luminari Sage
+
+# Production deploys are intentionally manual. This repository currently has no
+# deployment secrets configured, so automatic pushes would fail after publishing
+# an image and could encourage unsafe placeholder credentials.
+on:
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: Force rebuild Docker image
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: luminarimud/sage
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy Luminari Sage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Validate deployment context and secrets
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+          PRODUCTION_SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          PRODUCTION_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          NEO4J_USER: ${{ secrets.NEO4J_USER }}
+          NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SAGE_API_KEY: ${{ secrets.SAGE_API_KEY }}
+          SAGE_MCP_KEY: ${{ secrets.SAGE_MCP_KEY }}
+          SAGE_MCP_BACKEND_KEY: ${{ secrets.SAGE_MCP_BACKEND_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Production deploys must run from main." >&2
+            exit 1
+          fi
+
+          required=(
+            PRODUCTION_HOST PRODUCTION_USER PRODUCTION_SSH_KEY PRODUCTION_KNOWN_HOSTS
+            POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB
+            NEO4J_USER NEO4J_PASSWORD OPENAI_API_KEY
+            SAGE_API_KEY SAGE_MCP_KEY SAGE_MCP_BACKEND_KEY
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} )); then
+            printf 'Missing required deployment secret: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+          if [[ ! "$PRODUCTION_USER" =~ ^[A-Za-z_][A-Za-z0-9._-]*$ ]]; then
+            echo "PRODUCTION_USER contains unsupported characters." >&2
+            exit 1
+          fi
+          if [[ ! "$PRODUCTION_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]]; then
+            echo "PRODUCTION_HOST must be a hostname or IPv4 address." >&2
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=main-
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          no-cache: ${{ inputs.force_rebuild }}
+          platforms: linux/amd64
+          build-args: |
+            CACHE_BUST=${{ github.sha }}
+
+      - name: Configure pinned SSH host identity
+        env:
+          PRODUCTION_KNOWN_HOSTS: ${{ secrets.PRODUCTION_KNOWN_HOSTS }}
+        run: |
+          install -d -m 0700 "$HOME/.ssh"
+          printf '%s\n' "$PRODUCTION_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 0600 "$HOME/.ssh/known_hosts"
+
+      - name: Load deployment SSH key
+        uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
+
+      - name: Copy deployment files
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+        run: |
+          set -euo pipefail
+          target="${PRODUCTION_USER}@${PRODUCTION_HOST}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -- "$target" \
+            "install -d -m 0700 /tmp/luminari-sage-deploy"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -- docker-compose.prod.yml "$target:/tmp/luminari-sage-deploy/docker-compose.yml"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -- \
+            schemas/postgresql_schema.sql \
+            "$target:/tmp/luminari-sage-deploy/postgresql_schema.sql"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -- \
+            scripts/deploy_remote.sh \
+            "$target:/tmp/luminari-sage-deploy/deploy_remote.sh"
+
+      - name: Deploy immutable image
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          NEO4J_USER: ${{ secrets.NEO4J_USER }}
+          NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          SAGE_API_KEY: ${{ secrets.SAGE_API_KEY }}
+          SAGE_MCP_KEY: ${{ secrets.SAGE_MCP_KEY }}
+          SAGE_MCP_BACKEND_KEY: ${{ secrets.SAGE_MCP_BACKEND_KEY }}
+          GHCR_ACTOR: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SAGE_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          target="${PRODUCTION_USER}@${PRODUCTION_HOST}"
+
+          # The remote Bash process reads NUL-delimited values from stdin. This
+          # preserves special characters without sourcing, eval, command-line
+          # arguments, or a temporary plaintext transfer file.
+          {
+            printf '%s\0' "$POSTGRES_USER"
+            printf '%s\0' "$POSTGRES_PASSWORD"
+            printf '%s\0' "$POSTGRES_DB"
+            printf '%s\0' "$NEO4J_USER"
+            printf '%s\0' "$NEO4J_PASSWORD"
+            printf '%s\0' "$OPENAI_API_KEY"
+            printf '%s\0' "$LANGSMITH_API_KEY"
+            printf '%s\0' "$SAGE_API_KEY"
+            printf '%s\0' "$SAGE_MCP_KEY"
+            printf '%s\0' "$SAGE_MCP_BACKEND_KEY"
+            printf '%s\0' "$GHCR_ACTOR"
+            printf '%s\0' "$GHCR_TOKEN"
+            printf '%s\0' "$SAGE_IMAGE"
+          } | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -- "$target" \
+            'bash /tmp/luminari-sage-deploy/deploy_remote.sh'

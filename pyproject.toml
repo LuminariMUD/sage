@@ -1,0 +1,58 @@
+# Tool configuration for Luminari Sage.
+# Formatting/lint settings live here so results do not depend on tool defaults,
+# which shift between releases. Line length is 100 to match the flake8 hook in
+# .pre-commit-config.yaml.
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["docs", "logs", "lore_docs", ".venv", "venv"]
+
+[tool.ruff.lint]
+select = [
+    "F",     # pyflakes
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "I",     # import sorting
+    "UP",    # pyupgrade (PEP 585/604 modernization)
+    "C4",    # comprehensions
+    "PIE",   # misc lints
+    "PERF",  # performance anti-patterns
+    "FLY",   # static-join-to-f-string
+    "FURB",  # modernization refurb rules
+    "RUF",   # ruff-specific
+]
+ignore = [
+    "E501",    # line length is black's job
+    "RUF001",  # ambiguous unicode in lore text/emoji output is intentional
+    "RUF002",
+    "RUF003",
+    "RUF012",  # mutable class defaults are used deliberately in pydantic models
+    "PERF401", # explicit append loops are clearer than comprehensions in the pipeline code
+    "PERF403",
+    "UP042",   # `class X(str, Enum)` is kept: StrEnum changes json/pydantic serialization
+]
+
+[tool.ruff.lint.isort]
+# Keep ruff's import sorting in agreement with the isort pre-commit hook
+known-first-party = ["src"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test/diagnostic scripts print and shadow freely; entrypoints re-export on purpose.
+"tests/**" = ["E402"]  # tests insert sys.path before importing src
+"src/**/__init__.py" = ["F401"]
+# src/graphiti/__init__.py must set HF/tokenizer env vars before importing graphiti_core.
+"src/graphiti/__init__.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+ignore_missing_imports = true

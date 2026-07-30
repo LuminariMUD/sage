@@ -1,0 +1,200 @@
+services:
+  # PostgreSQL with pgvector for documents and embeddings
+  postgres:
+    # PG18: the official image stores data under a major-version subdirectory, so the
+    # volume mounts at /var/lib/postgresql (NOT /var/lib/postgresql/data) below.
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:0.8.6-pg18}
+    container_name: luminari-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-luminari}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: ${POSTGRES_DB:-luminari_sage}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    secrets:
+      - postgres_password
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./backups/postgres:/backups
+      - ./schemas/postgresql_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - luminari-network
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+
+  # Neo4j for graph database
+  neo4j:
+    # Migrated from 5.26 to the 2026.06 calver line (store format record-aligned-1.1).
+    image: ${NEO4J_IMAGE:-neo4j:2026.06.0-community}
+    container_name: luminari-neo4j
+    environment:
+      NEO4J_AUTH_FILE: /run/secrets/neo4j_auth
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_server_memory_pagecache_size: 1500M
+      NEO4J_server_memory_heap_max__size: 2G
+      NEO4J_server_memory_heap_initial__size: 1G
+      NEO4J_dbms_memory_transaction_total_max: 1500M
+      NEO4J_server_bolt_advertised__address: localhost:7687
+      NEO4J_server_http_advertised__address: localhost:7474
+    secrets:
+      - neo4j_auth
+    ports:
+      - "127.0.0.1:${NEO4J_BOLT_PORT:-7687}:7687"
+      - "127.0.0.1:${NEO4J_HTTP_PORT:-7474}:7474"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - ./backups/neo4j:/backups
+    # Healthcheck temporarily disabled - Neo4j takes too long to start in production
+    # healthcheck:
+    #   test: ["CMD", "neo4j", "status"]
+    #   interval: 15s
+    #   timeout: 10s
+    #   retries: 15
+    #   start_period: 60s
+    networks:
+      - luminari-network
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+
+  # FastAPI application
+  api:
+    image: "${SAGE_IMAGE:?Error: SAGE_IMAGE must be an immutable image digest}"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-luminari}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: ${POSTGRES_DB:-luminari_sage}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD_FILE: /run/secrets/neo4j_password
+      API_HOST: 0.0.0.0
+      API_PORT: 8003
+      LORE_DIR: /app/lore/lore_docs
+      LORE_SOURCE: ${LORE_SOURCE:-canon}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
+      LANGSMITH_API_KEY_FILE: /run/secrets/langsmith_api_key
+      LANGCHAIN_TRACING_V2: ${LANGCHAIN_TRACING_V2:-false}
+      GRAPHITI_TELEMETRY_ENABLED: ${GRAPHITI_TELEMETRY_ENABLED:-false}
+      USE_OPENAI_EMBEDDINGS: true
+      EMBEDDING_MODEL: openai/text-embedding-3-small
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://luminarimud.com}
+      ROOT_PATH: ${ROOT_PATH:-}
+      ENABLE_CACHE: true
+      ENABLE_VALIDATION: true
+      SENTENCE_TRANSFORMERS_HOME: /opt/sentence_transformers_cache
+      MCP_PORT: 8004
+      USE_MODERN_LANGCHAIN: true
+      LANGCHAIN_MODEL: gpt-4.1
+      ENABLE_REACT: true
+      REACT_THRESHOLD: auto
+      # Authentication
+      SAGE_API_KEY_FILE: /run/secrets/sage_api_key
+      SAGE_MCP_KEY_FILE: /run/secrets/sage_mcp_key
+      SAGE_MCP_BACKEND_KEY_FILE: /run/secrets/sage_mcp_backend_key
+      DISABLE_AUTH: ${DISABLE_AUTH:-false}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,testserver,api,luminari-api}
+    ports:
+      - "127.0.0.1:8003:8003"
+      - "127.0.0.1:8004:8004"
+    secrets:
+      - postgres_password
+      - neo4j_password
+      - openai_api_key
+      - langsmith_api_key
+      - sage_api_key
+      - sage_mcp_key
+      - sage_mcp_backend_key
+    networks:
+      - luminari-network
+    volumes:
+      - /home/luminari/lore/lore_docs:/app/lore/lore_docs:ro
+      - ./logs:/app/logs
+    user: "1013:1013" # Match the luminari user on host
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_started
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 4G
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/ping', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+networks:
+  luminari-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+  neo4j_auth:
+    file: ./secrets/neo4j_auth
+  neo4j_password:
+    file: ./secrets/neo4j_password
+  openai_api_key:
+    file: ./secrets/openai_api_key
+  langsmith_api_key:
+    file: ./secrets/langsmith_api_key
+  sage_api_key:
+    file: ./secrets/sage_api_key
+  sage_mcp_key:
+    file: ./secrets/sage_mcp_key
+  sage_mcp_backend_key:
+    file: ./secrets/sage_mcp_backend_key

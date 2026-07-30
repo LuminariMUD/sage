@@ -1,0 +1,9 @@
+# Deny the entire working tree, then admit only files copied by Dockerfile.
+# This prevents arbitrary local credentials from being sent to BuildKit even
+# when their names do not match a secret-file pattern.
+**
+!requirements-core.txt
+!src/
+!src/**
+!schemas/
+!schemas/**

@@ -1,0 +1,11 @@
+# Titans abstract
+
+*Converted from: Titans abstract.docx*
+
+Titans are extremely powerful beings within the world of Lumia, each with their own pocket plane they may move to and from at any time. Unconcerned with most mortal affairs, they’ve found that when revered, they gain a greater strength over their own domain. This has led to most Titans granting worshippers who pledge their lives to them divine powers, and possible assistance to any mortal pursuing their interests.
+
+How titans actually were formed, or their true purpose is unknown to any mortal. Some speculate that they created the mortal plane of existence, while others tell of them bringing the Luminari, and even the Prisoner, to Lumia. One part of knowledge that was retained throughout the generations was clear: the Titans never interfered with mortal lives until the Luminari create the Prison.
+
+Their most powerful ability to mortals is granting the powers of the divine, which can heal or harm on an extraplanar level. They also have been known to create items of extreme power and give (or allow) a mortal to find and hold onto it for a limited period of time. Titans do take an interest in certain mortal affairs, though only when it pertains to the power they gain from worship. The rarest, but most honored ability they have is to bring a mortal into their pocket plane, where one can become ageless. This can be used to keep exalted mortals lives extended well into another generation, to spread their word and influence again. This can also be done temporarily in order to give tests to find faith in them, or to punish a blasphemer who is harming what the  domains and ideals they represent.
+
+For mortals, it is best to keep in mind that beyond granting spellcasting, it is unlikely a mortal will ever directly interact with a Titan. Even more, with the extreme power they possess, it is inadvisable to seek one out, should they feel disrespected by something you do or say. Titans have their own path in Lumia, and Luminari, Darklings, the Marked, and any other sentient being is nothing more than an expendable resource to them.

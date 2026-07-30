@@ -1,0 +1,276 @@
+master spells
+Master List
+  1) armor: spell-armor.wav
+ 96) acid arrow: spell-acidarrow.wav
+163) acid fog: spell-acidfog.wav
+145) acid sheath: spell-acidsheath.wav
+  9) clone: spell-clone.wav
+148) cloudkill: spell-cloudkill.wav
+133) cold shield
+ 10) color spray
+158) cone of cold
+269) contagion
+100) continual flame
+297) control plants
+[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number (2/13) ]
+
+ 11) control weather
+ 12) create food
+ 13) create water
+292) creeping doom
+125) cunning
+ 14) cure blind
+ 15) cure critic
+223) cure deafness
+ 16) cure light
+220) cure moderate
+221) cure serious
+ 17) curse
+ 93) darkness
+117) daylight
+ 97) daze monster
+102) deafness
+278) death ward
+112) deathly heroism
+115) deep slumber
+ 69) destruction
+ 18) detect alignment
+ 19) detect invisibility
+ 20) detect magic
+[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number (3/13) ]
+
+ 21) detect poison
+236) dimensional lock
+157) dismissal
+ 22) dispel evil
+ 46) dispel good
+122) dispel magic
+180) displacement
+152) dominate person
+ 59) dragon knight
+ 23) earthquake
+299) elemental swarm
+ 24) enchant weapon
+ 57) endurance
+ 78) endure elements
+ 25) energy drain
+106) energy sphere
+208) enfeeblement
+140) enlarge person
+ 62) epic mage armor
+ 63) epic warding
+ 79) expeditious retreat
+166) eyebite
+247) faerie fire
+[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number (4/13) ]
+
+224) faerie fog
+156) faithful hound
+103) false life
+153) feeblemind
+298) finger of death
+284) fire seeds
+132) fire shield
+293) fire storm
+ 26) fireball
+160) firebrand
+264) flame blade
+ 68) flame strike
+265) flaming sphere
+ 53) fly
+230) free movement
+162) freezing sphere
+205) gate
+172) globe of invuln
+248) goodberry
+104) grace
+174) grasping hand
+ 80) grease
+192) greater animation
+[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number (5/13) ]
+
+173) greater dispelling
+168) greater heroism
+136) greater invisibility
+270) greater magic fang
+170) greater mirror image
+ 60) greater ruin
+214) greater spell mantle
+ 47) group armor
+ 48) group heal
+244) group summon
+279) hallow
+111) halt undead
+ 27) harm
+120) haste
+ 28) heal
+ 61) hellball
+ 98) hideous laughter
+266) hold animal
+114) hold person
+218) holy sword
+ 81) horizikauls boom
+191) horrid wilting
+ 82) ice dagger
+[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number (6/13) ]
+
+ 70) ice storm
+ 52) identify
+212) implode
+189) incendiary cloud
+ 50) infravision
+280) insect plague
+146) interposing hand
+ 29) invisibility
+116) invisibility sphere
+ 83) iron guts
+201) iron skin
+193) irresistible dance
+249) jump
+ 30) lightning bolt
+138) locate creature
+ 31) locate object
+ 84) mage armor
+250) magic fang
+ 32) magic missile
+289) magic resistance
+251) magic stone
+187) mass charisma
+202) mass cunning
+[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number (7/13) ]
+
+245) mass cure critic
+225) mass cure light
+228) mass cure moderate
+232) mass cure serious
+194) mass domination
+286) mass endurance
+215) mass enhance
+179) mass fly
+288) mass grace
+167) mass haste
+178) mass hold person
+287) mass strength
+186) mass wisdom
+ 74) meteor swarm
+200) mind blank
+155) mind fog
+139) minor globe
+ 55) mirror image
+ 72) missile storm
+ 58) mummy dust
+254) natures ally i
+255) natures ally ii
+256) natures ally iii
+[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number (8/13) ]
+
+257) natures ally iv
+262) natures ally ix
+258) natures ally v
+259) natures ally vi
+260) natures ally vii
+261) natures ally viii
+ 85) negative energy ray
+154) nightmare
+119) nondetection
+252) obscuring mist
+108) phantom steed
+239) plane shift
+ 33) poison
+ 77) polymorph self
+216) portal
+176) power word blind
+207) power word kill
+182) power word stun
+233) prayer
+211) prismatic sphere
+181) prismatic spray
+253) produce flame
+ 34) protection from evil
+[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number (9/13) ]
+
+ 75) protection from good
+183) protection from spells
+137) rainbow pattern
+ 86) ray of enfeeblement
+130) ray of frost
+196) refuge
+229) regeneration
+ 35) remove curse
+234) remove disease
+222) remove fear
+ 43) remove poison
+105) resist energy
+237) salvation
+ 36) sanctuary
+ 87) scare
+195) scint pattern
+101) scorching ray
+ 44) sense life
+210) shadow shield
+301) shambler
+ 88) shelgarns blade
+ 89) shield
+ 37) shocking grasp
+[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number (10/13) ]
+
+141) shrink person
+ 38) sleep
+121) slow
+185) spell mantle
+199) spell turning
+290) spellstaff
+272) spike growth
+276) spike stone
+238) spring of life
+109) stinking cloud
+ 56) stone skin
+240) storm of vengeance
+ 39) strength
+231) strengthen bones
+ 40) summon
+ 90) summon creature i
+ 94) summon creature ii
+110) summon creature iii
+135) summon creature iv
+204) summon creature ix
+149) summon creature v
+164) summon creature vi
+175) summon creature vii
+[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number (11/13) ]
+
+190) summon creature viii
+268) summon swarm
+295) sunbeam
+198) sunburst
+151) symbol of pain
+159) telekinesis
+  2) teleport
+184) thunderclap
+213) timestop
+ 99) touch of idiocy
+165) transformation
+291) transport via plants
+171) true seeing
+ 91) true strike
+281) unhallow
+113) vampiric touch
+206) wail of the banshee
+282) wall of fire
+ 92) wall of fog
+147) wall of force
+283) wall of thorns
+107) water breathe
+ 51) waterwalk
+[ Return to continue, (q)uit, (r)efresh, (b)ack, or page number (12/13) ]
+
+177) waves of exhaustion
+150) waves of fatigue
+ 95) web
+209) weird
+308) whirlwind
+126) wisdom
+131) wizard eye
+235) word of faith
+Total:  283
+

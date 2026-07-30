@@ -1,0 +1,191 @@
+# Gitleaks configuration for Luminari Sage
+# Scans for secrets, API keys, and credentials in code
+title = "Luminari Sage Gitleaks Configuration"
+
+[extend]
+# Use default Gitleaks rules as baseline
+useDefault = true
+
+# Custom rules for Luminari Sage-specific secrets
+[[rules]]
+id = "sage-api-key"
+description = "Luminari Sage API Keys (64-character hex)"
+regex = '''(?m)^[ \t]*(SAGE_API_KEY|SAGE_MCP_KEY|SAGE_MCP_BACKEND_KEY)[ \t]*[=:][ \t]*['"]?([a-fA-F0-9]{64})['"]?'''
+secretGroup = 2
+keywords = ["sage_api_key", "sage_mcp_key", "sage_mcp_backend_key"]
+tags = ["key", "sage", "api"]
+
+[[rules]]
+id = "postgres-password"
+description = "PostgreSQL Password"
+regex = '''(?m)^[ \t]*(POSTGRES_PASSWORD|POSTGRESQL_PASSWORD)[ \t]*[=:][ \t]*['"]?([^'"\s#]{8,})['"]?'''
+secretGroup = 2
+keywords = ["postgres_password", "postgresql_password"]
+tags = ["password", "database", "postgres"]
+
+[[rules.allowlists]]
+description = "Environment references and explicit placeholders are not literal PostgreSQL passwords"
+regexTarget = "secret"
+regexes = [
+    '''^\$\{?[A-Za-z_][A-Za-z0-9_]*''',
+    '''(?i)^(change|replace|insert|your|example|sample|dummy|fake|invalid|placeholder)[-_ .].*$''',
+    '''(?i)^(unit[-_ ]test|test[-_ ](unit|only|fixture|dummy|fake|placeholder))[-_ .].*$''',
+]
+
+[[rules]]
+id = "neo4j-password"
+description = "Neo4j Password"
+regex = '''(?m)^[ \t]*(NEO4J_PASSWORD)[ \t]*[=:][ \t]*['"]?([^'"\s#]{8,})['"]?'''
+secretGroup = 2
+keywords = ["neo4j_password"]
+tags = ["password", "database", "neo4j"]
+
+[[rules.allowlists]]
+description = "Environment references and explicit placeholders are not literal Neo4j passwords"
+regexTarget = "secret"
+regexes = [
+    '''^\$\{?[A-Za-z_][A-Za-z0-9_]*''',
+    '''(?i)^(change|replace|insert|your|example|sample|dummy|fake|invalid|placeholder)[-_ .].*$''',
+    '''(?i)^(unit[-_ ]test|test[-_ ](unit|only|fixture|dummy|fake|placeholder))[-_ .].*$''',
+]
+
+[[rules]]
+id = "jwt-secret"
+description = "JWT Secret Key"
+regex = '''(?m)^[ \t]*(JWT_SECRET|JWT_SECRET_KEY)[ \t]*[=:][ \t]*['"]?([^'"\s#]{16,})['"]?'''
+secretGroup = 2
+keywords = ["jwt_secret", "jwt_secret_key"]
+tags = ["secret", "jwt", "authentication"]
+
+[[rules.allowlists]]
+description = "Environment references and explicit placeholders are not literal JWT secrets"
+regexTarget = "secret"
+regexes = [
+    '''^\$\{?[A-Za-z_][A-Za-z0-9_]*''',
+    '''(?i)^(change|replace|insert|your|example|sample|dummy|fake|invalid|placeholder)[-_ .].*$''',
+    '''(?i)^(unit[-_ ]test|test[-_ ](unit|only|fixture|dummy|fake|placeholder))[-_ .].*$''',
+]
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API Key"
+regex = '''sk-[a-zA-Z0-9]{48,}'''
+keywords = ["sk-"]
+tags = ["api", "openai", "key"]
+
+[[rules]]
+id = "langsmith-api-key"
+description = "LangSmith API Key"
+regex = '''ls__[a-zA-Z0-9_-]{40,}'''
+keywords = ["ls__"]
+tags = ["api", "langsmith", "key"]
+
+[[rules]]
+id = "database-url"
+description = "Database Connection URL with credentials"
+regex = '''(?i)(postgres|postgresql|neo4j|mongodb)://[^:\s]+:([^@\s]+)@[^/\s]+'''
+secretGroup = 2
+keywords = ["postgres://", "postgresql://", "neo4j://", "mongodb://"]
+tags = ["database", "connection-string", "url"]
+
+[[rules.allowlists]]
+description = "Environment-variable references are not embedded database passwords"
+regexTarget = "secret"
+regexes = ['''^\$\{?[A-Za-z_][A-Za-z0-9_]*''']
+
+[[rules]]
+id = "credential-table-row"
+description = "Credential rows copied from spreadsheets or Markdown tables"
+regex = '''(?im)^[ \t]*(pw|pwd|passwd|password|passphrase|api[ _-]?key|access[ _-]?token|refresh[ _-]?token|secret|credential)[ \t]*\|[^\r\n]+$'''
+keywords = ["pw", "pwd", "passwd", "password", "passphrase", "api key", "api_key", "token", "secret", "credential"]
+tags = ["credential", "password", "table"]
+
+[[rules]]
+id = "quoted-credential-literal"
+description = "Quoted credential literals, including low-entropy passwords"
+regex = '''(?i)(api[_ -]?key|access[_ -]?key|client[_ -]?secret|jwt[_ -]?secret(_key)?|private[_ -]?key|password|passwd|passphrase|pwd|auth[_ -]?token|access[_ -]?token|refresh[_ -]?token|credential)[ \t]*[=:][ \t]*['"]([^'"]{8,})['"]'''
+secretGroup = 3
+keywords = ["api_key", "api key", "password", "passwd", "passphrase", "secret", "token", "credential"]
+tags = ["credential", "password", "token"]
+
+[[rules.allowlists]]
+description = "Clearly marked test and placeholder credential literals"
+regexTarget = "secret"
+regexes = [
+    '''(?i)^(change|replace|insert|your|example|sample|dummy|fake|invalid|placeholder)[-_ ].*''',
+    '''(?i)^(unit[-_ ]test|test[-_ ](unit|only|fixture|dummy|fake|placeholder))[-_ ].*''',
+    '''^\$\{?[A-Za-z_][A-Za-z0-9_]*''',
+    '''^\$\(''',
+]
+
+[[rules.allowlists]]
+description = "Documentation commands generate disposable credentials at runtime"
+regexTarget = "line"
+regexes = ['''secrets\.(token_hex|token_urlsafe)''']
+
+[[rules]]
+id = "credential-config-assignment"
+description = "Literal credentials assigned in environment and deployment configuration"
+regex = '''(?m)^[ \t]*([A-Z][A-Z0-9_]*(API_KEY|ACCESS_KEY|CLIENT_SECRET|JWT_SECRET|PRIVATE_KEY|PASSWORD|PASSWD|PASSPHRASE|AUTH_TOKEN|ACCESS_TOKEN|REFRESH_TOKEN|CREDENTIAL)[A-Z0-9_]*)[ \t]*[=:][ \t]*['"]?([^\s'"#]{8,})['"]?[ \t]*$'''
+secretGroup = 3
+keywords = ["API_KEY", "ACCESS_KEY", "CLIENT_SECRET", "JWT_SECRET", "PRIVATE_KEY", "PASSWORD", "PASSWD", "PASSPHRASE", "AUTH_TOKEN", "ACCESS_TOKEN", "REFRESH_TOKEN", "CREDENTIAL"]
+tags = ["credential", "configuration", "password", "token"]
+
+[[rules.allowlists]]
+description = "Environment references and explicit placeholders are safe configuration values"
+regexTarget = "secret"
+regexes = [
+    '''^\$\{?[A-Za-z_][A-Za-z0-9_]*''',
+    '''^\$\(''',
+    '''^\{\{.*\}\}$''',
+    '''^<[^>]+>$''',
+    '''^/run/secrets/[A-Za-z0-9_.-]+$''',
+    '''(?i)^(change|replace|insert|your|example|sample|dummy|fake|invalid|placeholder)[-_ ].*''',
+    '''(?i)^(unit[-_ ]test|test[-_ ](unit|only|fixture|dummy|fake|placeholder))[-_ ].*''',
+]
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Clearly marked non-production values for generic API-key findings"
+regexTarget = "secret"
+regexes = [
+    '''(?i)^(change|replace|insert|your|example|sample|dummy|fake|invalid|placeholder)[-_ ].*''',
+    '''(?i)^(unit[-_ ]test|test[-_ ](unit|only|fixture|dummy|fake|placeholder))[-_ ].*''',
+    '''^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$''',
+    '''^\$\(''',
+    '''^\{\{[^}]+\}\}$''',
+    '''^<[^>]+>$''',
+]
+
+[[rules]]
+id = "curl-auth-header"
+
+[[rules.allowlists]]
+description = "Documentation uses named variables and explicit placeholders in curl examples"
+regexTarget = "secret"
+regexes = [
+    '''^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$''',
+    '''^\{\{[^}]+\}\}$''',
+    '''^<[^>]+>$''',
+    '''^(SAGE_API_KEY|SAGE_MCP_KEY|SAGE_MCP_BACKEND_KEY|API_KEY)$''',
+    '''(?i)^(your|example|sample|dummy|fake|placeholder)[-_ ].*''',
+    '''(?i)^(unit[-_ ]test|test[-_ ](unit|only|fixture|dummy|fake|placeholder))[-_ ].*''',
+]
+
+[[rules]]
+id = "curl-auth-user"
+
+[[rules.allowlists]]
+description = "Documentation uses environment-variable references for curl basic authentication"
+regexTarget = "secret"
+regexes = [
+    '''.*\$\{?[A-Za-z_][A-Za-z0-9_]*.*''',
+    '''(?i)^(your|example|sample|dummy|fake|placeholder)[-_ :].*''',
+    '''(?i)^(unit[-_ ]test|test[-_ ](unit|only|fixture|dummy|fake|placeholder))[-_ :].*''',
+]
+
+[[allowlists]]
+description = "The scanner configuration necessarily contains secret-detection examples"
+paths = ['''(^|/)\.gitleaks\.toml$''']

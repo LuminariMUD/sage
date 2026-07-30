@@ -1,0 +1,37 @@
+    add_encounter_record(ENCOUNTER_TYPE_DYBBUK, ENCOUNTER_CLASS_COMBAT, 25, 30, ENCOUNTER_GROUP_TYPE_DYBBUK, "Dybbuk", 100, 1, 1, 
+      TREASURE_TABLE_NONE, CLASS_WIZARD, ENCOUNTER_STRENGTH_NORMAL, CHAOTIC_EVIL, RACE_TYPE_UNDEAD, 
+      SUBRACE_INCORPOREAL, SUBRACE_CHAOTIC, SUBRACE_EXTRAPLANAR, HOSTILE, SIZE_MEDIUM );
+    set_encounter_terrain_any(ENCOUNTER_TYPE_DYBBUK);
+    set_encounter_terrain_all_surface(ENCOUNTER_TYPE_DYBBUK);
+    set_encounter_terrain_all_underdark(ENCOUNTER_TYPE_DYBBUK);      add_encounter_sector(ENCOUNTER_TYPE_DYBBUK, SECT_ROADS);
+    set_encounter_terrain_all_water(ENCOUNTER_TYPE_DYBBUK);  
+#define ENCOUNTER_TYPE_DYBBUK
+#define ENCOUNTER_GROUP_TYPE_DYBBUK
+
+
+    add_encounter_record(ENCOUNTER_TYPE_CETACEAL_AGATHION, ENCOUNTER_CLASS_COMBAT, 25, 30, ENCOUNTER_GROUP_TYPE_CETACEAL_AGATHION, "Cetaceal_Agathion", 100, 1, 6, 
+      TREASURE_TABLE_NONE, CLASS_CLERIC, ENCOUNTER_STRENGTH_NORMAL, NEUTRAL_GOOD, RACE_TYPE_OUTSIDER, 
+      SUBRACE_AQUATIC, SUBRACE_EXTRAPLANAR, SUBRACE_GOOD, NON_HOSTILE, SIZE_MEDIUM );
+    set_encounter_description(ENCOUNTER_TYPE_CETACEAL_AGATHION, "This mermaid-like creature has the torso and head of a long haired woman and the lower half of a sleek killer whale.");
+    set_encounter_long_description(ENCOUNTER_TYPE_CETACEAL_AGATHION, "A Cetaceal Agathion swims gracefully by.");
+    add_encounter_sector(ENCOUNTER_TYPE_CETACEAL_AGATHION, SECT_WATER_SWIM);      add_encounter_sector(ENCOUNTER_TYPE_CETACEAL_AGATHION, SECT_UNDERWATER);
+    add_encounter_sector(ENCOUNTER_TYPE_CETACEAL_AGATHION, SECT_OCEAN);      add_encounter_sector(ENCOUNTER_TYPE_CETACEAL_AGATHION, SECT_UD_WATER);
+
+#define ENCOUNTER_TYPE_CETACEAL_AGATHION
+#define ENCOUNTER_GROUP_TYPE_CETACEAL_AGATHION
+
+
+
+    add_encounter_record(ENCOUNTER_TYPE_CANNON_GOLEM, ENCOUNTER_CLASS_COMBAT, 25, 30, ENCOUNTER_GROUP_TYPE_CANNON_GOLEM, "Cannon_Golem", 100, 1, 2, 
+      TREASURE_TABLE_NONE, CLASS_WARRIOR, ENCOUNTER_STRENGTH_NORMAL, TRUE_NEUTRAL, RACE_TYPE_CONSTRUCT, 
+      SUBRACE_AUGMENTED, SUBRACE_UNKNOWN, SUBRACE_UNKNOWN, NON_HOSTILE, SIZE_LARGE );
+    set_encounter_description(ENCOUNTER_TYPE_CANNON_GOLEM, "This collection of jagged metal rears up into a humanoid form, its enormous cannon tracking movement with mechanical precision.");
+    set_encounter_long_description(ENCOUNTER_TYPE_CANNON_GOLEM, "A large Cannon Golem stands here.");
+    set_encounter_terrain_any(ENCOUNTER_TYPE_CANNON_GOLEM);
+      set_encounter_terrain_all_surface(ENCOUNTER_TYPE_CANNON_GOLEM);
+
+#define ENCOUNTER_TYPE_CANNON_GOLEM
+#define ENCOUNTER_GROUP_TYPE_CANNON_GOLEM
+
+
+

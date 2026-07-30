@@ -1,0 +1,953 @@
+{
+  "info": {
+    "name": "Luminari Validation Agent Demo",
+    "description": "Comprehensive collection for testing the PydanticAI relationship validation agent and human review workflow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. System Health",
+      "item": [
+        {
+          "name": "API Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "health"]
+            },
+            "description": "Check if the API is healthy and ready for validation"
+          },
+          "response": []
+        },
+        {
+          "name": "Get System Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "stats"]
+            },
+            "description": "Get overall system statistics including entity and relationship counts"
+          },
+          "response": []
+        }
+      ],
+      "description": "Basic health checks before running validation"
+    },
+    {
+      "name": "2. Run Validation",
+      "item": [
+        {
+          "name": "Full Relationship Validation with LLM",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Store the report_id for later use",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('last_report_id', response.report_id);",
+                  "    pm.environment.set('last_agent_id', response.agent_id);",
+                  "    ",
+                  "    // Display summary",
+                  "    console.log(`Validation completed in ${response.execution_time_seconds}s`);",
+                  "    console.log(`Found ${response.findings_count} findings`);",
+                  "    console.log(`Severity breakdown: ${JSON.stringify(response.severity_counts)}`);",
+                  "    ",
+                  "    // Store some finding IDs if available",
+                  "    if (response.findings.length > 0) {",
+                  "        pm.environment.set('sample_finding_id', response.findings[0].finding_id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 1000,\n  \"relationship_limit\": 5000,\n  \"check_bidirectional\": true,\n  \"check_mutual_exclusivity\": true,\n  \"check_hierarchies\": true,\n  \"check_semantic_consistency\": true,\n  \"enable_llm_analysis\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "Run comprehensive relationship validation with all checks enabled, including LLM-enhanced semantic analysis"
+          },
+          "response": []
+        },
+        {
+          "name": "Quick Validation (Small Sample)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 100,\n  \"relationship_limit\": 500,\n  \"check_bidirectional\": true,\n  \"check_mutual_exclusivity\": true,\n  \"check_hierarchies\": false,\n  \"check_semantic_consistency\": true,\n  \"enable_llm_analysis\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "Run validation on a smaller sample for quick testing with LLM analysis"
+          },
+          "response": []
+        },
+        {
+          "name": "DEBUG: Tiny Sample for Property Analysis",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 10,\n  \"relationship_limit\": 20,\n  \"check_bidirectional\": false,\n  \"check_mutual_exclusivity\": false,\n  \"check_hierarchies\": false,\n  \"check_semantic_consistency\": true,\n  \"enable_llm_analysis\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "TINY sample to debug property structure and see what semantic data we're missing"
+          },
+          "response": []
+        },
+        {
+          "name": "Bidirectional Check Only",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 1000,\n  \"relationship_limit\": 5000,\n  \"check_bidirectional\": true,\n  \"check_mutual_exclusivity\": false,\n  \"check_hierarchies\": false,\n  \"check_semantic_consistency\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "Run only bidirectional consistency checks"
+          },
+          "response": []
+        },
+        {
+          "name": "Rule-Based Only (No LLM)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 1000,\n  \"relationship_limit\": 5000,\n  \"check_bidirectional\": true,\n  \"check_mutual_exclusivity\": true,\n  \"check_hierarchies\": true,\n  \"check_semantic_consistency\": true,\n  \"enable_llm_analysis\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "Run deterministic rule-based validation only - fast and consistent results"
+          },
+          "response": []
+        },
+        {
+          "name": "Semantic Analysis with LLM Focus",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 500,\n  \"relationship_limit\": 2000,\n  \"check_bidirectional\": false,\n  \"check_mutual_exclusivity\": false,\n  \"check_hierarchies\": false,\n  \"check_semantic_consistency\": true,\n  \"enable_llm_analysis\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "Focus only on semantic consistency with LLM analysis - compare rule-based vs LLM findings"
+          },
+          "response": []
+        },
+        {
+          "name": "Compare: Rule-Based vs LLM Enhanced",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Store LLM-enhanced results for comparison",
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.environment.set('llm_report_id', response.report_id);",
+                  "    ",
+                  "    // Count rule-based vs LLM findings",
+                  "    const ruleBasedFindings = response.findings.filter(f => f.category !== 'llm_semantic_analysis');",
+                  "    const llmFindings = response.findings.filter(f => f.category === 'llm_semantic_analysis');",
+                  "    ",
+                  "    console.log(`Rule-based findings: ${ruleBasedFindings.length}`);",
+                  "    console.log(`LLM-enhanced findings: ${llmFindings.length}`);",
+                  "    console.log(`Total findings: ${response.findings_count}`);",
+                  "    ",
+                  "    // Show LLM suggestions",
+                  "    if (llmFindings.length > 0) {",
+                  "        console.log('LLM Analysis Summary:');",
+                  "        llmFindings.slice(0, 3).forEach((f, i) => {",
+                  "            console.log(`${i+1}. ${f.title}`);",
+                  "            console.log(`   Confidence: ${f.confidence_score}`);",
+                  "            console.log(`   Suggested: ${f.suggested_action}`);",
+                  "        });",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 200,\n  \"relationship_limit\": 1000,\n  \"check_bidirectional\": true,\n  \"check_mutual_exclusivity\": true,\n  \"check_hierarchies\": true,\n  \"check_semantic_consistency\": true,\n  \"enable_llm_analysis\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "Compare deterministic rule-based findings vs LLM-enhanced analysis on same data"
+          },
+          "response": []
+        }
+      ],
+      "description": "Different validation configurations to test rule-based vs LLM-enhanced analysis"
+    },
+    {
+      "name": "3. Review Results",
+      "item": [
+        {
+          "name": "Get Validation History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/history?limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "history"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Number of reports to return"
+                },
+                {
+                  "key": "agent_id",
+                  "value": "{{last_agent_id}}",
+                  "description": "Filter by agent ID",
+                  "disabled": true
+                },
+                {
+                  "key": "validation_type",
+                  "value": "Entity Relationship Validation",
+                  "description": "Filter by validation type",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get recent validation reports with optional filtering"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Specific Validation Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/report/{{last_report_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "report", "{{last_report_id}}"]
+            },
+            "description": "Get detailed report including all findings and markdown report"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Validation Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/stats",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "stats"]
+            },
+            "description": "Get overall validation statistics and trends"
+          },
+          "response": []
+        }
+      ],
+      "description": "Review validation results and history"
+    },
+    {
+      "name": "4. Human Review Workflow",
+      "item": [
+        {
+          "name": "Get All Unreviewed Findings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Store first finding ID for review testing",
+                  "if (pm.response.code === 200) {",
+                  "    const findings = pm.response.json();",
+                  "    if (findings.length > 0) {",
+                  "        pm.environment.set('unreviewed_finding_id', findings[0].finding_id);",
+                  "        console.log(`Found ${findings.length} unreviewed findings`);",
+                  "        console.log(`Sample finding: ${findings[0].title}`);",
+                  "    } else {",
+                  "        console.log('No unreviewed findings found');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/findings/unreviewed",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "findings", "unreviewed"]
+            },
+            "description": "Get all findings that need human review"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Critical/Error Findings Only",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/findings/unreviewed?severity=error",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "findings", "unreviewed"],
+              "query": [
+                {
+                  "key": "severity",
+                  "value": "error",
+                  "description": "Filter by severity: critical, error, warning, info"
+                },
+                {
+                  "key": "category",
+                  "value": "mutual_exclusivity",
+                  "description": "Filter by category",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Limit number of results",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get only high-priority findings that need immediate attention"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Bidirectional Issues",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/findings/unreviewed?category=bidirectional_consistency",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "findings", "unreviewed"],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "bidirectional_consistency",
+                  "description": "Filter by category"
+                }
+              ]
+            },
+            "description": "Get findings related to missing bidirectional relationships"
+          },
+          "response": []
+        },
+        {
+          "name": "Get LLM-Enhanced Findings Only",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/findings/unreviewed?category=llm_semantic_analysis",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "findings", "unreviewed"],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "llm_semantic_analysis",
+                  "description": "Filter for LLM-enhanced findings only"
+                },
+                {
+                  "key": "limit",
+                  "value": "25",
+                  "description": "Limit LLM findings",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get only LLM-enhanced semantic analysis findings for human review"
+          },
+          "response": []
+        },
+        {
+          "name": "Compare Rule-Based vs LLM Findings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Analyze and compare findings",
+                  "if (pm.response.code === 200) {",
+                  "    const findings = pm.response.json();",
+                  "    ",
+                  "    // Separate rule-based from LLM findings",
+                  "    const ruleBasedFindings = findings.filter(f => f.category !== 'llm_semantic_analysis');",
+                  "    const llmFindings = findings.filter(f => f.category === 'llm_semantic_analysis');",
+                  "    ",
+                  "    console.log('=== FINDINGS COMPARISON ===');",
+                  "    console.log(`Rule-based findings: ${ruleBasedFindings.length}`);",
+                  "    console.log(`LLM-enhanced findings: ${llmFindings.length}`);",
+                  "    ",
+                  "    // Show confidence distribution for LLM findings",
+                  "    if (llmFindings.length > 0) {",
+                  "        const highConf = llmFindings.filter(f => f.confidence_score >= 0.7).length;",
+                  "        const medConf = llmFindings.filter(f => f.confidence_score >= 0.5 && f.confidence_score < 0.7).length;",
+                  "        const lowConf = llmFindings.filter(f => f.confidence_score < 0.5).length;",
+                  "        ",
+                  "        console.log('LLM Confidence Distribution:');",
+                  "        console.log(`  High (≥0.7): ${highConf}`);",
+                  "        console.log(`  Medium (0.5-0.69): ${medConf}`);",
+                  "        console.log(`  Low (<0.5): ${lowConf}`);",
+                  "    }",
+                  "    ",
+                  "    // Show top LLM suggestions",
+                  "    console.log('\\n=== TOP LLM SUGGESTIONS ===');",
+                  "    llmFindings",
+                  "        .sort((a, b) => b.confidence_score - a.confidence_score)",
+                  "        .slice(0, 3)",
+                  "        .forEach((f, i) => {",
+                  "            console.log(`${i+1}. ${f.title.substring(0, 60)}...`);",
+                  "            console.log(`   Confidence: ${f.confidence_score} | Priority: ${f.priority}`);",
+                  "            console.log(`   Action: ${f.suggested_action.substring(0, 80)}...`);",
+                  "        });",
+                  "}",
+                  ""
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/findings/unreviewed?limit=100",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "findings", "unreviewed"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Get more findings for comparison"
+                }
+              ]
+            },
+            "description": "Get all findings and compare rule-based vs LLM analysis with statistics"
+          },
+          "response": []
+        }
+      ],
+      "description": "Find and filter unreviewed findings, including LLM-enhanced analysis"
+    },
+    {
+      "name": "5. Mark Findings as Reviewed",
+      "item": [
+        {
+          "name": "Review Finding - Fixed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer\": \"admin\",\n  \"action\": \"fixed\",\n  \"notes\": \"Added missing bidirectional relationship in Neo4j database\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/findings/{{unreviewed_finding_id}}/review",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "findings", "{{unreviewed_finding_id}}", "review"]
+            },
+            "description": "Mark a finding as reviewed with 'fixed' action"
+          },
+          "response": []
+        },
+        {
+          "name": "Review Finding - False Positive",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer\": \"admin\",\n  \"action\": \"false_positive\",\n  \"notes\": \"This relationship is intentionally asymmetric in the lore - not an error\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/findings/{{sample_finding_id}}/review",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "findings", "{{sample_finding_id}}", "review"]
+            },
+            "description": "Mark a finding as a false positive"
+          },
+          "response": []
+        },
+        {
+          "name": "Review Finding - Acknowledged",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer\": \"admin\",\n  \"action\": \"acknowledged\",\n  \"notes\": \"Valid finding, will address in next lore update cycle\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/findings/{{sample_finding_id}}/review",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "findings", "{{sample_finding_id}}", "review"]
+            },
+            "description": "Acknowledge a finding for future action"
+          },
+          "response": []
+        },
+        {
+          "name": "Review LLM Finding - Accepted",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer\": \"admin\",\n  \"action\": \"llm_accepted\",\n  \"notes\": \"LLM analysis was accurate - will implement suggested semantic type\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/findings/{{sample_finding_id}}/review",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "findings", "{{sample_finding_id}}", "review"]
+            },
+            "description": "Accept an LLM analysis as correct and actionable"
+          },
+          "response": []
+        },
+        {
+          "name": "Review LLM Finding - Rejected",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewer\": \"admin\",\n  \"action\": \"llm_rejected\",\n  \"notes\": \"LLM analysis was incorrect - rule-based finding was sufficient. Domain-specific knowledge needed.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/findings/{{sample_finding_id}}/review",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "findings", "{{sample_finding_id}}", "review"]
+            },
+            "description": "Reject an LLM analysis as incorrect or unhelpful"
+          },
+          "response": []
+        }
+      ],
+      "description": "Mark findings as reviewed with different actions, including LLM-specific reviews"
+    },
+    {
+      "name": "6. Test Scenarios",
+      "item": [
+        {
+          "name": "Scenario: New Data Validation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 500,\n  \"relationship_limit\": 2000,\n  \"check_bidirectional\": true,\n  \"check_mutual_exclusivity\": true,\n  \"check_hierarchies\": true,\n  \"check_semantic_consistency\": true,\n  \"enable_llm_analysis\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "Scenario: Validate after ingesting new lore documents"
+          },
+          "response": []
+        },
+        {
+          "name": "Scenario: Pre-Release Check",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 2000,\n  \"relationship_limit\": 10000,\n  \"check_bidirectional\": true,\n  \"check_mutual_exclusivity\": true,\n  \"check_hierarchies\": true,\n  \"check_semantic_consistency\": true,\n  \"enable_llm_analysis\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "Scenario: Full validation before major release"
+          },
+          "response": []
+        },
+        {
+          "name": "Scenario: Debug Specific Issue",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 100,\n  \"relationship_limit\": 300,\n  \"check_bidirectional\": false,\n  \"check_mutual_exclusivity\": true,\n  \"check_hierarchies\": false,\n  \"check_semantic_consistency\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "Scenario: Focus on specific validation type to debug issues"
+          },
+          "response": []
+        }
+      ],
+      "description": "Common validation scenarios"
+    },
+    {
+      "name": "4. Semantic Appropriateness Validation",
+      "item": [
+        {
+          "name": "Focus on Semantic Appropriateness Only",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Has semantic_appropriateness findings', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const semanticFindings = jsonData.findings.filter(f => f.category === 'semantic_appropriateness');",
+                  "    pm.expect(semanticFindings.length).to.be.greaterThan(0);",
+                  "    console.log(`Found ${semanticFindings.length} semantic appropriateness issues`);",
+                  "    ",
+                  "    // Show examples",
+                  "    semanticFindings.slice(0, 3).forEach((finding, i) => {",
+                  "        console.log(`${i+1}. ${finding.title}`);",
+                  "        console.log(`   Entity types: ${finding.metadata.source_entity_type} -> ${finding.metadata.target_entity_type}`);",
+                  "        console.log(`   Better: ${finding.metadata.suggested_relationship}`);",
+                  "    });",
+                  "});",
+                  "",
+                  "pm.test('LLM structured output working', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const llmErrors = jsonData.findings.filter(f => f.category.includes('llm') && f.title.includes('failed'));",
+                  "    pm.expect(llmErrors.length).to.equal(0, 'LLM should work without errors');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 30,\n  \"relationship_limit\": 30,\n  \"check_bidirectional\": true,\n  \"check_mutual_exclusivity\": false,\n  \"check_hierarchies\": false,\n  \"check_semantic_consistency\": false,\n  \"enable_llm_analysis\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "Test the new semantic appropriateness validation with entity type analysis. Focuses on LLM-driven semantic analysis to find relationships that don't make sense between entity types (e.g., faction COMMANDS material -> faction USES material)"
+          },
+          "response": []
+        },
+        {
+          "name": "Compare Old vs New Validation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('New validation categories present', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const categories = Object.keys(jsonData.category_counts);",
+                  "    ",
+                  "    // Should have new semantic categories",
+                  "    const hasSemanticAppropriateness = categories.includes('semantic_appropriateness');",
+                  "    const hasOldSemanticConsistency = categories.includes('semantic_consistency');",
+                  "    ",
+                  "    console.log('Categories found:', categories);",
+                  "    console.log('Has semantic_appropriateness:', hasSemanticAppropriateness);",
+                  "    console.log('Has old semantic_consistency:', hasOldSemanticConsistency);",
+                  "    ",
+                  "    // New approach should focus on appropriateness over consistency",
+                  "    if (hasSemanticAppropriateness) {",
+                  "        console.log('✅ New semantic validation working!');",
+                  "    }",
+                  "});",
+                  "",
+                  "pm.test('Entity type metadata included', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const semanticFindings = jsonData.findings.filter(f => f.category === 'semantic_appropriateness');",
+                  "    ",
+                  "    if (semanticFindings.length > 0) {",
+                  "        const hasEntityTypes = semanticFindings.some(f => ",
+                  "            f.metadata.source_entity_type && f.metadata.target_entity_type",
+                  "        );",
+                  "        pm.expect(hasEntityTypes).to.be.true;",
+                  "        console.log('✅ Entity type analysis working!');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 50,\n  \"relationship_limit\": 50,\n  \"check_bidirectional\": true,\n  \"check_mutual_exclusivity\": true,\n  \"check_hierarchies\": true,\n  \"check_semantic_consistency\": true,\n  \"enable_llm_analysis\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "Run comprehensive validation to compare old rigid rules (semantic_consistency) vs new context-aware validation (semantic_appropriateness). Shows the difference between formatting complaints and actual semantic issues."
+          },
+          "response": []
+        },
+        {
+          "name": "Test Forgotten Tide Use Case",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Find faction-material relationship issues', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    const findings = jsonData.findings;",
+                  "    ",
+                  "    // Look for faction/organization relationships with materials",
+                  "    const factionMaterialIssues = findings.filter(f => {",
+                  "        if (f.category !== 'semantic_appropriateness') return false;",
+                  "        ",
+                  "        const srcType = f.metadata?.source_entity_type;",
+                  "        const tgtType = f.metadata?.target_entity_type;",
+                  "        const title = f.title.toLowerCase();",
+                  "        ",
+                  "        return (srcType === 'ORGANIZATION' || srcType === 'FACTION') && ",
+                  "               (tgtType === 'MATERIAL' || tgtType === 'OBJECT') ||",
+                  "               title.includes('forgotten') || title.includes('drow') || ",
+                  "               title.includes('lacquer') || title.includes('mushroom');",
+                  "    });",
+                  "    ",
+                  "    console.log(`Found ${factionMaterialIssues.length} faction-material relationship issues`);",
+                  "    ",
+                  "    factionMaterialIssues.forEach(finding => {",
+                  "        console.log(`🔍 ${finding.title}`);",
+                  "        console.log(`   Current: ${finding.metadata?.appropriateness}`);",
+                  "        console.log(`   Better: ${finding.metadata?.suggested_relationship}`);",
+                  "        console.log(`   Types: ${finding.metadata?.source_entity_type} -> ${finding.metadata?.target_entity_type}`);",
+                  "    });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity_limit\": 100,\n  \"relationship_limit\": 200,\n  \"check_bidirectional\": true,\n  \"check_mutual_exclusivity\": false,\n  \"check_hierarchies\": false,\n  \"check_semantic_consistency\": false,\n  \"enable_llm_analysis\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/validate/relationships",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "validate", "relationships"]
+            },
+            "description": "Specifically test the use case that motivated this enhancement: finding relationships like 'Forgotten Tide COMMANDS drow mushroom lacquers' and suggesting 'Forgotten Tide USES drow mushroom lacquers' instead."
+          },
+          "response": []
+        }
+      ],
+      "description": "Test the new semantic appropriateness validation that replaces rigid bidirectional rules with context-aware LLM analysis. Focuses on entity type analysis and semantic relationship suggestions."
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Set timestamp for requests",
+          "pm.environment.set('timestamp', new Date().toISOString());"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://luminarimud.com/sage",
+      "description": "Base URL for the Luminari Sage API"
+    },
+    {
+      "key": "last_report_id",
+      "value": "",
+      "description": "Most recent validation report ID"
+    },
+    {
+      "key": "last_agent_id",
+      "value": "relationship_validator_v1_llm",
+      "description": "Agent ID from last validation run"
+    },
+    {
+      "key": "sample_finding_id",
+      "value": "",
+      "description": "Sample finding ID for testing review"
+    },
+    {
+      "key": "unreviewed_finding_id",
+      "value": "",
+      "description": "First unreviewed finding ID"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+# The Crystal Dwarves of Nagburim
+
+Long before the Last War, a dwarven clan delved deep into the caverns that would later be known as the Crystal Caves. These halls glittered with veins of a strange, luminous crystal—raw Arcanite, humming with hidden power. In time, the dwarves came to covet their trove. When the Last War erupted, they sealed their gates against the world above, believing the surface lost to ruin.
+
+In isolation, they endured a transformation. The Arcanite's slow pulse reshaped them: skin hardened and turned translucent, their need for food and drink fell away, and their thoughts sharpened into diamond clarity. What emerged from that seclusion were no longer dwarves as the world knew them, but the first Crystal Dwarves—beings of flesh transmuted into living crystal. They saw this metamorphosis not as a curse, but as a step toward perfection.
+
+Their society soon revolved around this ideal. A rigid caste system formed, ranking individuals by the purity of their crystal bodies. The noble castes were nearly transparent, their forms glimmering like flawless quartz with faint hues of color or specks of precious metal. Those of lower birth bore veins of darker minerals, mottled stone, or cloudy imperfections swirling through their forms.
+
+Clothing fell out of fashion—seen as a relic of mortality—but among the lower castes a new custom arose: gilding. With molten gold, silver, or copper, they traced the fractures and flaws of their bodies in shimmering lines. Part adornment, part concealment, gilding was at once an act of shame and of aspiration. To some it is a ritual of transcendence, a way of elevating impure crystal toward the appearance of nobility. To others, it is a mask—hiding imperfections beneath the illusion of beauty. In either case, the gleam of metal has become a quiet language of status, ambition, and defiance within their society.
+
+At each Crystal Dwarf's core lies a glowing Arcanite heart, a lattice of crystalline energy that sustains their being. Its faint radiance can be seen shining within their bodies, though they can will the light dim if they desire. Yet this heart ties them irrevocably to Lumina itself—for beyond the world's natural Arcanite field, their hearts slowly fade. When the stored energy is exhausted, the dwarf withers into lifeless crystal. Though wondrous, these hearts cannot be harvested to power magical artifacts, for their structure is too intricate and unlike any other form of Arcanite.
+
+The Crystal Dwarves of Nagburim remained hidden from the surface until only eighty years ago. For centuries they were thought to be legend, stories of dwarves who had turned their bodies to pure crystal. But when they were at last rediscovered, myth became truth. Their meticulous records—preserved since before the Last War—proved both gift and burden. They alone carried knowledge of ancient wonders, from forgotten magics to relics of the Darklings and Luminari. Among their archives lay designs for the first arcana golems, the mighty constructs of old, of which only crude imitations walk Lumina today.
+
+They are not merely scholars but also guardians of Arcanite. Born of it, they can sense its fields with uncanny precision and so became the foremost miners and refiners of the crystal. Yet mindful of their dependence, they limit its extraction and brook no rivals. Any who trespass upon their monopoly are swiftly and mercilessly dealt with.
+
+Their language, known as Tal, is unlike any other tongue. Spoken through resonance and vibration, it rings like a living symphony—harmonic tones cascading in chorus. To outsiders, a conversation between Crystal Dwarves is as much music as speech, at once beautiful and unsettling.
+
+Thus the Crystal Dwarves endure: children of stone and light, heirs of secrets long buried, and eternal keepers of the crystal that is both their strength and their doom.

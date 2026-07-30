@@ -1,0 +1,151 @@
+# Luminari Sage Python Requirements
+# Python 3.11+ required (CI/containers run 3.13)
+
+# ===========================================
+# Core Framework
+# ===========================================
+fastapi==0.141.1
+# starlette is pinned explicitly (not just via fastapi) to hold the floor for the
+# BadHost fix; >=1.0.1 is the security requirement, 1.3.1 is current.
+starlette==1.3.1
+uvicorn[standard]==0.52.0
+pydantic==2.13.4
+pydantic-settings==2.14.2
+python-multipart==0.0.32
+
+# ===========================================
+# AI & ML
+# ===========================================
+--extra-index-url https://download.pytorch.org/whl/cpu
+pydantic-ai-slim[openai]==2.20.0  # Only the provider used by Sage
+graphiti-core==0.29.3  # Knowledge graph RAG
+sentence-transformers==5.6.1  # Local embeddings
+torch==2.13.0  # CPU index above selects the CPU wheel; no unused CUDA libraries
+tiktoken==0.13.0  # Token counting
+openai==2.50.0  # For PydanticAI agents
+langchain-core==1.5.2  # LangChain core abstractions
+langchain-openai==1.4.1  # OpenAI integration layer
+langchain-ollama==1.1.0  # Ollama chat models (replaces deprecated langchain-community.ChatOllama)
+langgraph==1.2.10  # Stateful agent orchestration for ReAct
+langsmith==0.10.12  # LangSmith observability and tracing
+
+# NER and Entity Extraction
+spacy==3.8.14  # NER framework
+dateparser==1.4.1  # Temporal entity parsing
+python-dateutil==2.9.0.post0  # Date utilities
+nltk==3.10.0  # Natural language toolkit
+
+# ===========================================
+# Databases
+# ===========================================
+# PostgreSQL with pgvector
+asyncpg==0.31.0  # Async PostgreSQL driver
+psycopg2-binary==2.9.12  # Sync PostgreSQL driver
+pgvector==0.5.0  # pgvector Python client
+sqlalchemy==2.0.51
+alembic==1.18.5  # Database migrations
+
+# Neo4j
+neo4j==6.2.0  # Official Neo4j driver
+
+# Redis (redis>=4.2 ships the asyncio client; aioredis is archived)
+redis==8.0.1
+
+# ===========================================
+# Authentication & Security
+# ===========================================
+passlib[bcrypt]==1.7.4  # Password hashing
+authlib==1.7.2  # OAuth
+httpx==0.28.1  # OAuth HTTP client / test client
+itsdangerous==2.2.0  # Secure tokens
+
+# ===========================================
+# API & Web
+# ===========================================
+strawberry-graphql[fastapi]==0.323.2  # GraphQL
+python-dotenv==1.2.2  # Environment variables
+pyyaml==6.0.3  # YAML parsing
+python-json-logger==4.1.0  # Structured logging
+prometheus-client==0.26.0  # Metrics
+
+# ===========================================
+# Data Processing
+# ===========================================
+numpy==2.5.1
+pandas==3.0.5  # For data manipulation
+beautifulsoup4==4.15.0  # HTML parsing
+markdown==3.10.2  # Markdown processing
+python-frontmatter==1.3.0  # Markdown frontmatter
+
+# ===========================================
+# Utilities
+# ===========================================
+ulid-py==1.1.0  # ULID generation
+pendulum==3.2.0  # Better datetime
+cachetools==7.1.6  # Caching utilities
+tenacity==9.1.4  # Retry logic
+rich==15.0.0  # Beautiful terminal output
+click==8.4.2  # CLI framework
+typer==0.27.0  # Modern CLI
+aiofiles==25.1.0  # Async file IO
+
+# ===========================================
+# Development & Testing
+# ===========================================
+pytest==9.1.1
+pytest-asyncio==1.4.0
+pytest-cov==7.1.0
+pytest-mock==3.15.1
+faker==40.36.0  # Mock data generation
+black==26.5.1  # Code formatting
+isort==8.0.1  # Import sorting
+ruff==0.16.0  # Linting
+mypy==2.3.0  # Type checking
+pre-commit==4.6.1  # Git hook runner
+ipython==9.15.0  # Interactive shell
+ipdb==0.13.13  # Debugger
+
+# ===========================================
+# Documentation
+# ===========================================
+mkdocs==1.6.1
+mkdocs-material==9.7.7
+mkdocstrings[python]==1.0.6
+
+# ===========================================
+# Monitoring & Observability
+# ===========================================
+sentry-sdk[fastapi]==2.66.1  # Error tracking
+opentelemetry-api==1.44.0
+opentelemetry-sdk==1.44.0
+opentelemetry-instrumentation-fastapi==0.65b0
+
+# ===========================================
+# Discord Integration
+# ===========================================
+discord.py==2.7.1
+aiohttp==3.14.3  # Required by discord.py
+
+# ===========================================
+# Background Tasks
+# ===========================================
+# NOTE: the celery[redis] extra pins kombu's redis<6.5 range, which conflicts with the
+# redis client version above. The redis broker still works via the redis pin.
+celery==5.6.3  # For async tasks (optional)
+flower==2.0.1  # Celery monitoring (optional)
+
+# ===========================================
+# File Processing
+# ===========================================
+python-magic==0.4.27  # File type detection
+pillow==12.3.0  # Image processing
+pypdf==6.14.2  # PDF processing
+
+# ===========================================
+# System Requirements
+# ===========================================
+# Note: Some packages may require system libraries:
+# - PostgreSQL client libraries (libpq-dev)
+# - Neo4j Java runtime (for embedded)
+# - Redis server (for caching)
+# - Build tools (gcc, python3-dev)
