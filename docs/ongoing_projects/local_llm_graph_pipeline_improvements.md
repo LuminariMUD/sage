@@ -49,6 +49,17 @@ The live graph currently has no source, sync-profile, or embedding-profile finge
 
 Live activation is intentionally pending. The migration command reports `0001_graph_sync_lifecycle` pending and no migration ledger. Capture and verify current PostgreSQL and Neo4j backups before applying it. The legacy worker remains stopped and must not be restarted.
 
+### 2026-08-07 - L1 backup and restore gate tooling checkpoint
+
+- Added a combined provider-upgrade backup command that creates a PostgreSQL custom-format dump and offline Neo4j Community dumps for both `neo4j` and `system`.
+- PostgreSQL verification performs a real scratch-database restore and records restored episode, synchronized-episode, and public-table counts.
+- Neo4j verification inspects and consistency-checks both dump archives before restarting the exact service container and waiting for health.
+- Added a strict completion-marker verifier and made live migration repeat that verifier before applying any SQL.
+- Added a recovery runbook with explicit PostgreSQL and Neo4j restore commands and post-restore audit requirements.
+- Verified 5 focused tests plus Bash syntax, ShellCheck, Compose rendering, Make dry-runs, and refusal guards.
+
+The tooling is committed before the operational checkpoint. A new live backup must still be captured and verified before the pending migration is applied. This tooling does not start the legacy worker; it remains stopped by operator request.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.

@@ -38,6 +38,19 @@ The next Phase 1 artifact is implemented but has not been applied to the live sc
 
 Current live status remains unchanged: migration `0001_graph_sync_lifecycle` is pending, `schema_migrations` does not exist, the audit is still clean through the legacy projection, and the legacy worker remains stopped. Activation must wait for current PostgreSQL and Neo4j backup/restore evidence.
 
+### Backup and activation safety checkpoint - tooling ready
+
+The recoverability tooling required before live migration is implemented and awaiting one live capture:
+
+- `make backup-provider-upgrade` creates a private combined backup set below ignored `backups/` storage.
+- PostgreSQL is dumped in custom format, restored into a generated scratch database, checked for episode/table counts, and removed after verification.
+- Neo4j Community Edition is stopped before dumping both `neo4j` and `system`; each archive is inspected and consistency-checked before the service is restarted and health-gated.
+- `src/scripts/verify_provider_upgrade_backup.py` binds the completion marker to all three SHA-256 digests and rejects escaped paths, symlinks, altered dumps, broad permissions, or incomplete restore evidence.
+- `make db-migrate` now independently repeats that verification before invoking the immutable migration runner.
+- `docs/deployment/PROVIDER_UPGRADE_BACKUP_RESTORE.md` records the tested backup contract and explicit PostgreSQL/Neo4j recovery commands.
+
+Focused backup-verifier coverage passes 5 tests; Bash syntax, ShellCheck, Compose rendering, Make dry-runs, and path/confirmation refusal checks pass. The live backup and migration remain pending at this checkpoint. The legacy worker remains stopped and no backup command starts it.
+
 ---
 
 ## 1. Executive Summary

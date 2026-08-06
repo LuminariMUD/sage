@@ -1,6 +1,6 @@
 # Correction System Documentation
 
-**Version**: 0.7.0  
+**Version**: 0.7.1
 **Status**: Production Ready  
 **Last Updated**: 2025-11-12
 
@@ -1125,6 +1125,5 @@ Or manually rollback and keep the preferred duplicate.
 ---
 
 **Last Updated**: 2025-11-12  
-**Version**: 0.7.0  
+**Version**: 0.7.1
 **Status**: Production Ready
-

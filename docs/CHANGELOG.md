@@ -530,6 +530,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.1] - 2026-08-07
+
+### Added
+
+- Read-only PostgreSQL/Neo4j graph reconciliation with deterministic human and JSON output.
+- Checksum-tracked PostgreSQL migrations for the durable graph-sync lifecycle and immutable attempt ledger.
+- Private provider-upgrade backup tooling with PostgreSQL scratch-restore verification, offline Neo4j `neo4j` and `system` dumps, archive consistency checks, and a strict migration gate.
+- A PostgreSQL and Neo4j backup/restore runbook for migration recovery and rollback.
+
+### Safety
+
+- The legacy Boolean graph worker remains stopped at 305 synchronized episodes and is not started by backup or migration tooling.
+
 ## [0.7.0] - 2026-07-30
 
 ### Changed

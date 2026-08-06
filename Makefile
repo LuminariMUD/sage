@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json db-migrate-status db-migrate-check db-migrate benchmark-graphiti benchmark-graphiti-openai
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate benchmark-graphiti benchmark-graphiti-openai
 
 # Support for verbose mode
 ifdef VERBOSE
@@ -36,6 +36,8 @@ help:
 	@echo "  make graphiti-status           - Show Graphiti/Neo4j statistics"
 	@echo "  make graph-audit              - Reconcile PostgreSQL and Neo4j (read-only)"
 	@echo "  make graph-audit-json         - Emit machine-readable reconciliation JSON"
+	@echo "  make backup-provider-upgrade BACKUP_REFERENCE=... - Create verified DB backups"
+	@echo "  make verify-provider-upgrade-backup BACKUP_REFERENCE=... - Verify backup gate"
 	@echo "  make db-migrate-status        - Show immutable PostgreSQL migration status"
 	@echo "  make db-migrate-check         - Fail when PostgreSQL migrations are pending"
 	@echo "  make db-migrate BACKUP_REFERENCE=... - Apply after verified backups"
@@ -279,6 +281,19 @@ graph-audit:
 graph-audit-json:
 	@docker compose exec -T api python src/scripts/graph_audit.py --json
 
+.PHONY: backup-provider-upgrade
+backup-provider-upgrade:
+	@test -n "$(BACKUP_REFERENCE)" || \
+		(echo "BACKUP_REFERENCE below backups/ is required" >&2; exit 2)
+	@CONFIRM_NEO4J_OFFLINE_BACKUP=1 \
+		bash src/scripts/backup_provider_upgrade.sh "$(BACKUP_REFERENCE)"
+
+.PHONY: verify-provider-upgrade-backup
+verify-provider-upgrade-backup:
+	@test -n "$(BACKUP_REFERENCE)" || \
+		(echo "BACKUP_REFERENCE below backups/ is required" >&2; exit 2)
+	@python3 src/scripts/verify_provider_upgrade_backup.py "$(BACKUP_REFERENCE)"
+
 .PHONY: db-migrate-status
 db-migrate-status:
 	@docker compose run --rm --no-deps api python src/scripts/migrate_database.py
@@ -293,6 +308,7 @@ db-migrate:
 		(echo "BACKUP_REFERENCE is required and must identify verified backups" >&2; exit 2)
 	@test -z "$(shell git status --porcelain)" || \
 		(echo "Commit the exact migration and application revision before applying" >&2; exit 2)
+	@python3 src/scripts/verify_provider_upgrade_backup.py "$(BACKUP_REFERENCE)"
 	@docker compose run --rm --no-deps api python src/scripts/migrate_database.py \
 		--apply \
 		--backup-reference "$(BACKUP_REFERENCE)" \

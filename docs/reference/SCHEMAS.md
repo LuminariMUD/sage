@@ -1,6 +1,6 @@
 # Database Schemas Reference
 
-**Version**: 0.7.0  
+**Version**: 0.7.1
 **Status**: Production Ready  
 **Last Updated**: 2025-11-12
 
@@ -760,4 +760,3 @@ See [Deployment Guide](../guides/DEPLOYMENT_GUIDE.md) for complete backup and re
 - [Pipeline System](../systems/PIPELINE_SYSTEM.md)
 - [API Reference](API_REFERENCE.md)
 - [Developer Guide](../development/DEVELOPER_GUIDE.md)
-
