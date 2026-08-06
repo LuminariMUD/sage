@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -153,6 +154,29 @@ async def test_graph_sync_migration_seed_guards_and_immutable_ledgers():
             lease_token,
             pending_id,
         )
+        call_started_at = datetime.now(UTC)
+        await connection.execute(
+            """
+            INSERT INTO graph_sync_provider_call_intents (
+                attempt_id,
+                call_number,
+                logical_model_attempt,
+                transport_attempt,
+                provider,
+                model,
+                candidate_fingerprint,
+                prompt_version,
+                schema_version,
+                started_at
+            )
+            VALUES (
+                $1, 1, 1, 1, 'ollama', 'test-model', 'candidate:test',
+                'prompt:v1', 'schema:v1', $2
+            )
+            """,
+            attempt_id,
+            call_started_at,
+        )
         await connection.execute(
             """
             INSERT INTO graph_sync_provider_calls (
@@ -172,11 +196,12 @@ async def test_graph_sync_migration_seed_guards_and_immutable_ledgers():
             )
             VALUES (
                 $1, 1, 1, 1, 'ollama', 'test-model', 'candidate:test',
-                'prompt:v1', 'schema:v1', clock_timestamp(), clock_timestamp(),
+                'prompt:v1', 'schema:v1', $2, clock_timestamp(),
                 0, 'success'
             )
             """,
             attempt_id,
+            call_started_at,
         )
         await connection.execute(
             """
@@ -196,6 +221,11 @@ async def test_graph_sync_migration_seed_guards_and_immutable_ledgers():
         await _expect_database_rejection(
             connection,
             "DELETE FROM graph_sync_provider_calls WHERE attempt_id = $1",
+            attempt_id,
+        )
+        await _expect_database_rejection(
+            connection,
+            "DELETE FROM graph_sync_provider_call_intents WHERE attempt_id = $1",
             attempt_id,
         )
 
@@ -372,6 +402,37 @@ async def test_runtime_migration_backfills_existing_append_only_attempts():
         with pytest.raises(asyncpg.PostgresError):
             await connection.execute(
                 "UPDATE graph_sync_attempts SET route_fingerprint = 'changed' WHERE id = $1",
+                attempt_id,
+            )
+
+        await connection.execute(MIGRATION_PATHS[2].read_text(encoding="ascii"))
+        intent = await connection.fetchrow(
+            """
+            SELECT call_number, provider, model, candidate_fingerprint
+            FROM graph_sync_provider_call_intents
+            WHERE attempt_id = $1
+            """,
+            attempt_id,
+        )
+        assert dict(intent) == {
+            "call_number": 1,
+            "provider": "ollama",
+            "model": "test-model",
+            "candidate_fingerprint": "candidate:test",
+        }
+        with pytest.raises(asyncpg.PostgresError):
+            await connection.execute(
+                """
+                INSERT INTO graph_sync_provider_call_intents (
+                    attempt_id, call_number, logical_model_attempt,
+                    transport_attempt, provider, model, candidate_fingerprint,
+                    prompt_version, schema_version, started_at
+                )
+                VALUES (
+                    $1, 2, 2, 1, 'ollama', 'test-model', 'candidate:test',
+                    'prompt:v1', 'schema:v1', clock_timestamp()
+                )
+                """,
                 attempt_id,
             )
         with pytest.raises(asyncpg.PostgresError):

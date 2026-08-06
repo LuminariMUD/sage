@@ -10,6 +10,7 @@ from src.graphiti.sync_models import (
     FailureDisposition,
     FailureRecord,
     GraphSyncPolicy,
+    ProviderCallIntent,
     ProviderCallOutcome,
     ProviderCallRecord,
     deterministic_retry_delay,
@@ -103,6 +104,9 @@ def test_provider_call_requires_failure_taxonomy_and_valid_timing():
         failure_summary="connection reset",
     )
     assert failed.failure_class is FailureClass.TRANSPORT
+    intent = ProviderCallIntent.from_record(failed)
+    assert intent.model == failed.model
+    assert intent.started_at == failed.started_at
 
     secret = "sk_test_abcdefghijklmnopqrstuvwxyz"
     redacted = ProviderCallRecord(

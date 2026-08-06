@@ -188,6 +188,9 @@ class JobLease:
     attempt_number: int
     budget_attempt_number: int
     retry_generation: int
+    job_attempt_limit: int
+    provider_call_limit: int
+    retry_delay_seconds: int
     captured_source_fingerprint: str
     sync_profile_fingerprint: str
     route_fingerprint: str
@@ -228,6 +231,54 @@ class FailureRecord:
             summary=str(summary),
             disposition=disposition,
         )
+
+
+@dataclass(frozen=True)
+class ProviderCallIntent:
+    logical_model_attempt: int
+    transport_attempt: int
+    provider: str
+    model: str
+    candidate_fingerprint: str
+    prompt_version: str
+    schema_version: str
+    started_at: datetime
+    model_revision: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.logical_model_attempt <= 0 or self.transport_attempt <= 0:
+            raise ValueError("Provider attempt numbers must be positive")
+        for value, label in (
+            (self.provider, "Provider"),
+            (self.model, "Model"),
+            (self.candidate_fingerprint, "Candidate fingerprint"),
+            (self.prompt_version, "Prompt version"),
+            (self.schema_version, "Schema version"),
+        ):
+            validate_label(value, label)
+        if self.model_revision is not None:
+            validate_label(self.model_revision, "Model revision")
+
+    @classmethod
+    def from_record(cls, record: ProviderCallRecord) -> ProviderCallIntent:
+        return cls(
+            logical_model_attempt=record.logical_model_attempt,
+            transport_attempt=record.transport_attempt,
+            provider=record.provider,
+            model=record.model,
+            model_revision=record.model_revision,
+            candidate_fingerprint=record.candidate_fingerprint,
+            prompt_version=record.prompt_version,
+            schema_version=record.schema_version,
+            started_at=record.started_at,
+        )
+
+
+@dataclass(frozen=True)
+class ProviderCallTicket:
+    attempt_id: UUID
+    call_number: int
+    intent: ProviderCallIntent
 
 
 @dataclass(frozen=True)

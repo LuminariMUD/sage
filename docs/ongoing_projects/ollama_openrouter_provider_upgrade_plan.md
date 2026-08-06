@@ -58,6 +58,20 @@ Migration `0002_graph_sync_runtime` was applied on `2026-08-06T22:57:38Z`. The i
 
 Activation preserved all live state: 611 jobs remain 305 `synced` and 306 `pending`, with zero runs, attempts, results, provider calls, leases, retry-wait rows, quarantines, nonzero runtime counters, and compatibility-projection mismatches. Required provider/result/append-only/source triggers are present; operator status and list commands return the expected empty runtime ledger; the graph audit remains clean; and all services are healthy. Applying the migration did not start ingestion. The legacy Boolean worker remains stopped by operator request; worker integration and fault-injection around Neo4j crash windows remain required before any ingestion is authorized.
 
+### Provider-call reservation checkpoint - staged
+
+Migration `0003_graph_sync_provider_call_intents` closes the request-dispatch crash window before durable worker integration:
+
+- Every allowed provider request receives an immutable intent containing attempt, call number, logical/transport attempt, provider, model/revision, candidate, prompt/schema versions, and start time before network I/O.
+- The hard database budget counts intents rather than only returned calls. Completion is a separate append-only record that must match the reserved identity, and terminal success is rejected while any intent is incomplete.
+- Attempt recovery counts all reservations. A crash after dispatch but before completion therefore remains visible in the sanitized attempt chain and cannot produce false success or silently restore budget.
+- Repository APIs separately reserve and complete provider calls under the current token-fenced lease; status reports reserved and completed totals independently.
+- Upgrade tests backfill pre-existing completed calls, while isolated fault coverage proves hard limits, terminal guards, immutable intent/result rows, and recovery of an incomplete reservation.
+
+Focused verification passes 27 unit tests and 10 isolated PostgreSQL integration tests; the full fast suite passes 103 tests with 6 skips and 109 intentionally deselected tests. The complete migration also passed a rollback-only rehearsal against the live schema: the intent table and guards existed inside the transaction with zero rows, then rollback restored two migration-ledger rows, no intent artifacts, and all 611 jobs.
+
+Migration `0003_graph_sync_provider_call_intents` remains staged and pending. No run, lease, provider request, or ingestion was started, and the legacy worker remains stopped by operator request.
+
 ### Backup and activation safety checkpoint - verified
 
 The recoverability tooling and live pre-migration checkpoint are complete:

@@ -46,7 +46,8 @@ def render_status(snapshot: dict[str, Any]) -> str:
     lines.append(
         "Ledger: "
         f"{ledger['completed_attempts']}/{ledger['attempts']} completed attempts, "
-        f"{ledger['provider_calls']} provider calls"
+        f"{ledger['provider_calls']} reserved provider calls, "
+        f"{ledger['completed_provider_calls']} completed"
     )
     active_run = snapshot["active_run"]
     if active_run is None:

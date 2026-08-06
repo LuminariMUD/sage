@@ -19,7 +19,9 @@ from src.graphiti.sync_models import (
     JobLease,
     JobState,
     LeaseLostError,
+    ProviderCallIntent,
     ProviderCallRecord,
+    ProviderCallTicket,
     RunRecord,
     RunState,
     RunUnavailableError,
@@ -354,6 +356,9 @@ class GraphSyncRepository:
                             attempt_number=attempt_number,
                             budget_attempt_number=budget_attempt_number,
                             retry_generation=candidate["retry_generation"],
+                            job_attempt_limit=policy.max_job_attempts,
+                            provider_call_limit=policy.max_provider_calls,
+                            retry_delay_seconds=retry_delay,
                             captured_source_fingerprint=candidate["desired_source_fingerprint"],
                             sync_profile_fingerprint=candidate["sync_profile_fingerprint"],
                             route_fingerprint=route_fingerprint,
@@ -402,8 +407,132 @@ class GraphSyncRepository:
             raise LeaseLostError("Lease is expired or no longer owned by this worker")
         return expires_at
 
-    async def record_provider_call(self, lease: JobLease, provider_call: ProviderCallRecord) -> int:
-        """Append one sanitized provider call under the attempt's hard DB budget."""
+    async def reserve_provider_call(
+        self, lease: JobLease, intent: ProviderCallIntent
+    ) -> ProviderCallTicket:
+        """Commit a budgeted request intent before any provider network I/O."""
+        async with self.postgres.acquire() as connection:
+            async with connection.transaction():
+                job = await connection.fetchrow(
+                    """
+                    SELECT state,
+                           last_attempt_id,
+                           lease_token,
+                           lease_owner,
+                           lease_expires_at > clock_timestamp() AS lease_is_valid
+                    FROM graph_sync_jobs
+                    WHERE episode_id = $1
+                    FOR UPDATE
+                    """,
+                    lease.episode_id,
+                )
+                if (
+                    job is None
+                    or job["state"] != "leased"
+                    or job["last_attempt_id"] != lease.attempt_id
+                    or job["lease_token"] != lease.lease_token
+                    or job["lease_owner"] != lease.lease_owner
+                    or not job["lease_is_valid"]
+                ):
+                    raise LeaseLostError("Provider call requires a current valid lease")
+
+                attempt = await connection.fetchrow(
+                    """
+                    SELECT attempt.lease_token,
+                           attempt.lease_owner,
+                           attempt.provider_call_limit,
+                           result.attempt_id IS NOT NULL AS completed
+                    FROM graph_sync_attempts AS attempt
+                    LEFT JOIN graph_sync_attempt_results AS result
+                      ON result.attempt_id = attempt.id
+                    WHERE attempt.id = $1
+                    FOR UPDATE OF attempt
+                    """,
+                    lease.attempt_id,
+                )
+                if (
+                    attempt is None
+                    or attempt["lease_token"] != lease.lease_token
+                    or attempt["lease_owner"] != lease.lease_owner
+                ):
+                    raise LeaseLostError("Attempt identity does not match the lease")
+                if attempt["completed"]:
+                    raise InvalidTransitionError("Attempt already has a terminal result")
+                if attempt["provider_call_limit"] != lease.provider_call_limit:
+                    raise InvalidTransitionError("Lease provider-call policy does not match")
+
+                call_number = await connection.fetchval(
+                    """
+                    SELECT COALESCE(max(call_number), 0) + 1
+                    FROM graph_sync_provider_call_intents
+                    WHERE attempt_id = $1
+                    """,
+                    lease.attempt_id,
+                )
+                if call_number > attempt["provider_call_limit"]:
+                    raise InvalidTransitionError("Provider call limit is exhausted")
+
+                await connection.execute(
+                    """
+                    INSERT INTO graph_sync_provider_call_intents (
+                        attempt_id,
+                        call_number,
+                        logical_model_attempt,
+                        transport_attempt,
+                        provider,
+                        model,
+                        model_revision,
+                        candidate_fingerprint,
+                        prompt_version,
+                        schema_version,
+                        started_at
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    """,
+                    lease.attempt_id,
+                    call_number,
+                    intent.logical_model_attempt,
+                    intent.transport_attempt,
+                    intent.provider,
+                    intent.model,
+                    intent.model_revision,
+                    intent.candidate_fingerprint,
+                    intent.prompt_version,
+                    intent.schema_version,
+                    intent.started_at,
+                )
+                return ProviderCallTicket(
+                    attempt_id=lease.attempt_id,
+                    call_number=call_number,
+                    intent=intent,
+                )
+
+    async def complete_provider_call(
+        self,
+        lease: JobLease,
+        ticket: ProviderCallTicket,
+        provider_call: ProviderCallRecord,
+    ) -> int:
+        """Append a sanitized completion for one durably reserved request."""
+        if ticket.attempt_id != lease.attempt_id:
+            raise InvalidTransitionError("Provider call ticket targets another attempt")
+        intent = ticket.intent
+        identity_fields = (
+            "logical_model_attempt",
+            "transport_attempt",
+            "provider",
+            "model",
+            "model_revision",
+            "candidate_fingerprint",
+            "prompt_version",
+            "schema_version",
+            "started_at",
+        )
+        if any(
+            getattr(provider_call, field) != getattr(intent, field) for field in identity_fields
+        ):
+            raise InvalidTransitionError("Provider call completion identity changed")
+
         optional_labels = (
             (provider_call.model_revision, "Model revision"),
             (provider_call.actual_model, "Actual model"),
@@ -425,7 +554,6 @@ class GraphSyncRepository:
                     SELECT attempt.id,
                            attempt.lease_token,
                            attempt.lease_owner,
-                           attempt.provider_call_limit,
                            result.attempt_id IS NOT NULL AS completed
                     FROM graph_sync_attempts AS attempt
                     LEFT JOIN graph_sync_attempt_results AS result
@@ -443,17 +571,19 @@ class GraphSyncRepository:
                     raise LeaseLostError("Attempt identity does not match the lease")
                 if attempt["completed"]:
                     raise InvalidTransitionError("Attempt already has a terminal result")
-
-                call_number = await connection.fetchval(
+                already_completed = await connection.fetchval(
                     """
-                    SELECT COALESCE(max(call_number), 0) + 1
-                    FROM graph_sync_provider_calls
-                    WHERE attempt_id = $1
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM graph_sync_provider_calls
+                        WHERE attempt_id = $1 AND call_number = $2
+                    )
                     """,
                     lease.attempt_id,
+                    ticket.call_number,
                 )
-                if call_number > attempt["provider_call_limit"]:
-                    raise InvalidTransitionError("Provider call limit is exhausted")
+                if already_completed:
+                    raise InvalidTransitionError("Provider call already completed")
 
                 await connection.execute(
                     """
@@ -487,7 +617,7 @@ class GraphSyncRepository:
                     )
                     """,
                     lease.attempt_id,
-                    call_number,
+                    ticket.call_number,
                     provider_call.logical_model_attempt,
                     provider_call.transport_attempt,
                     provider_call.provider,
@@ -513,7 +643,14 @@ class GraphSyncRepository:
                     provider_call.completion_tokens,
                     provider_call.total_tokens,
                 )
-                return call_number
+                return ticket.call_number
+
+    async def record_provider_call(self, lease: JobLease, provider_call: ProviderCallRecord) -> int:
+        """Reserve and immediately complete a call for non-network test callers."""
+        ticket = await self.reserve_provider_call(
+            lease, ProviderCallIntent.from_record(provider_call)
+        )
+        return await self.complete_provider_call(lease, ticket, provider_call)
 
     async def complete_verified_success(
         self,
@@ -920,12 +1057,14 @@ class GraphSyncRepository:
             FROM graph_sync_jobs
             """)
         attempt_totals = await self.postgres.fetchrow("""
-            SELECT count(*) AS attempts,
-                   count(result.attempt_id) AS completed_attempts,
-                   COALESCE(sum(result.provider_call_count), 0) AS provider_calls
-            FROM graph_sync_attempts AS attempt
-            LEFT JOIN graph_sync_attempt_results AS result
-              ON result.attempt_id = attempt.id
+            SELECT
+                (SELECT count(*) FROM graph_sync_attempts) AS attempts,
+                (SELECT count(*) FROM graph_sync_attempt_results)
+                    AS completed_attempts,
+                (SELECT count(*) FROM graph_sync_provider_call_intents)
+                    AS provider_calls,
+                (SELECT count(*) FROM graph_sync_provider_calls)
+                    AS completed_provider_calls
             """)
         visible_run = dict(active_run) if active_run is not None else None
         if visible_run is not None and visible_run["last_failure_summary"] is not None:
@@ -1028,30 +1167,33 @@ class GraphSyncRepository:
                 item["failure_summary"] = sanitize_summary(item["failure_summary"])
             calls = await self.postgres.fetch(
                 """
-                SELECT call_number,
-                       logical_model_attempt,
-                       transport_attempt,
-                       provider,
-                       model,
-                       model_revision,
-                       actual_model,
-                       actual_upstream_provider,
-                       candidate_fingerprint,
-                       prompt_version,
-                       schema_version,
-                       started_at,
-                       completed_at,
-                       latency_ms,
-                       outcome,
-                       failure_class,
-                       failure_code,
-                       failure_summary,
-                       prompt_tokens,
-                       completion_tokens,
-                       total_tokens
-                FROM graph_sync_provider_calls
-                WHERE attempt_id = $1
-                ORDER BY call_number
+                SELECT intent.call_number,
+                       intent.logical_model_attempt,
+                       intent.transport_attempt,
+                       intent.provider,
+                       intent.model,
+                       intent.model_revision,
+                       provider_call.actual_model,
+                       provider_call.actual_upstream_provider,
+                       intent.candidate_fingerprint,
+                       intent.prompt_version,
+                       intent.schema_version,
+                       intent.started_at,
+                       provider_call.completed_at,
+                       provider_call.latency_ms,
+                       provider_call.outcome,
+                       provider_call.failure_class,
+                       provider_call.failure_code,
+                       provider_call.failure_summary,
+                       provider_call.prompt_tokens,
+                       provider_call.completion_tokens,
+                       provider_call.total_tokens
+                FROM graph_sync_provider_call_intents AS intent
+                LEFT JOIN graph_sync_provider_calls AS provider_call
+                  ON provider_call.attempt_id = intent.attempt_id
+                 AND provider_call.call_number = intent.call_number
+                WHERE intent.attempt_id = $1
+                ORDER BY intent.call_number
                 """,
                 row["id"],
             )
@@ -1249,6 +1391,6 @@ class GraphSyncRepository:
     @staticmethod
     async def _provider_call_count(connection, attempt_id: UUID) -> int:
         return await connection.fetchval(
-            "SELECT count(*) FROM graph_sync_provider_calls WHERE attempt_id = $1",
+            "SELECT count(*) FROM graph_sync_provider_call_intents WHERE attempt_id = $1",
             attempt_id,
         )

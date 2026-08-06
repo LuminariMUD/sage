@@ -222,3 +222,13 @@ def test_repository_migration_contains_required_durable_contract():
         "graph_sync_attempt_results_provider_count",
     ):
         assert required_fragment in runtime_sql
+
+    provider_intent_sql = migrations[2].sql
+    for required_fragment in (
+        "CREATE TABLE graph_sync_provider_call_intents",
+        "graph_sync_provider_call_intents_budget",
+        "graph_sync_guard_provider_call_result",
+        "graph_sync_provider_calls_match_intent",
+        "successful attempt has incomplete provider calls",
+    ):
+        assert required_fragment in provider_intent_sql

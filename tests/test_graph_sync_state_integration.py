@@ -21,6 +21,7 @@ from src.graphiti.sync_models import (
     GraphSyncPolicy,
     InvalidTransitionError,
     LeaseLostError,
+    ProviderCallIntent,
     ProviderCallOutcome,
     ProviderCallRecord,
     RunUnavailableError,
@@ -187,15 +188,14 @@ async def test_two_workers_claim_distinct_jobs_and_verified_success_projects(
     with pytest.raises(asyncpg.PostgresError):
         await postgres.execute(
             """
-            INSERT INTO graph_sync_provider_calls (
+            INSERT INTO graph_sync_provider_call_intents (
                 attempt_id, call_number, logical_model_attempt, transport_attempt,
                 provider, model, candidate_fingerprint, prompt_version,
-                schema_version, started_at, completed_at, latency_ms, outcome
+                schema_version, started_at
             )
             VALUES (
                 $1, 2, 2, 1, 'ollama', 'qwen2.5:3b', 'candidate:test',
-                'prompt:v1', 'schema:v1', clock_timestamp(), clock_timestamp(),
-                0, 'success'
+                'prompt:v1', 'schema:v1', clock_timestamp()
             )
             """,
             leases[0].attempt_id,
@@ -223,15 +223,14 @@ async def test_two_workers_claim_distinct_jobs_and_verified_success_projects(
     with pytest.raises(asyncpg.PostgresError):
         await postgres.execute(
             """
-            INSERT INTO graph_sync_provider_calls (
+            INSERT INTO graph_sync_provider_call_intents (
                 attempt_id, call_number, logical_model_attempt, transport_attempt,
                 provider, model, candidate_fingerprint, prompt_version,
-                schema_version, started_at, completed_at, latency_ms, outcome
+                schema_version, started_at
             )
             VALUES (
                 $1, 2, 2, 1, 'ollama', 'qwen2.5:3b', 'candidate:test',
-                'prompt:v1', 'schema:v1', clock_timestamp(), clock_timestamp(),
-                0, 'success'
+                'prompt:v1', 'schema:v1', clock_timestamp()
             )
             """,
             leases[0].attempt_id,
@@ -520,3 +519,60 @@ async def test_retry_waiting_selection_is_atomic_and_state_filters_are_validated
     }
     with pytest.raises(ValueError, match="Unknown"):
         await repository.list_jobs(states=["not-a-state"])
+
+
+async def test_reserved_provider_call_survives_worker_crash_without_false_completion(
+    state_store,
+):
+    postgres, repository, _ = state_store
+    run = await repository.start_or_join_run(
+        worker_id="worker-a", sync_profile_fingerprint=SYNC_PROFILE
+    )
+    lease = (
+        await repository.claim_jobs(
+            run_id=run.id,
+            worker_id="worker-a",
+            route_fingerprint="route:test",
+            policy=GraphSyncPolicy(max_job_attempts=2, max_provider_calls=1),
+        )
+    )[0]
+    call_started_at = datetime.now(UTC)
+    ticket = await repository.reserve_provider_call(
+        lease,
+        ProviderCallIntent(
+            logical_model_attempt=1,
+            transport_attempt=1,
+            provider="ollama",
+            model="qwen2.5:3b",
+            candidate_fingerprint="candidate:test",
+            prompt_version="prompt:v1",
+            schema_version="schema:v1",
+            started_at=call_started_at,
+        ),
+    )
+    assert ticket.call_number == 1
+    await postgres.execute(
+        """
+        UPDATE graph_sync_jobs
+        SET lease_expires_at = clock_timestamp() - interval '1 second'
+        WHERE episode_id = $1
+        """,
+        lease.episode_id,
+    )
+
+    recovered = await repository.recover_expired_leases()
+    assert recovered[0]["state"] == "retry_wait"
+    result_count = await postgres.fetchval(
+        """
+        SELECT provider_call_count
+        FROM graph_sync_attempt_results
+        WHERE attempt_id = $1
+        """,
+        lease.attempt_id,
+    )
+    assert result_count == 1
+
+    chain = await repository.attempt_chain(lease.episode_id)
+    assert chain[0]["provider_call_count"] == 1
+    assert chain[0]["provider_calls"][0]["call_number"] == 1
+    assert chain[0]["provider_calls"][0]["outcome"] is None

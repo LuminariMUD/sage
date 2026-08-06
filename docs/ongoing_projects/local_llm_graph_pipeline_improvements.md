@@ -66,6 +66,18 @@ Migration `0002_graph_sync_runtime` was applied at `2026-08-06T22:57:38Z` with c
 
 Post-activation evidence remains unchanged: 611 jobs consist of 305 `synced` and 306 `pending`; there are zero runs, attempts, results, provider calls, leases, retry-wait rows, quarantines, nonzero runtime counters, or compatibility-projection mismatches. The operator status/list commands report the same state, required ledger guards are present, the graph audit remains clean, and every service is healthy. Applying the runtime migration did not start ingestion. The legacy worker remains stopped by operator request; do not run ingestion until the durable worker loop is integrated and separately authorized.
 
+### 2026-08-07 - L1 provider-call reservation checkpoint - staged
+
+- Added migration `0003_graph_sync_provider_call_intents` so every allowed text-provider request is committed as an immutable intent before network I/O and completed through a separate append-only record afterward.
+- Moved the database provider-call ceiling to the intent ledger, matched every completion to its reserved provider/model/candidate/prompt/schema identity, and required successful attempts to have no incomplete calls.
+- Updated the repository with token-fenced reservation and completion methods. Attempt recovery counts reservations, so a process death after request dispatch leaves explainable provenance and can never be mistaken for an uncalled or successful attempt.
+- Updated operator status and attempt chains to distinguish reserved calls from completed calls while continuing to omit prompts, episode text, and credentials.
+- Added upgrade backfill coverage for completed calls created between migrations `0002` and `0003`, direct-database guard tests, and an interrupted-call integration test that recovers to `retry_wait` with one visible incomplete reservation.
+
+Focused verification passes 27 unit tests and 10 isolated PostgreSQL integration tests; the full fast suite passes 103 tests with 6 skips and 109 intentionally deselected tests. A live-schema rehearsal created the intent table, its referential constraint, request-limit and completion triggers, and invariant checks inside one explicit transaction, then rolled back unconditionally. Post-rollback proof shows no intent table/function, two unchanged migration-ledger rows, and all 611 jobs intact.
+
+This checkpoint is staged only: migration `0003_graph_sync_provider_call_intents` remains pending on the live database. No run, lease, provider request, or ingestion was started, and the legacy worker remains stopped.
+
 ### 2026-08-07 - L1 backup and restore gate tooling checkpoint
 
 - Added a combined provider-upgrade backup command that creates a PostgreSQL custom-format dump and offline Neo4j Community dumps for both `neo4j` and `system`.

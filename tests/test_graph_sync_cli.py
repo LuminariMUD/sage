@@ -39,7 +39,12 @@ def test_status_renderer_includes_zero_states_and_run_identity():
         "eligible": 3,
         "expired_leases": 0,
         "job_attempts": 0,
-        "ledger": {"attempts": 0, "completed_attempts": 0, "provider_calls": 0},
+        "ledger": {
+            "attempts": 0,
+            "completed_attempts": 0,
+            "provider_calls": 0,
+            "completed_provider_calls": 0,
+        },
         "active_run": {
             "id": run_id,
             "state": "running",
@@ -65,7 +70,12 @@ async def test_run_uses_read_only_connection_for_inspection():
         "eligible": 0,
         "expired_leases": 0,
         "job_attempts": 0,
-        "ledger": {"attempts": 0, "completed_attempts": 0, "provider_calls": 0},
+        "ledger": {
+            "attempts": 0,
+            "completed_attempts": 0,
+            "provider_calls": 0,
+            "completed_provider_calls": 0,
+        },
         "active_run": None,
     }
 
