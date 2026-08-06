@@ -101,6 +101,10 @@ neo4j-backups/
 *.sql
 *.dump
 
+# SQL source and migrations are code, not database backups
+!schemas/*.sql
+!src/scripts/*.sql
+
 # Cache directories
 .cache/
 .sentence_transformers/
