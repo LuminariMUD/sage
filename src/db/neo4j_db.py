@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from dotenv import load_dotenv
-from neo4j import AsyncDriver, AsyncGraphDatabase
+from neo4j import READ_ACCESS, AsyncDriver, AsyncGraphDatabase
 
 load_dotenv()
 
@@ -15,8 +15,9 @@ _CYPHER_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 class Neo4jDB:
     """Neo4j graph database manager with async support."""
 
-    def __init__(self):
+    def __init__(self, *, read_only: bool = False):
         self.driver: AsyncDriver | None = None
+        self.read_only = read_only
         self.uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 
         # Validate required credentials - no defaults for security
@@ -70,7 +71,8 @@ class Neo4jDB:
         if not self.driver:
             await self.connect()
 
-        async with self.driver.session() as session:
+        session_options = {"default_access_mode": READ_ACCESS} if self.read_only else {}
+        async with self.driver.session(**session_options) as session:
             result = await session.run(query, parameters or {})
             records = await result.data()
             return records

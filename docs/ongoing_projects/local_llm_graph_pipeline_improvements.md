@@ -1,25 +1,41 @@
 # Local LLM and Graph Pipeline Improvements
 
-| Field | Value |
-|---|---|
-| Status | Proposed implementation-ready supporting workstream |
-| Last updated | 2026-08-07 |
-| Observed | 2026-08-06 during the full local-development bootstrap |
-| Scope | Ollama, Graphiti, PostgreSQL-to-Neo4j synchronization, local observability, and browser chat verification |
-| Umbrella program | [Ollama and OpenRouter Provider Upgrade Plan](./ollama_openrouter_provider_upgrade_plan.md) |
+| Field            | Value                                                                                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| Status           | Active implementation                                                                                     |
+| Last updated     | 2026-08-07                                                                                                |
+| Observed         | 2026-08-06 during the full local-development bootstrap                                                    |
+| Scope            | Ollama, Graphiti, PostgreSQL-to-Neo4j synchronization, local observability, and browser chat verification |
+| Umbrella program | [Ollama and OpenRouter Provider Upgrade Plan](./ollama_openrouter_provider_upgrade_plan.md)               |
 
 ## Relationship to the umbrella program
 
 The provider upgrade plan is authoritative for shared architecture, terminology, sequencing, release invariants, migrations, and the definition of done. This document owns the observed local evidence and the detailed Ollama/Graphiti work needed to satisfy those requirements on the 8 GB GPU development stack.
 
-| Concern | Source of truth |
-|---|---|
-| Provider interfaces, text routes, embedding profiles, migration order, cross-provider tests | Umbrella program |
-| Durable graph-sync states, retry layers, audit semantics, hard release invariants | Umbrella program; detailed locally here |
-| Qwen 3B/7B extraction measurements, GPU residency, worker concurrency, local browser behavior | This workstream |
-| Shared contract change | Update both documents in the same documentation change |
+| Concern                                                                                       | Source of truth                                        |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Provider interfaces, text routes, embedding profiles, migration order, cross-provider tests   | Umbrella program                                       |
+| Durable graph-sync states, retry layers, audit semantics, hard release invariants             | Umbrella program; detailed locally here                |
+| Qwen 3B/7B extraction measurements, GPU residency, worker concurrency, local browser behavior | This workstream                                        |
+| Shared contract change                                                                        | Update both documents in the same documentation change |
 
 This workstream must not introduce a local-only shortcut that weakens the provider-neutral contract. In particular, text extraction may use an explicit bounded model fallback, while embeddings must never switch model, revision, implementation, or dimension inside an active vector space.
+
+## Implementation progress
+
+### 2026-08-07 - L1 read-only graph audit checkpoint
+
+- Added `src/scripts/graph_audit.py` and pure reconciliation logic in `src/graphiti/audit.py`.
+- Added enforced read-only PostgreSQL sessions and Neo4j read access for audit clients.
+- Added human and stable JSON output plus exit codes `0` for clean, `1` for drift, and `2` for incomplete execution.
+- Added actionable checks for missing, unexpected, duplicate, and null stable IDs; source-description and available fingerprint/profile mismatches; non-synced jobs with Neo4j records; invalid or inconsistent durable jobs; and lifecycle counts.
+- Added `make graph-audit` and `make graph-audit-json`.
+- Verified the stopped local snapshot as clean: 611 PostgreSQL episodes, 305 synchronized, 306 pending under the legacy projection, 305 Neo4j Episodic nodes, 305 populated and distinct stable IDs, and zero drift findings.
+- Verified 71 fast tests passed and 5 were skipped; the focused audit/security suite passed 18 tests.
+
+The operator stopped the legacy Boolean-based worker at 305 of 611 episodes and requested that it not continue. Do not restart that worker without explicit operator direction. The next ingestion work should use the durable lifecycle after its migration and worker integration are complete.
+
+The live graph currently has no source, sync-profile, or embedding-profile fingerprint metadata. The audit reports that coverage as zero without treating absent legacy metadata as a false drift result; the durable migration and profile work remain required.
 
 ## Why this project exists
 
@@ -101,6 +117,8 @@ The intended processing model is idempotent at-least-once delivery; this workstr
 ### 3. Turn cross-store reconciliation into a first-class command
 
 **Observed:** The strongest current audit compares PostgreSQL episode UUIDs with Neo4j `Episodic.stable_id` values and checks total, populated, and distinct counts. These checks are currently assembled from several manual commands.
+
+**Implementation status:** The command, Make targets, read-only sessions, stable output, exit codes, legacy projection, and forward-compatible durable-job/profile checks were delivered on 2026-08-07. Post-migration and preserved-volume evidence remains outstanding.
 
 **Proposed:**
 
@@ -199,13 +217,13 @@ The intended processing model is idempotent at-least-once delivery; this workstr
 
 ## Delivery packages and dependencies
 
-| Package | Scope | Umbrella phase | Depends on | Exit evidence |
-|---|---|---:|---|---|
-| L0 — Baseline | Manual reconciliation, extraction/retrieval corpus, current 3B/7B/GPU measurements | 0 | None | Versioned baseline and clean snapshot |
-| L1 — Truth and recovery | Durable states, attempt ledger, atomic leases, CLI, `graph-audit`, progress | 1 | L0 and restorable backups | Fault-injection report and clean audit |
-| L2 — Extraction correctness | Bounded 3B→7B route, schema validation, retry coordination, relationship quality | 3 | L1 and versioned corpus | Candidate comparison and approved route |
-| L3 — Local resource tuning | Separate budgets plus one/two-worker benchmark | 9 | L2 correctness gates | GPU/API/throughput comparison |
-| L4 — Local release automation | Compose/API/MCP/browser/ingest/audit/restart gate | 8–9 | L1; extend after L2/L3 | Machine-readable release report |
+| Package                       | Scope                                                                              | Umbrella phase | Depends on                | Exit evidence                           |
+| ----------------------------- | ---------------------------------------------------------------------------------- | -------------: | ------------------------- | --------------------------------------- |
+| L0 — Baseline                 | Manual reconciliation, extraction/retrieval corpus, current 3B/7B/GPU measurements |              0 | None                      | Versioned baseline and clean snapshot   |
+| L1 — Truth and recovery       | Durable states, attempt ledger, atomic leases, CLI, `graph-audit`, progress        |              1 | L0 and restorable backups | Fault-injection report and clean audit  |
+| L2 — Extraction correctness   | Bounded 3B→7B route, schema validation, retry coordination, relationship quality   |              3 | L1 and versioned corpus   | Candidate comparison and approved route |
+| L3 — Local resource tuning    | Separate budgets plus one/two-worker benchmark                                     |              9 | L2 correctness gates      | GPU/API/throughput comparison           |
+| L4 — Local release automation | Compose/API/MCP/browser/ingest/audit/restart gate                                  |            8–9 | L1; extend after L2/L3    | Machine-readable release report         |
 
 Execute L0 and L1 before changing providers or optimizing throughput. L2 establishes correctness before L3 tests speed. Build the release-gate skeleton during L1, then extend it as later capabilities arrive.
 
@@ -222,13 +240,13 @@ Execute L0 and L1 before changing providers or optimizing throughput. L2 establi
 
 ## Local decisions to close
 
-| Decision | Recommendation | Decision gate |
-|---|---|---|
-| Primary/fallback route | Start evaluation with `qwen2.5:3b` → `qwen2.5:7b` | L0 exit |
-| Fallback-eligible failures | Malformed JSON, schema validation, and proven output truncation only | L0 exit |
-| Provider-call ceiling | Derive from the benchmark; validate one hard ceiling across all retry layers | Before L1 exit |
-| Lease duration/heartbeat | Base on measured p99 extraction duration plus recovery headroom | Before L1 implementation |
-| Quarantine retry policy | Explicit operator action with immutable prior attempt history | Before L1 exit |
-| Parse, schema, fallback, and graph-quality thresholds | Set from the versioned corpus; approve before changing defaults | L0/L2 exits |
-| Worker concurrency | One by default; use two only if it passes all quality/resource/isolation gates | L3 exit |
-| Browser/device coverage | Require desktop and mobile-responsive paths supported by the product | Before L4 exit |
+| Decision                                              | Recommendation                                                                 | Decision gate            |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------ |
+| Primary/fallback route                                | Start evaluation with `qwen2.5:3b` → `qwen2.5:7b`                              | L0 exit                  |
+| Fallback-eligible failures                            | Malformed JSON, schema validation, and proven output truncation only           | L0 exit                  |
+| Provider-call ceiling                                 | Derive from the benchmark; validate one hard ceiling across all retry layers   | Before L1 exit           |
+| Lease duration/heartbeat                              | Base on measured p99 extraction duration plus recovery headroom                | Before L1 implementation |
+| Quarantine retry policy                               | Explicit operator action with immutable prior attempt history                  | Before L1 exit           |
+| Parse, schema, fallback, and graph-quality thresholds | Set from the versioned corpus; approve before changing defaults                | L0/L2 exits              |
+| Worker concurrency                                    | One by default; use two only if it passes all quality/resource/isolation gates | L3 exit                  |
+| Browser/device coverage                               | Require desktop and mobile-responsive paths supported by the product           | Before L4 exit           |

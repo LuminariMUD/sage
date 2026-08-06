@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti benchmark-graphiti benchmark-graphiti-openai
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json benchmark-graphiti benchmark-graphiti-openai
 
 # Support for verbose mode
 ifdef VERBOSE
@@ -34,6 +34,8 @@ help:
 	@echo "  make sync-to-graphiti-ollama   - Sync with Ollama (local, free)"
 	@echo "  make sync-to-graphiti-openai   - Sync with OpenAI (requires API key)"
 	@echo "  make graphiti-status           - Show Graphiti/Neo4j statistics"
+	@echo "  make graph-audit              - Reconcile PostgreSQL and Neo4j (read-only)"
+	@echo "  make graph-audit-json         - Emit machine-readable reconciliation JSON"
 	@echo "  make benchmark-graphiti        - Benchmark entity extraction (Ollama)"
 	@echo "  make benchmark-graphiti-openai - Benchmark entity extraction (OpenAI)"
 	@echo ""
@@ -265,6 +267,14 @@ status-graphiti:
 		"SELECT COUNT(*) FILTER (WHERE graphiti_synced) AS processed, COUNT(*) AS total FROM episodes;"
 	@echo ""
 	@docker compose exec -T api python src/scripts/clear_graph.py --status
+
+.PHONY: graph-audit
+graph-audit:
+	@docker compose exec -T api python src/scripts/graph_audit.py
+
+.PHONY: graph-audit-json
+graph-audit-json:
+	@docker compose exec -T api python src/scripts/graph_audit.py --json
 
 .PHONY: benchmark-graphiti
 benchmark-graphiti:

@@ -18,8 +18,9 @@ _SQL_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 class PostgresDB:
     """PostgreSQL database manager with connection pooling."""
 
-    def __init__(self):
+    def __init__(self, *, read_only: bool = False):
         self.pool: Pool | None = None
+        self.read_only = read_only
         self.host = os.getenv("POSTGRES_HOST", "localhost")
         self.port = int(os.getenv("POSTGRES_PORT", "5432"))
         self.user = self._required_env("POSTGRES_USER")
@@ -46,6 +47,10 @@ class PostgresDB:
     async def connect(self) -> None:
         """Create connection pool."""
         if not self.pool:
+            pool_options: dict[str, Any] = {}
+            if self.read_only:
+                pool_options["server_settings"] = {"default_transaction_read_only": "on"}
+
             self.pool = await asyncpg.create_pool(
                 host=self.host,
                 port=self.port,
@@ -55,12 +60,15 @@ class PostgresDB:
                 min_size=5,
                 max_size=20,
                 command_timeout=60,
+                **pool_options,
             )
 
-            # Enable pgvector extension
-            async with self.pool.acquire() as conn:
-                await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
-                await conn.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+            if not self.read_only:
+                # Schema setup is intentionally skipped for read-only clients such as
+                # graph-audit. This keeps their connection contract non-mutating.
+                async with self.pool.acquire() as conn:
+                    await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                    await conn.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
 
     async def disconnect(self) -> None:
         """Close connection pool."""
