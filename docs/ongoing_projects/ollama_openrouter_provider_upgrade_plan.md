@@ -1,0 +1,1107 @@
+# Ollama and OpenRouter Provider Upgrade Plan
+
+| Field | Value |
+|---|---|
+| Status | Proposed integrated program |
+| Implementation | Not started |
+| Last updated | 2026-08-07 |
+| Scope | Text generation, embeddings, Graphiti, configuration, storage migrations, deployment, and tests |
+| Compatibility target | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
+| Supporting workstream | [Local LLM and Graph Pipeline Improvements](./local_llm_graph_pipeline_improvements.md) |
+
+---
+
+## 1. Executive Summary
+
+Luminari Sage currently treats the text-generation provider, embedding provider, and Graphiti provider as partially overlapping configuration choices. That works for the current all-Ollama deployment, but it does not safely support combinations such as:
+
+1. Ollama text models with OpenRouter embeddings.
+2. OpenRouter text models with Ollama embeddings.
+3. Ollama for both capabilities.
+4. OpenRouter for both capabilities.
+
+The upgrade should separate provider selection by capability, centralize provider and model configuration, and make the identity of every embedding vector space explicit. Interactive text routes can usually switch through configuration because they do not define a shared vector space. Graphiti extraction routes are different: their outputs shape persisted graph data, so route/prompt/schema changes require versioned provenance, quality comparison, and sometimes a rebuild. Embedding models always require a controlled migration because vectors from different models, revisions, dimensions, encodings, or inference implementations are not interchangeable.
+
+The first delivery should keep Ollama as the default and preserve model-selection and user-visible output behavior for an unchanged environment. It deliberately improves synchronization state and failure visibility before changing providers. OpenRouter support should then be added incrementally through its OpenAI-compatible Chat Completions and Embeddings APIs. Graphiti must receive separate text and embedding clients so it can use any supported combination.
+
+The implementation must never silently fall back from one embedding model to another. A mismatch between configured embedding metadata and a stored index must fail closed before search or ingestion can mix vector spaces.
+
+Provider flexibility alone will not make the graph pipeline reliable. The full local import exposed malformed structured output, exhausted retries, limited failure history, manual cross-store reconciliation, weak progress reporting, and graph-quality variance. Those findings are now part of this program's required operational foundation, not a later optimization backlog.
+
+This document is the umbrella source of truth for architecture, sequencing, cross-provider contracts, release gates, and the definition of done. The [local pipeline workstream](./local_llm_graph_pipeline_improvements.md) remains the evidence log and detailed design for Ollama-specific extraction, GPU, throughput, and local release behavior. If the documents conflict, this umbrella plan governs and both documents must be reconciled in the same documentation change.
+
+---
+
+## 2. Goals
+
+- [ ] Support `ollama` and `openrouter` as first-class text-generation providers.
+- [ ] Support `ollama` and `openrouter` as first-class embedding providers.
+- [ ] Allow text and embedding providers to be selected independently.
+- [ ] Allow the Graphiti extraction route and embedding profile to inherit application defaults or override them independently.
+- [ ] Preserve task-specific text models for chat, creative writing, reasoning, extraction, and tool calling.
+- [ ] Use one validated configuration source across direct providers, LangChain, PydanticAI, Graphiti, API startup, scripts, and tests.
+- [ ] Make embedding model, dimensions, encoding, distance metric, and implementation identity explicit.
+- [ ] Prevent queries from being executed against an incompatible vector index.
+- [ ] Provide a repeatable, reversible vector and graph migration workflow.
+- [ ] Add provider-aware health information, metrics, error handling, and secret transport.
+- [ ] Preserve the current local-only mode with no OpenRouter credential requirement.
+- [ ] Add a durable, leased, idempotent Graphiti ingestion lifecycle with attempt history, bounded retries, and quarantine.
+- [ ] Distinguish transport retries, same-candidate generation retries, intentional text-model fallback, and durable job retries in configuration, telemetry, and tests.
+- [ ] Add a read-only PostgreSQL/Neo4j reconciliation command with actionable exit codes and machine-readable output.
+- [ ] Measure graph completeness and graph quality independently.
+- [ ] Add repeatable local and provider-matrix release gates, including browser streaming and preserved-volume checks.
+
+## 3. Non-Goals
+
+- Adding first-class providers beyond Ollama and OpenRouter in the first release. Existing direct-OpenAI support is a separate compatibility decision, not a third target architecture.
+- Dynamically selecting a different embedding model per request.
+- Mixing vectors from different embedding profiles in one active index.
+- Automatically falling back to a different embedding model during an outage.
+- Providing exactly-once distributed transactions across PostgreSQL and Neo4j. The design uses idempotent at-least-once processing plus reconciliation.
+- Enabling unbounded or implicit text-model failover. Any text fallback must be an explicit, ordered route with a bounded attempt budget.
+- Adopting binary-vector or Hamming-distance storage in the first release.
+- Replacing PostgreSQL/pgvector, Neo4j, Graphiti, LangChain, or PydanticAI.
+- Choosing permanent OpenRouter text-model slugs as part of the provider abstraction. Model selection remains deployment configuration and must pass the capability tests in this plan.
+
+---
+
+## 4. Current-State Findings
+
+### 4.1 Provider coupling
+
+| Area | Current behavior | Upgrade risk |
+|---|---|---|
+| Core text configuration | `LLM_PROVIDER` selects Ollama or OpenAI and also carries an embedding model | Text and embedding choices cannot be reasoned about independently |
+| Embedding factory | `USE_LOCAL_EMBEDDINGS` and `LLM_PROVIDER` jointly select Ollama, OpenAI, or sentence-transformers | OpenRouter cannot be selected without impersonating OpenAI; dimensions are hard-coded |
+| Core provider interface | `BaseLLMProvider` includes `embed()` even though a separate `BaseEmbedder` exists | Capability boundaries are duplicated and can drift |
+| Graphiti | `GRAPHITI_PROVIDER` selects both the LLM client and embedding client | Graphiti cannot use local extraction with cloud embeddings, or the reverse |
+| LangChain | Factory branches only between `ChatOllama` and direct `ChatOpenAI` | OpenRouter base URL, credential, headers, routing, and errors are not represented |
+| PydanticAI | `create_openai_chat_model()` accepts only an OpenAI API key | Legacy agents are tied to OpenAI-specific construction rather than the active text route |
+| Prompt selection | All non-Ollama providers receive the OpenAI prompt path | An OpenRouter-hosted Qwen, Claude, Gemini, or other model is treated as an OpenAI model |
+| Deployment secrets | Secret-file loading covers `OPENAI_API_KEY`, not `OPENROUTER_API_KEY` | OpenRouter cannot be deployed with the existing file-secret workflow |
+| Tests | Provider enums and vector lengths are fixed to Ollama/OpenAI and 768/1536 | The test suite will reject new valid combinations and miss cross-profile mistakes |
+
+Relevant files include:
+
+- [`src/llm/config.py`](../../src/llm/config.py)
+- [`src/llm/base.py`](../../src/llm/base.py)
+- [`src/llm/langchain_helpers.py`](../../src/llm/langchain_helpers.py)
+- [`src/llm/pydantic_ai_factory.py`](../../src/llm/pydantic_ai_factory.py)
+- [`src/graphiti/ollama_config.py`](../../src/graphiti/ollama_config.py)
+- [`src/llm/embeddings/factory.py`](../../src/llm/embeddings/factory.py)
+
+### 4.2 Vector-schema drift
+
+The vector schema is not represented by one authoritative source:
+
+- The checked-in base schema declares `episodes.embedding` as `vector(384)`.
+- `schemas/add_episode_uuid.sql` declares it as `vector(1536)`.
+- The live database uses `vector(768)` for the 611 populated episode vectors.
+- The live episode table does not currently show the checked-in `idx_episodes_embedding` vector index.
+- `chunks.embedding`, `canonical_content.embedding`, and `search_queries.query_embedding` remain at 384 dimensions.
+- The current `chunks` and `search_queries` tables contain no vectors, while all 611 episodes have vectors.
+
+There is also a current query-space mismatch: `/api/v1/validate` uses the global 768-dimensional Nomic embedder to query the legacy 384-dimensional `chunks.embedding` column. This should be resolved as part of the provider work rather than reproduced in a new abstraction.
+
+### 4.3 Current active model roles
+
+| Capability | Current provider | Current model |
+|---|---|---|
+| Chat | Ollama | `qwen2.5:7b` |
+| Creative generation | Ollama | `qwen2.5:7b` |
+| Tool calling | Ollama | `qwen2.5:7b` |
+| Reasoning and Graphiti extraction | Ollama | `qwen2.5:3b` |
+| Episode and Graphiti embeddings | Ollama | `nomic-embed-text` at 768 dimensions |
+| Legacy chunk embeddings | sentence-transformers | `all-MiniLM-L6-v2` at 384 dimensions |
+
+### 4.4 Graph ingestion reliability exposure
+
+The completed local 611-episode import established that the synchronization contract is fundamentally sound but not yet production-operable:
+
+- PostgreSQL is marked synchronized only after one Neo4j episode with the expected stable ID is independently verified.
+- `qwen2.5:3b` periodically emits malformed or schema-invalid structured output; Graphiti retries recover many, but not all, episodes.
+- The current Boolean synchronization flag preserves resumability but not failure class, attempt history, lease state, next retry, or quarantine reason.
+- The strongest PostgreSQL/Neo4j reconciliation is assembled from manual commands rather than one authoritative read-only audit.
+- Multi-hour imports lack stable aggregate progress, rolling throughput, retry counts, quarantine counts, and ETA.
+- Episode synchronization can succeed while proposed relationships are rejected, so completeness is not evidence of graph quality.
+- Browser-level testing previously found an SSE/CORS regression that unit tests did not detect.
+
+These are provider-independent failure modes. A stronger OpenRouter model may reduce malformed output, but it cannot replace durable state, idempotency, reconciliation, observability, or release gates.
+
+---
+
+## 5. Target Architecture
+
+```mermaid
+flowchart TD
+    ENV[Validated settings] --> TEXT[Text route profiles]
+    ENV --> EMB[Embedding profile]
+    ENV --> GEMB[Graphiti embedding override or inherited embedding profile]
+
+    TEXT --> TF[Text provider factory]
+    TF --> OT[Ollama text adapter]
+    TF --> RT[OpenRouter text adapter]
+    TF --> LC[LangChain factory]
+    TF --> PA[PydanticAI factory]
+
+    EMB --> EF[Embedding provider factory]
+    EF --> OE[Ollama embedder]
+    EF --> RE[OpenRouter embedder]
+    EF --> API[API query embedding]
+    EF --> PIPE[Episode embedding pipeline]
+
+    PIPE --> PG[(PostgreSQL vector index)]
+    EMB --> GUARD[Embedding profile guard]
+    GUARD --> PG
+    GUARD --> NEO
+
+    PG --> JOBS[Durable graph-sync jobs]
+    JOBS --> LEASE[Lease and idempotency coordinator]
+    LEASE --> ROUTE[Ordered extraction candidates]
+    ROUTE --> TF
+    TF --> GLC[Graphiti LLM client]
+    GEMB --> GEC[Graphiti embedding client]
+    GLC --> INGEST[Graphiti ingestion]
+    GEC --> INGEST
+    INGEST --> NEO[(Neo4j / Graphiti vector indexes)]
+    INGEST --> VERIFY[Independent stable-ID verification]
+    VERIFY --> JOBS
+
+    PG --> AUDIT[Read-only cross-store audit]
+    NEO --> AUDIT
+    JOBS --> OBS[Progress, attempts, metrics, quarantine]
+```
+
+### 5.1 Capability-level provider selection
+
+Replace the overloaded provider switches with independent selectors:
+
+```dotenv
+TEXT_PROVIDER=ollama
+EMBEDDING_PROVIDER=ollama
+
+# Empty means inherit TEXT_PROVIDER.
+GRAPHITI_TEXT_PROVIDER=
+
+# Empty means inherit EMBEDDING_PROVIDER.
+GRAPHITI_EMBEDDING_PROVIDER=
+```
+
+The application must support the full matrix:
+
+| Text provider | Embedding provider | Required result |
+|---|---|---|
+| Ollama | Ollama | Current local deployment remains functional |
+| Ollama | OpenRouter | Local Qwen with cloud embeddings |
+| OpenRouter | Ollama | Cloud text generation with local embeddings |
+| OpenRouter | OpenRouter | Fully cloud-routed model access |
+
+Graphiti overrides add two more independently testable choices without changing the main application providers.
+
+### 5.2 Typed configuration contracts
+
+Introduce validated, immutable settings objects instead of returning loosely structured dictionaries. Exact class names may change during implementation, but the contracts should be equivalent to:
+
+```python
+TargetProviderName = Literal["ollama", "openrouter"]
+# "openai" is compatibility-only if Phase 0 decides to retain the existing adapter.
+ProviderName = Literal["ollama", "openrouter", "openai"]
+TextTask = Literal["chat", "creative", "reasoning", "extraction", "tools"]
+FailureClass = Literal[
+    "transport", "authentication", "configuration", "profile_mismatch",
+    "rate_limit", "resource_exhaustion", "output_limit",
+    "malformed_json", "schema_validation", "graph_validation",
+    "persistence", "verification", "cancellation", "shutdown",
+]
+
+@dataclass(frozen=True)
+class TransportRetryPolicy:
+    maximum_attempts: int
+    retry_on: frozenset[FailureClass]
+    base_delay_seconds: float
+    maximum_delay_seconds: float
+
+@dataclass(frozen=True)
+class ProviderConnection:
+    provider: ProviderName
+    base_url: str
+    api_key: SecretStr | None
+    timeout_seconds: float
+    transport_retry: TransportRetryPolicy
+    default_headers: Mapping[str, str]
+
+@dataclass(frozen=True)
+class TextModelCandidate:
+    name: str
+    connection: ProviderConnection
+    model: str
+    prompt_profile: str
+    context_limit: int
+    temperature: float
+    capabilities: frozenset[str]
+    maximum_model_attempts: int
+    retry_on: frozenset[FailureClass]
+    fingerprint: str
+
+@dataclass(frozen=True)
+class TextRouteProfile:
+    task: TextTask
+    candidates: tuple[TextModelCandidate, ...]
+    fallback_on: frozenset[FailureClass]
+    maximum_provider_calls: int
+
+@dataclass(frozen=True)
+class EmbeddingProfile:
+    connection: ProviderConnection
+    model: str
+    dimensions: int
+    encoding_format: str
+    distance_metric: Literal["cosine"]
+    normalize: bool
+    revision: str | None
+    fingerprint: str
+```
+
+Configuration parsing should happen once and validate only the selected providers. An absent OpenRouter key must not break an all-Ollama deployment.
+
+### 5.3 Provider-specific model settings
+
+Keep provider-specific model variables so both providers can be fully configured and switching a selector does not require rewriting unrelated values.
+
+```dotenv
+# Ollama connection and text models
+OLLAMA_BASE_URL=http://ollama:11434
+OLLAMA_CHAT_MODEL=qwen2.5:7b
+OLLAMA_CREATIVE_MODEL=qwen2.5:7b
+OLLAMA_REASONING_MODEL=qwen2.5:3b
+OLLAMA_EXTRACTION_MODEL=qwen2.5:3b
+OLLAMA_TOOLS_MODEL=qwen2.5:7b
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+OLLAMA_EMBEDDING_DIMENSIONS=768
+
+# OpenRouter connection and text models
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_API_KEY=
+OPENROUTER_SITE_URL=
+OPENROUTER_APP_NAME=Luminari Sage
+OPENROUTER_CHAT_MODEL=
+OPENROUTER_CREATIVE_MODEL=
+OPENROUTER_REASONING_MODEL=
+OPENROUTER_EXTRACTION_MODEL=
+OPENROUTER_TOOLS_MODEL=
+OPENROUTER_EMBEDDING_MODEL=perplexity/pplx-embed-v1-0.6b
+OPENROUTER_EMBEDDING_DIMENSIONS=1024
+OPENROUTER_EMBEDDING_ENCODING_FORMAT=float
+
+# Explicit Graphiti extraction fallback; empty provider disables it.
+GRAPHITI_EXTRACTION_FALLBACK_PROVIDER=ollama
+GRAPHITI_EXTRACTION_FALLBACK_MODEL=qwen2.5:7b
+GRAPHITI_EXTRACTION_PRIMARY_ATTEMPTS=2
+GRAPHITI_EXTRACTION_FALLBACK_ATTEMPTS=1
+GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS=3
+
+# Durable job policy; separate from HTTP/client retry counts.
+GRAPHITI_SYNC_MAX_JOB_ATTEMPTS=3
+GRAPHITI_SYNC_LEASE_SECONDS=900
+GRAPHITI_SYNC_RETRY_BASE_SECONDS=60
+```
+
+The values above illustrate the configuration shape; Phase 0 must approve operational defaults such as lease duration and attempt budgets from measured data. Additional settings should cover timeouts, retry limits, optional Zero Data Retention enforcement, parameter enforcement, and explicit provider-routing policy. Do not accept arbitrary JSON from an environment variable unless it is schema-validated.
+
+### 5.4 Retry and fallback semantics
+
+The implementation must treat four superficially similar mechanisms as different contracts:
+
+| Mechanism | Changes model/vector space? | Durable? | Intended use |
+|---|---:|---:|---|
+| Transport retry | No | No | Retry a retryable timeout, 429, or transient upstream failure for the same logical model attempt |
+| Same-candidate generation retry | No | Recorded in attempt history | Ask the same model again after an eligible malformed, schema-invalid, or truncated output |
+| Text candidate fallback | Yes | Recorded in attempt history | Move to the next explicitly configured candidate after eligible failures exhaust the current candidate's model-attempt budget |
+| Durable job retry | May rerun the configured route | Yes | Requeue an episode after a failed leased attempt, using backoff and a total job-attempt limit |
+| Embedding fallback | Forbidden | Not applicable | Never substitute a model, revision, dimension, or implementation inside an active vector space |
+
+Classify failures before applying policy. At minimum, distinguish transport, authentication/authorization, invalid configuration, profile mismatch, rate limit, resource exhaustion, output limit, malformed JSON, schema validation, graph validation, persistence, verification, cancellation, and operator shutdown. Authentication errors, invalid configuration, profile mismatch, cancellation, and shutdown must not trigger model fallback. The initial extraction fallback should target malformed output, schema-validation failures, and explicitly approved output-limit failures.
+
+Each failure must also be scoped as item-specific or systemic. Only an item-specific permanent failure may quarantine an episode. Authentication failure, invalid configuration, embedding/sync-profile mismatch, database unavailability, broad Ollama resource exhaustion, and similar systemic failures must stop new claims, mark the worker/run unhealthy, preserve queued items without consuming their job budgets, and require recovery/readiness validation before claims resume. Provider-wide rate limiting or overload should activate shared backpressure/circuit-breaking rather than create a synchronized wave of per-episode retries.
+
+Nested retry budgets must have a validated upper bound. `maximum_provider_calls` caps every actual upstream inference request in one leased job attempt, including transport retries, same-candidate generation retries, fallback candidates, and Graphiti-internal retries. The orchestration layer must pass a remaining-call budget into adapters or otherwise prove the hard ceiling cannot be exceeded. Every provider call records the route, candidate fingerprint, logical attempt number, transport attempt number, failure class, latency, and sanitized outcome.
+
+### 5.5 Backward-compatible precedence
+
+Use one deprecation window so existing supported configurations keep working:
+
+1. `TEXT_PROVIDER` takes precedence; otherwise fall back to legacy `LLM_PROVIDER`.
+2. `EMBEDDING_PROVIDER` takes precedence; otherwise derive the legacy behavior from `USE_LOCAL_EMBEDDINGS` and `LLM_PROVIDER`.
+3. `GRAPHITI_TEXT_PROVIDER` takes precedence; otherwise use explicit legacy `GRAPHITI_PROVIDER`, then `TEXT_PROVIDER`.
+4. `GRAPHITI_EMBEDDING_PROVIDER` takes precedence; otherwise use explicit legacy `GRAPHITI_PROVIDER`, then `EMBEDDING_PROVIDER`.
+5. Log a deprecation warning when a legacy variable determines behavior.
+6. Reject contradictory new settings rather than guessing.
+7. Remove the legacy variables only in a separately announced breaking release.
+
+Never reinterpret legacy `LLM_PROVIDER=openai` as OpenRouter: the endpoints, credentials, routing, and privacy contracts differ. Phase 0 must explicitly choose whether to retain direct OpenAI as a deprecated compatibility adapter for one window or remove it through a separately documented breaking migration. Until that decision is implemented, ambiguous legacy configuration must fail with actionable guidance rather than select the wrong service.
+
+---
+
+## 6. Provider Adapter Design
+
+### 6.1 Separate text generation from embeddings
+
+- [ ] Remove or deprecate `embed()` on `BaseLLMProvider`.
+- [ ] Make `BaseEmbedder` the only application embedding interface.
+- [ ] Ensure direct providers, LangChain, PydanticAI, and Graphiti consume the same validated candidates and routes.
+- [ ] Keep provider adapters responsible for one model call; keep candidate fallback and durable job retry in higher-level orchestration.
+- [ ] Key singleton caches by profile fingerprint, or maintain separate caches per capability and profile.
+- [ ] Provide one test-only reset function that clears all relevant caches.
+
+### 6.2 Ollama text adapter
+
+- [ ] Preserve the existing request queue and local timeout behavior.
+- [ ] Prefer message-based chat semantics for new code so tool calls and structured output are represented consistently.
+- [ ] Retain any native Ollama options that are not expressible through OpenAI compatibility behind the Ollama adapter.
+- [ ] Validate that selected task models are installed and expose required capabilities.
+- [ ] Use schema-constrained output for extraction when the installed Ollama version and selected model demonstrably support it.
+- [ ] Preserve streaming behavior and model keep-alive controls.
+- [ ] Expose queue depth, model residency, load latency, and resource-exhaustion outcomes without exposing prompt content.
+- [ ] Do not require an API key for the local endpoint.
+
+### 6.3 OpenRouter text adapter
+
+- [ ] Use the existing OpenAI-compatible libraries rather than introducing an unnecessary OpenRouter SDK dependency.
+- [ ] Configure `base_url=https://openrouter.ai/api/v1` and `OPENROUTER_API_KEY` explicitly.
+- [ ] Add optional `HTTP-Referer` and application-title headers without logging credentials.
+- [ ] Use Chat Completions as the common first-release protocol for LangChain and Graphiti compatibility.
+- [ ] Support streaming, non-streaming, tool calls, response formats, token limits, and usage metadata.
+- [ ] Handle OpenRouter's normalized error envelope and mid-stream SSE errors.
+- [ ] Retry only retryable pre-response failures, respect `Retry-After`, and cap exponential backoff.
+- [ ] Require model/task capability compatibility. Tool and structured-output tasks must request providers that support all supplied parameters.
+- [ ] Make provider routing explicit. Any OpenRouter model/provider fallback must be compatible with the declared text route and recorded in provenance.
+- [ ] Record the actual model and upstream provider returned by OpenRouter when available.
+
+### 6.4 Ollama embedding adapter
+
+- [ ] Move from one-request-per-text legacy `/api/embeddings` behavior to a batch-capable endpoint (`/api/embed` or `/v1/embeddings`).
+- [ ] Support an explicit dimensions request where the selected model supports it.
+- [ ] Validate response count, numeric type, finite values, non-zero norm, and exact dimensions.
+- [ ] Retain local queue/concurrency controls separately from text-generation concurrency.
+- [ ] Fail the whole batch or return explicit per-item failures; never silently drop or reorder embeddings.
+
+### 6.5 OpenRouter embedding adapter
+
+- [ ] Call `POST /api/v1/embeddings` with the configured OpenRouter model slug.
+- [ ] Send batches through `input` and preserve response ordering by response index.
+- [ ] Explicitly request `encoding_format=float` for compatibility with the existing Python and Graphiti clients.
+- [ ] Pass `dimensions` when a reduced Matryoshka dimension is configured.
+- [ ] Validate response count, dimensions, finite values, and non-zero norm.
+- [ ] Use cosine similarity for unnormalized models such as `pplx-embed-v1`.
+- [ ] Disable cross-model fallback. If routing between implementations of the same model is allowed, treat a changed implementation as a new embedding fingerprint unless equivalence is proven.
+- [ ] Capture token usage and estimated cost without recording source text.
+
+### 6.6 Framework adapters
+
+#### LangChain
+
+- [ ] Keep `ChatOllama` for local-specific behavior.
+- [ ] Construct `ChatOpenAI` with the OpenRouter base URL, API key, and headers when OpenRouter is selected.
+- [ ] Ensure tool schemas, streaming chunks, structured responses, and max-token fields work with both branches.
+- [ ] Replace provider-specific availability checks in reflection and direct-answer chains with a shared `is_text_profile_ready()` check.
+
+#### PydanticAI
+
+- [ ] Replace `create_openai_chat_model()` with a provider-neutral text-model factory.
+- [ ] Configure PydanticAI's OpenAI-compatible provider with the selected base URL and key.
+- [ ] Refactor legacy agent constructors so they no longer require an argument named `openai_api_key` when Ollama or OpenRouter is selected.
+- [ ] Preserve a temporary compatibility wrapper for existing imports.
+
+#### Prompt selection
+
+- [ ] Select prompt adaptations from the configured model family or explicit prompt profile, not from the transport provider.
+- [ ] Treat an OpenRouter-hosted Qwen model as Qwen and an OpenRouter-hosted Claude model as Claude.
+- [ ] Provide a generic prompt profile for unknown model families.
+
+---
+
+## 7. Graphiti Design
+
+Graphiti must no longer use one provider variable for two independent capabilities. It must also stop treating a provider call, an episode synchronization attempt, and cross-store verification as one opaque operation.
+
+- [ ] Rename or replace `src/graphiti/ollama_config.py` with a provider-neutral module; retain an import shim during the deprecation window.
+- [ ] Build each Graphiti LLM client from the active candidate in the extraction route.
+- [ ] Build the Graphiti embedder from `GRAPHITI_EMBEDDING_PROVIDER` or the inherited embedding profile.
+- [ ] Use an OpenAI-compatible generic chat client for Ollama and OpenRouter unless a model has been verified with Graphiti's Responses-based client.
+- [ ] Pass OpenRouter base URL, key, headers, model, retry settings, and output limits explicitly.
+- [ ] Pass the selected embedding dimension from configuration rather than hard-coding 768 or 1536.
+- [ ] Preserve the existing Graphiti maximum-output-token guard.
+- [ ] Add a startup summary that reports sanitized text provider/model and embedding provider/model/dimensions separately.
+- [ ] Verify structured JSON extraction, entity deduplication, edge extraction, and Graphiti search for every supported provider combination.
+
+Embedding migration affects Graphiti entity names, facts, summaries, and episodic vectors. A full graph rebuild is the safest default when changing the Graphiti embedding profile. Re-embedding existing graph properties in place may be considered later only if Graphiti exposes a complete, tested migration API.
+
+### 7.1 Non-negotiable synchronization invariants
+
+- PostgreSQL remains the authoritative source for episode content and synchronization intent.
+- The stable episode UUID is the identity/idempotency key across PostgreSQL, the job ledger, and Neo4j; a deterministic source-content fingerprint identifies the episode revision processed by an attempt.
+- An episode becomes `synced` only after exactly one expected Neo4j episodic record is independently verified for the current source fingerprint and sync profile.
+- A transport, extraction, validation, persistence, or verification failure can never be reported as synchronized.
+- Processing is at-least-once. Duplicate delivery is expected and made safe through stable identifiers, idempotent writes, and reconciliation.
+- State transitions and attempt-ledger writes are transactional in PostgreSQL.
+- Changing a model, prompt/schema version, or embedding profile does not erase prior attempt provenance.
+- Operator-visible state must be explainable without reconstructing transient container logs.
+
+### 7.2 Durable job lifecycle
+
+Replace the Boolean-only operational lifecycle with an explicit state machine. The legacy `graphiti_synced` flag may remain as a compatibility projection during migration, but it must not be the orchestration source of truth.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> leased: atomic claim
+    retry_wait --> leased: retry time reached
+    leased --> synced: write plus independent verification
+    leased --> retry_wait: retryable failure and budget remains
+    leased --> quarantined: permanent failure or budget exhausted
+    leased --> retry_wait: lease expires
+    quarantined --> pending: explicit operator retry
+    synced --> pending: source/profile change or explicit rebuild
+```
+
+| State | Contract |
+|---|---|
+| `pending` | Eligible for an atomic claim; has never completed under the target sync profile |
+| `leased` | Owned by one worker until a recorded expiry; another worker may reclaim only after expiry |
+| `retry_wait` | Failed retryably and becomes claimable at `next_attempt_at` |
+| `quarantined` | Exhausted its budget or hit a permanent failure; requires explicit inspection or retry |
+| `synced` | Independently verified against the expected stable ID and recorded sync profile |
+
+This is the item lifecycle. A separate run/worker circuit (`running`, `draining`, `paused_systemic`, `stopped`) gates whether new items may be claimed; pausing the run must not rewrite or increment queued item state.
+
+The durable record must include the episode ID, desired source fingerprint, state, total job attempts, next-attempt time, lease owner/expiry, last attempt ID, last failure class/code, sanitized summary, active sync-profile fingerprint, and verified timestamp. Store each attempt in an append-only ledger with run ID, captured source fingerprint, candidate fingerprint, prompt/schema version, timing, token/usage data when available, outcome, and graph counts. Do not store source text or credentials in the ledger.
+
+Claims must be atomic, using `FOR UPDATE SKIP LOCKED` or an equivalent proven mechanism. Workers must heartbeat or use a lease long enough for the measured extraction distribution. Expired work returns safely to `retry_wait`; process termination must not require a manual database edit. Neo4j writes must use the stable ID so a recovered job verifies or completes existing work instead of creating duplicates. Before the success transition, compare the current source fingerprint with the claimed fingerprint; if content changed mid-flight, do not mark the stale attempt synchronized and queue the new revision.
+
+### 7.3 Structured extraction policy
+
+The first local route should evaluate `qwen2.5:3b` as the fast primary and `qwen2.5:7b` as the stronger fallback. That recommendation is provisional until the fixed extraction corpus establishes parse success, schema success, graph quality, latency, and resource cost.
+
+- [ ] Version the Graphiti/application implementation, extraction prompt, output schema, entity types, edge types, normalization rules, candidate route, and referenced embedding profile as one sync-profile fingerprint.
+- [ ] Prefer schema-constrained generation where verified; still validate the parsed result independently.
+- [ ] Split entity and relationship extraction when oversized combined responses are the measured cause of truncation.
+- [ ] Coordinate or disable opaque Graphiti-internal retries so the application-level maximum provider-call budget remains authoritative.
+- [ ] Retry the same candidate only for its allowed failure classes; advance to a fallback only for explicitly configured classes.
+- [ ] Stop claims on systemic failures instead of exhausting or quarantining unrelated episode jobs.
+- [ ] Record successful fallback as degraded success, not ordinary primary success.
+- [ ] Send an exhausted route to durable retry or quarantine with the complete sanitized attempt chain.
+- [ ] Require explicit reprocessing when the sync-profile fingerprint changes.
+
+An OpenRouter candidate can later replace or follow an Ollama candidate under the same contract. Provider choice must not change success semantics.
+
+### 7.4 Cross-store reconciliation contract
+
+Add one read-only `graph-audit` command as the authoritative proof of synchronization. It must compare PostgreSQL source/sync state with Neo4j `Episodic.stable_id` values and report:
+
+- Synchronized PostgreSQL IDs missing from Neo4j.
+- Unexpected Neo4j stable IDs.
+- Duplicate or null stable IDs.
+- Source-description mismatches where applicable.
+- Jobs marked `synced` without the expected verified record.
+- Jobs whose verified source fingerprint no longer matches PostgreSQL.
+- Neo4j records associated with an incompatible sync or embedding profile when metadata is available.
+- Total, populated, distinct, pending, leased, retry-wait, quarantined, and synced counts.
+
+Support human-readable and stable JSON output. Exit `0` only for a clean reconciliation, `1` for discovered data drift, and `2` for invalid invocation or an incomplete audit caused by infrastructure/query failure. The command must never mutate either store and must be safe to run repeatedly, after every import, and after preserved-volume restarts.
+
+### 7.5 Observability and graph-quality gates
+
+Every import run receives a run ID and emits structured, sanitized events. Operators must be able to see attempted, primary-success, fallback-success, retrying, quarantined, verified, skipped, and remaining counts; rolling episodes per minute; approximate ETA; and failures grouped by class and candidate.
+
+Use bounded-cardinality metrics. Episode IDs and error messages belong in structured diagnostic logs or the attempt ledger, not metric labels. Separate these outcome families:
+
+1. Provider and parsing behavior: calls, retries, fallbacks, latency, tokens, malformed output, schema failures.
+2. Synchronization correctness: leases, verified episodes, retries, quarantines, duplicate-prevention events, audit drift.
+3. Graph quality: proposed, normalized, accepted, and rejected entities/edges by stable reason code.
+4. Resource health: Ollama queue depth, model reloads, GPU memory pressure, worker throughput, Neo4j contention.
+
+The following are hard release invariants:
+
+| Gate | Required result |
+|---|---|
+| Falsely synchronized episodes | `0` |
+| Duplicate or null stable IDs | `0` |
+| Unclassified terminal failures | `0` |
+| Jobs quarantined because of a systemic provider/configuration failure | `0` |
+| Quarantined rows without visible reason/attempt chain | `0` |
+| Active embedding-profile mismatches | `0` |
+| Cross-store audit drift at cutover | `0` |
+| Required attempt provenance coverage | `100%` |
+| Browser/API/MCP/preserved-volume release-gate pass rate | `100%` |
+
+Phase 0 must set baseline-relative thresholds for extraction parse success, fallback rate, relationship quality, retrieval quality, p95 latency, throughput, and cost. Synchronization completeness and graph quality are reported separately; one must never be used as a proxy for the other.
+
+### 7.6 Local resource isolation and release gate
+
+Keep one Graphiti extraction worker as the safe local default until a controlled one-versus-two-worker benchmark proves a net improvement without model eviction, out-of-memory failures, parse-quality regression, Neo4j contention, or degradation of API/browser chat. Text generation and embedding queues need separate concurrency controls and resource budgets.
+
+The local release gate must cover Compose health, API and MCP readiness, one real browser SSE chat, a representative Graphiti ingest, `graph-audit`, embedding-profile preflight, and a preserved-volume restart. The detailed local benchmark and browser requirements remain in the [supporting workstream](./local_llm_graph_pipeline_improvements.md).
+
+---
+
+## 8. Embedding Profile and Storage Contract
+
+### 8.1 Profile identity
+
+Every active semantic index must have a persisted profile containing at least:
+
+- Provider (`ollama` or `openrouter`).
+- Base endpoint class or inference implementation identifier.
+- Exact model slug/name.
+- Model revision or immutable digest when available.
+- Output dimensions.
+- Output encoding and decoded storage type.
+- Normalization behavior.
+- Distance metric.
+- Profile fingerprint.
+- Creation and activation timestamps.
+
+The fingerprint should be derived from the fields that can change the vector space. Credentials and other secrets must never be included.
+
+### 8.2 Index state
+
+Add a small authoritative index-state table or equivalent metadata store with one active record per semantic index, for example:
+
+- `episodes`
+- `graphiti_nodes`
+- `graphiti_edges`
+- `legacy_chunks` while that index remains supported
+
+At startup and before ingestion, compare the configured profile with the stored active profile and physical vector dimensions. Refuse embedding search or writes when they disagree.
+
+### 8.3 Resolve the legacy chunk index
+
+Recommended decision:
+
+1. Treat `episodes.embedding` plus Graphiti as the supported semantic retrieval path.
+2. Migrate `/api/v1/validate` away from the empty legacy `chunks.embedding` index and use the episode retrieval path.
+3. Keep the 384-dimensional chunk schema read-only during the transition.
+4. Remove or explicitly isolate the chunk-vector path after confirming there are no production consumers.
+
+If chunks must remain independently searchable, they require their own named embedding profile and their own embedder factory call. They must never reuse the episode embedder implicitly.
+
+### 8.4 Dimension strategy for `pplx-embed-v1-0.6b`
+
+The model has a native 1024-dimensional output and supports reduced Matryoshka dimensions.
+
+| Choice | Benefits | Costs |
+|---|---|---|
+| 1024 dimensions | Maximum model quality; recommended initial evaluation | PostgreSQL and Neo4j vector indexes must migrate; vectors are 33% wider than 768 |
+| 768 dimensions | Retains the current physical width | API must explicitly request 768; reduced quality must be measured; all vectors still require rebuilding |
+
+Recommended starting point: evaluate and migrate at the native 1024 dimensions because the corpus is currently small. Keep 768 as a separately measured candidate dimension, not a runtime fallback or accidental default.
+
+### 8.5 Storage encoding
+
+Perplexity embeddings are natively quantized and unnormalized, but the first release should store decoded numeric vectors through the current cosine-search paths. This avoids an immediate Graphiti and pgvector binary-storage redesign. Native INT8 or binary storage can be evaluated as a separate optimization after functional parity.
+
+---
+
+## 9. Implementation Phases
+
+### Phase 0 — Baseline, decisions, and safety gates
+
+- [ ] Record the current live configuration without secrets.
+- [ ] Capture the PostgreSQL and Neo4j schema/index inventory.
+- [ ] Reconcile checked-in schemas with the live 768-dimensional episode state.
+- [ ] Capture a PostgreSQL and Neo4j backup and verify restore instructions.
+- [ ] Run and archive the current manual PostgreSQL/Neo4j ID-set reconciliation as the audit baseline.
+- [ ] Create a versioned retrieval benchmark with lore questions and expected episodes/entities.
+- [ ] Create a versioned extraction corpus with expected parse/schema outcomes, important entities, and important relationships.
+- [ ] Capture current Nomic retrieval metrics, 3B/7B extraction behavior, Graphiti quality, latency, GPU use, and failure classes.
+- [ ] Approve the error taxonomy, sync-profile fingerprint fields, attempt limits, lease policy, and hard release invariants.
+- [ ] Select OpenRouter text models for each required task and document their required capabilities.
+- [ ] Decide whether the initial OpenRouter embedding pilot uses 1024 or 768 dimensions; recommended: 1024.
+- [ ] Confirm the data-retention policy and whether OpenRouter ZDR must be enforced.
+- [ ] Confirm that legacy chunk-vector search will be retired or assign it a separate profile.
+- [ ] Assign an owner and decision date to every open decision in Section 16.
+
+**Exit criteria:** Restorable backups, a clean reconciliation snapshot, versioned quality baselines, explicit budgets, owned decisions, and the intended first deployment matrix are recorded.
+
+### Phase 1 — Operational truth and recoverability
+
+- [ ] Add versioned migrations for durable graph-sync state and an append-only attempt ledger.
+- [ ] Preserve `graphiti_synced` temporarily as a derived compatibility field, not the worker queue.
+- [ ] Implement atomic claims, expiring leases, deterministic backoff, bounded job attempts, and quarantine.
+- [ ] Add run-level pause/circuit state so systemic failures stop claims without consuming item attempts.
+- [ ] Make stable-ID Neo4j writes and post-write verification idempotent under process crashes and duplicate delivery.
+- [ ] Bind claims and success to a source-content fingerprint and requeue changes detected during an active lease.
+- [ ] Add CLI commands to list state, retry eligible failures, retry quarantined rows explicitly, and inspect sanitized attempt chains.
+- [ ] Add the read-only `graph-audit` command with human/JSON output and exit codes `0`, `1`, and `2`.
+- [ ] Add structured run summaries, progress, rolling throughput, approximate ETA, and failure-class counts.
+- [ ] Add fault-injection tests for termination before write, after write, before verification, and after verification.
+- [ ] Run the complete 611-episode audit and recovery tests using the current Ollama/Nomic configuration.
+
+**Exit criteria:** No injected failure produces a false success or duplicate stable ID; expired work recovers automatically; every failure has durable provenance; `graph-audit` is clean and repeatable.
+
+### Phase 2 — Configuration and interface refactor
+
+- [ ] Add typed provider connections, text candidates/routes, embedding profiles, and graph-sync policies.
+- [ ] Add `TEXT_PROVIDER`, `EMBEDDING_PROVIDER`, and both Graphiti override variables.
+- [ ] Add the explicit Graphiti extraction fallback and bounded-attempt settings.
+- [ ] Implement legacy-variable precedence and deprecation warnings.
+- [ ] Validate URLs, dimensions, timeouts, retry/fallback budgets, model capabilities, and selected-provider credentials.
+- [ ] Split text and embedding interfaces; deprecate embedding methods on text providers.
+- [ ] Make caches profile-aware.
+- [ ] Keep fallback orchestration outside single-call provider adapters.
+- [ ] Add unit tests for precedence, candidate order, failure-class routing, maximum calls, and all four primary provider combinations.
+- [ ] Deploy this phase with current Ollama defaults and confirm no provider-selection or output-quality regression beyond the Phase 1 safety contract.
+
+**Exit criteria:** The existing all-Ollama deployment passes through the new settings and orchestration path with no OpenRouter key present, no regression against the Phase 0 baseline, and all Phase 1 safety invariants intact.
+
+### Phase 3 — Structured extraction reliability and graph quality
+
+- [ ] Benchmark local `qwen2.5:3b`, local `qwen2.5:7b`, and any candidate OpenRouter extraction model on the fixed corpus.
+- [ ] Enable verified schema-constrained output and independently validate every response.
+- [ ] Test combined versus staged entity/relationship extraction where truncation is observed.
+- [ ] Implement the explicit primary/fallback route and record fallback success as degraded success.
+- [ ] Coordinate Graphiti-internal and application retry counts under one maximum-provider-call budget.
+- [ ] Define and version the canonical relationship vocabulary and safe alias normalization.
+- [ ] Validate relationship endpoints before graph maintenance and record proposed/normalized/accepted/rejected counts.
+- [ ] Add graph-quality reports that are separate from synchronization-completeness reports.
+- [ ] Keep one local worker as the default while correctness is being established.
+
+**Exit criteria:** The selected extraction route meets the approved parse, schema, and graph-quality thresholds; every exhausted episode enters visible `retry_wait` or `quarantined` state; no failed extraction is synchronized.
+
+### Phase 4 — OpenRouter text generation
+
+- [ ] Add the OpenRouter text adapter.
+- [ ] Add non-streaming, streaming, usage, error, retry, and redaction tests using mocked HTTP responses.
+- [ ] Add LangChain OpenRouter construction.
+- [ ] Add PydanticAI provider-neutral construction and compatibility wrappers.
+- [ ] Update provider-specific checks in reflection, direct answers, classifiers, workflows, and legacy agents.
+- [ ] Make prompt profiles model-family-aware.
+- [ ] Add task-capability validation for tools and structured extraction.
+- [ ] Record requested candidate, actual returned model/upstream, and route outcome.
+- [ ] Add an opt-in live integration test with a strict token/cost ceiling.
+
+**Exit criteria:** Chat, creative, reasoning, tool use, structured output, extraction fallback, and streaming pass against selected OpenRouter routes while embeddings remain on Ollama.
+
+### Phase 5 — OpenRouter embeddings
+
+- [ ] Add the OpenRouter embedding adapter and explicit float output.
+- [ ] Add configurable dimensions and response validation.
+- [ ] Upgrade the Ollama embedder to batch-capable modern endpoints and the same validation contract.
+- [ ] Add embedding profile fingerprinting and startup guards.
+- [ ] Store or expose provider/model/dimensions in sanitized health and pipeline output.
+- [ ] Add deterministic ordering, cardinality, invalid-vector, retry, and no-fallback tests.
+- [ ] Build a shadow embedding evaluation path that does not overwrite active Nomic vectors.
+
+**Exit criteria:** Both embedding providers produce valid vectors through one interface, and a profile mismatch reliably blocks reads and writes.
+
+### Phase 6 — Graphiti provider separation
+
+- [ ] Replace the coupled Graphiti provider switch with an extraction route and an independent embedding profile.
+- [ ] Add Ollama/Ollama, Ollama/OpenRouter, OpenRouter/Ollama, and OpenRouter/OpenRouter Graphiti configuration tests.
+- [ ] Verify Graphiti structured extraction with the selected OpenRouter text model.
+- [ ] Verify vector dimensions and cosine configuration before Graphiti initialization.
+- [ ] Update Graphiti benchmark scripts and summaries.
+- [ ] Add a graph rebuild command that records the active sync and embedding profiles.
+- [ ] Require graph rebuild jobs to use the durable lifecycle, attempt ledger, and audit contract.
+
+**Exit criteria:** Graphiti can initialize, ingest, recover, reconcile, search, and report its routes/profiles correctly in every supported configuration.
+
+### Phase 7 — Schema reconciliation and vector migration tooling
+
+- [ ] Establish a versioned migration directory and migration ledger.
+- [ ] Make the checked-in schema match the actual supported dimensions and indexes.
+- [ ] Add embedding-profile/index-state metadata.
+- [ ] Restore or replace the missing episode vector index.
+- [ ] Add preflight checks for column dimensions, index dimensions, profile fingerprints, and row counts.
+- [ ] Implement a shadow-column or shadow-table backfill so the active Nomic vectors remain available during evaluation.
+- [ ] Build the replacement vector index before cutover.
+- [ ] Add resumable batching, progress reporting, cost accounting, and idempotency.
+- [ ] Add a controlled graph backup, clear, and rebuild workflow.
+- [ ] Resolve `/api/v1/validate` and the legacy 384-dimensional chunk path.
+- [ ] Require clean index-profile preflight and `graph-audit` results before activation.
+
+**Exit criteria:** A dry-run migration can build and validate a new embedding space without modifying the active one, and rollback remains possible.
+
+### Phase 8 — Deployment, secrets, and operations
+
+- [ ] Add OpenRouter variables to `.env.example` with empty secret values.
+- [ ] Add `OPENROUTER_API_KEY_FILE` support to the container entrypoint.
+- [ ] Add OpenRouter secret transport to development Compose, production Compose, deployment scripts, and CI/CD.
+- [ ] Ensure all-Ollama deployments do not mount or require an OpenRouter secret.
+- [ ] Make Ollama model initialization and warmup conditional on selected capabilities.
+- [ ] Add provider-neutral Make targets for configuration checks, model probes, embedding probes, and Graphiti benchmarks.
+- [ ] Add Make targets for graph-sync status, safe retries, `graph-audit`, and the complete release gate.
+- [ ] Update secret scanners and environment contract tests.
+- [ ] Add sanitized health/readiness, queue/lease state, provider-level metrics, and graph-quality summaries.
+- [ ] Alert on quarantined growth, stale leases, audit drift, profile mismatch, retry storms, and sustained provider failure.
+- [ ] Document cost, privacy, ZDR, data-collection routing, and outage behavior.
+
+**Exit criteria:** Every deployment mode starts with only its required dependencies and secrets, and logs contain no credentials or prompt content.
+
+### Phase 9 — Quality validation, local tuning, and staged rollout
+
+- [ ] Run unit, integration, end-to-end, security, stress, and performance suites.
+- [ ] Run the four-provider matrix for the API and Graphiti.
+- [ ] Run the local release gate: Compose, API, MCP, browser SSE, representative ingest, audit, and preserved-volume restart.
+- [ ] Benchmark one and two local extraction workers under an explicit GPU/resource budget; retain one unless two wins every safety gate.
+- [ ] Compare the shadow OpenRouter embedding index with Nomic using the Phase 0 retrieval set.
+- [ ] Review failed or materially changed retrieval cases manually.
+- [ ] Measure Graphiti entity and relationship changes under the new profiles.
+- [ ] Confirm cost and latency budgets.
+- [ ] Cut over text generation first because it is immediately reversible.
+- [ ] Cut over embeddings only after the shadow index passes quality gates.
+- [ ] Require zero cross-store drift and zero active profile mismatch immediately before and after each cutover.
+- [ ] Retain the old vector space and graph backup through the agreed bake period.
+- [ ] Remove deprecated variables and migration artifacts only in a later cleanup release.
+
+**Exit criteria:** The selected production configuration meets every hard invariant and agreed quality, latency, throughput, cost, privacy, and reliability budget, with a demonstrated rollback and a clean bake period.
+
+---
+
+## 10. File-by-File Change Map
+
+| File or area | Planned responsibility |
+|---|---|
+| `src/llm/config.py` | Replace loosely coupled dictionaries with validated connections, candidates, routes, embedding profiles, sync policies, and legacy precedence |
+| `src/llm/base.py` | Separate text and embedding protocols |
+| New provider-neutral text-route module | Execute ordered candidates under classified, bounded fallback rules; emit attempt provenance |
+| `src/llm/providers/factory.py` | Select/cache single-call text adapters by candidate fingerprint |
+| `src/llm/providers/ollama_provider.py` | Preserve Ollama text behavior; remove embedding responsibility |
+| `src/llm/providers/openrouter_provider.py` | New OpenRouter text adapter |
+| `src/llm/embeddings/factory.py` | Select/cache embedders by embedding-profile fingerprint and semantic-index scope |
+| `src/llm/embeddings/ollama_embedder.py` | Modern batch endpoint, dimensions, and validation |
+| `src/llm/embeddings/openrouter_embedder.py` | New OpenRouter embeddings adapter |
+| `src/llm/embeddings/openai_embedder.py` | Keep only if direct OpenAI remains supported; otherwise avoid using it as an OpenRouter alias |
+| `src/llm/langchain_helpers.py` | Build Ollama or OpenRouter chat clients from the active text-route candidate |
+| `src/llm/pydantic_ai_factory.py` | Provider-neutral PydanticAI factory plus temporary compatibility shim |
+| `src/llm/prompts.py` | Select by model family/prompt profile rather than provider |
+| `src/graphiti/ollama_config.py` | Replace with provider-neutral Graphiti configuration; keep import shim temporarily |
+| `src/graphiti/__init__.py` | Report and enforce independent Graphiti routes/profiles |
+| New Graphiti sync-state module | Atomic claims, leases, transitions, run-level circuit state, backoff, quarantine, and append-only attempt records |
+| `src/api/main.py` | Provider-aware startup checks, index guards, health details, and correction of legacy chunk search |
+| `src/scripts/generate_embeddings.py` | Profile validation, resumable backfill, progress, and provenance |
+| `src/scripts/sync_episodes_to_graphiti.py` | Durable worker loop, independent Graphiti routes/profiles, progress, and recovery |
+| New `src/scripts/graph_audit.py` | Read-only PostgreSQL/Neo4j reconciliation with human/JSON output and stable exit codes |
+| `src/scripts/reset_processing.py` | Profile-aware reset language and safe migration operations |
+| `schemas/` | Versioned graph-job/attempt migrations, profile metadata, correct dimensions, vector indexes, and migration ledger |
+| `docker-compose.yml` | New selectors/settings, conditional Ollama dependencies, OpenRouter secret |
+| `docker-compose.prod.yml` | Remove stale provider flags and adopt the same configuration contract |
+| `src/scripts/entrypoint.sh` | Load `OPENROUTER_API_KEY_FILE` securely |
+| `scripts/setup_ollama_models.sh` | Pull only configured local models |
+| `scripts/warmup_models.sh` | Warm only active Ollama candidates/capabilities and use embedding endpoints correctly |
+| `scripts/benchmark_graphiti.sh` | Versioned extraction/quality corpus, candidate comparisons, and bounded concurrency benchmark |
+| `Makefile` | Provider-neutral probes, graph status/audit/retry, benchmarks, release gate, migration, cutover, and rollback targets |
+| `.env.example` | Complete documented configuration contract with blank secrets |
+| `.github/workflows/` and deployment scripts | Secret transport and configuration validation |
+| `tests/llm/` | Provider factories, task capabilities, streaming, retries, and error mapping |
+| `tests/embeddings/` | Dimensions, profile identity, batching, vector validation, and quality |
+| `tests/graphiti/` | Provider matrix, extraction routes, quality, durable state, recovery, and reconciliation |
+| `tests/test_graphiti_sync_contract.py` | Idempotency, crash windows, leases, terminal-state truth, and compatibility behavior |
+| Deployment and local docs | Configuration recipes for all four provider combinations |
+
+---
+
+## 11. Test Strategy
+
+### 11.1 Unit tests
+
+- [ ] New and legacy environment-variable precedence.
+- [ ] Selected-provider credential validation.
+- [ ] Provider URL and header construction.
+- [ ] Model selection for every text task.
+- [ ] Model-family prompt selection independent of provider.
+- [ ] Factory cache isolation by profile.
+- [ ] Candidate ordering, allowed fallback classes, maximum-call enforcement, and degraded-success reporting.
+- [ ] Distinct accounting for transport retries, same-candidate generation retries, candidate fallback, and durable job retries.
+- [ ] OpenRouter normal and streaming responses.
+- [ ] Mid-stream and pre-stream error handling.
+- [ ] Retryable versus non-retryable failures.
+- [ ] Ollama and OpenRouter batch embedding ordering.
+- [ ] Float, base64, malformed, NaN, zero, wrong-length, and wrong-count vector responses.
+- [ ] Embedding fingerprint stability and mismatch rejection.
+- [ ] Secret redaction and `_FILE` handling.
+
+### 11.2 Integration matrix
+
+| Text | Embeddings | API smoke | LangChain | PydanticAI | Graphiti ingest/fallback/recovery/search |
+|---|---|---:|---:|---:|---:|
+| Ollama | Ollama | Required | Required | Required | Required |
+| Ollama | OpenRouter | Required | Required | Required | Required |
+| OpenRouter | Ollama | Required | Required | Required | Required |
+| OpenRouter | OpenRouter | Required | Required | Required | Required |
+
+OpenRouter integration tests must be opt-in, use a restricted test key, cap tokens and requests, and never run on untrusted pull requests.
+
+For Graphiti, each row must exercise primary success, eligible fallback success, exhausted-route quarantine, retry recovery, and clean audit—not merely client construction.
+
+### 11.3 Graph synchronization contract and fault injection
+
+- [ ] Two workers cannot hold a valid lease for the same episode.
+- [ ] Expired leases become reclaimable without manual mutation.
+- [ ] Crashes before Neo4j write, after write, before verification, and after verification converge without false success or duplicate stable IDs.
+- [ ] An episode changed during an active lease cannot be marked synchronized for the stale source fingerprint.
+- [ ] Job-attempt and provider-call budgets cannot multiply beyond the configured maximum.
+- [ ] Item-specific permanent failures quarantine immediately; retryable item failures honor deterministic backoff; systemic failures pause claims without consuming item budgets.
+- [ ] Explicit quarantine retry preserves prior attempts and creates a new run/attempt chain.
+- [ ] `graph-audit` detects missing, unexpected, duplicate, null, incorrectly synced, and profile-incompatible records.
+- [ ] Audit exit codes distinguish clean state, data drift, and incomplete/failed audit execution.
+- [ ] Attempt events and metrics are sanitized and use bounded-cardinality labels.
+- [ ] Authentication, configuration, profile, and provider-wide failures pause claims without mass-quarantining episodes.
+- [ ] The legacy Boolean flag remains a correct compatibility projection during its deprecation window.
+
+### 11.4 End-to-end tests
+
+- [ ] API startup and readiness for each provider combination.
+- [ ] `/api/v1/rag/query` retrieves compatible episode vectors.
+- [ ] `/api/v1/validate` never queries a dimensionally incompatible index.
+- [ ] Streaming chat completes and surfaces mid-stream failures correctly.
+- [ ] Tool-calling workflows execute tools and preserve tool results.
+- [ ] Graphiti extracts entities/edges, deduplicates, and retrieves related facts.
+- [ ] A malformed primary extraction falls back exactly as configured and is reported as degraded success.
+- [ ] An exhausted extraction route leaves an explainable quarantined record and no false synchronization.
+- [ ] The post-import and post-restart `graph-audit` results are clean.
+- [ ] A real browser completes one SSE chat without CORS, console, credential, or responsive-overflow regressions.
+- [ ] A mismatched active embedding profile prevents startup or marks embedding-dependent endpoints unavailable.
+- [ ] Text-provider rollback requires only configuration and restart.
+- [ ] Embedding rollback selects the retained previous vector space and graph backup.
+
+### 11.5 Quality and performance gates
+
+- [ ] Establish Recall@5/Recall@10, MRR or nDCG, and manual relevance judgments for the lore benchmark.
+- [ ] Require the candidate embedding profile to meet the Phase 0 agreed threshold before cutover.
+- [ ] Compare entity/relationship extraction precision and omission rates.
+- [ ] Record primary parse/schema success, fallback rate/success, quarantine rate, and accepted/rejected graph elements by reason.
+- [ ] Record p50/p95 text latency, embedding throughput, Graphiti episode time, queue wait, and error rate.
+- [ ] Record OpenRouter token usage and cost by task without storing content.
+- [ ] Confirm local GPU memory, model reloads, and API/chat latency remain within operational limits in Ollama modes.
+- [ ] Require the hard invariants in Section 7.5 to pass before every cutover.
+
+---
+
+## 12. Migration and Rollout Runbook
+
+### 12.1 Preparation
+
+1. Freeze ingestion and record row/node/edge counts.
+2. Back up PostgreSQL and Neo4j.
+3. Verify that both backups can be inspected or restored.
+4. Archive a complete pre-change reconciliation, embedding-profile inventory, and benchmark result.
+5. Confirm no unexplained duplicate/null stable IDs or falsely synchronized rows exist; resolve them before migration.
+6. Record the exact Ollama model digests, prompts/schemas, application revision, and active configuration fingerprints.
+
+### 12.2 Operational foundation activation
+
+1. Apply the graph-job and attempt-ledger migrations without changing providers.
+2. Seed lifecycle state from the existing source rows and compatibility flag; verify every row is accounted for exactly once.
+3. Deploy one Ollama/Nomic worker using atomic claims, leases, bounded retries, and stable-ID verification.
+4. Exercise the documented crash windows and verify automatic recovery.
+5. Run `graph-audit` and require a clean result.
+6. Run the local release gate and compare quality/latency with Phase 0.
+7. Keep this foundation active for all later provider pilots.
+
+### 12.3 Text-provider pilot
+
+1. Configure OpenRouter model slugs in staging.
+2. Set `TEXT_PROVIDER=openrouter`; leave embeddings on Ollama.
+3. Configure an explicit extraction route separately; do not inherit an untested chat model into Graphiti.
+4. Run chat, creative, reasoning, streaming, structured-output, extraction-route, and tool tests.
+5. Review primary/fallback behavior, quality, errors, usage, cost, and data-routing settings.
+6. Revert to the prior route immediately if gates fail; no vector migration is required.
+
+### 12.4 Embedding shadow build
+
+1. Create the target embedding profile and shadow vector storage.
+2. Keep the active Nomic index readable.
+3. Backfill all episodes with resumable batches.
+4. Build the new vector index.
+5. Run dimension, count, null, finite-value, and profile checks.
+6. Run the retrieval benchmark against both indexes.
+7. Reject the candidate if it misses the agreed quality gate.
+
+### 12.5 Graph rebuild
+
+1. Preserve the old Neo4j database or backup.
+2. Record the candidate Graphiti sync-route and embedding-profile fingerprints.
+3. Create a new rebuild run in the durable job ledger; do not erase historical attempts.
+4. Rebuild the graph from stable PostgreSQL episodes through the leased worker lifecycle.
+5. Resolve or explicitly accept every quarantined episode before cutover.
+6. Validate node, edge, episode, embedding-index, and attempt-ledger counts.
+7. Run `graph-audit`, extraction quality, relationship quality, and retrieval tests.
+
+### 12.6 Cutover
+
+1. Pause writes.
+2. Re-run incremental backfill for records changed during the shadow build.
+3. Require a clean old-space audit and a clean candidate-space audit.
+4. Atomically activate the new episode index/profile.
+5. Activate the rebuilt Graphiti database/sync/embedding profiles.
+6. Restart the API and workers and require successful profile preflight.
+7. Run API, MCP, browser, retrieval, Graphiti, and audit smoke tests.
+8. Resume traffic and writes gradually while watching fallbacks, quarantines, drift, latency, and cost.
+9. Monitor the full bake period before deleting any old vectors, job evidence, or backups.
+
+---
+
+## 13. Rollback Plan
+
+### Text rollback
+
+1. Restore `TEXT_PROVIDER=ollama` or the previous application text route.
+2. Restart the API.
+3. Run chat, streaming, structured-output, and tool-call smoke tests.
+
+No persisted-data rollback is required for interactive text generation. Graph extraction is governed by the separate route rollback below because it persists derived data.
+
+### Graph extraction-route rollback
+
+1. Pause graph workers and stop new claims.
+2. Let active leases finish or release them through the tested operator command; never edit state ad hoc.
+3. Preserve the attempt ledger and quarantine state.
+4. Reactivate the previous extraction-route and sync-profile configuration.
+5. Resume workers, retry only eligible work, and run `graph-audit`.
+
+If a changed extraction route already produced an unacceptable graph, restore the retained graph backup or rebuild under the previous sync profile. Merely switching the route does not undo persisted graph changes.
+
+### Embedding rollback before cutover
+
+1. Stop the shadow job.
+2. Leave the current Nomic profile active.
+3. Drop or retain the incomplete shadow data for diagnosis.
+
+### Embedding rollback after cutover
+
+1. Pause embedding-dependent writes and traffic.
+2. Reactivate the retained previous episode vector profile/index.
+3. Restore or switch back to the previous Neo4j graph backup.
+4. Restore the previous embedding provider configuration.
+5. Restart and require successful profile preflight.
+6. Run retrieval, graph, and cross-store audit smoke tests before resuming traffic.
+
+Old vectors, indexes, and graph backups must not be deleted until the bake period ends and rollback is formally closed.
+
+---
+
+## 14. Security, Privacy, and Reliability Requirements
+
+- [ ] Store OpenRouter credentials only through environment injection or Docker secret files.
+- [ ] Never expose keys in health output, logs, exception text, metrics labels, or subprocess arguments.
+- [ ] Do not log lore prompts or embedding inputs by default.
+- [ ] Apply the existing sensitive-data logging filters to OpenRouter clients and errors.
+- [ ] Make OpenRouter data-collection and ZDR requirements explicit and testable.
+- [ ] Pin or explicitly constrain provider routing for embedding reproducibility.
+- [ ] Do not enable cross-model embedding fallbacks.
+- [ ] Treat timeouts, 429s, provider overload, and mid-stream failures as distinct observable events.
+- [ ] Use bounded retries with jitter, honor `Retry-After`, and enforce a total provider-call ceiling per leased job attempt.
+- [ ] Add per-task request, token, latency, error, and estimated-cost metrics with bounded-cardinality labels.
+- [ ] Use database time for lease expiry/claim decisions or explicitly bound clock-skew risk.
+- [ ] Give `graph-audit` read-only database credentials where the deployment platform permits it.
+- [ ] Keep attempt summaries sanitized and retain them according to an explicit operational-data policy.
+- [ ] Apply per-provider concurrency/rate budgets so Graphiti backfills cannot starve interactive chat or trigger an uncontrolled cost spike.
+- [ ] Verify that sending episode content to OpenRouter is allowed by the project's data classification and selected routing/privacy policy.
+- [ ] Ensure an OpenRouter outage does not prevent startup when OpenRouter is not selected.
+- [ ] Ensure an Ollama outage affects only capabilities configured to use Ollama.
+
+---
+
+## 15. Definition of Done
+
+- [ ] All four primary text/embedding combinations pass the required test matrix.
+- [ ] The Graphiti extraction route and embedding profile can be inherited or overridden independently.
+- [ ] The unchanged all-Ollama environment behaves as before.
+- [ ] Graph synchronization uses atomic leases, an append-only attempt ledger, bounded retries, quarantine, and stable-ID idempotency.
+- [ ] Systemic failures stop new graph claims without consuming unrelated episode budgets; recovery requires a successful readiness check.
+- [ ] Fault-injection tests prove recovery across every documented crash window without false success or duplicate stable IDs.
+- [ ] Source changes during processing requeue the new revision and cannot leave a stale `synced` result.
+- [ ] The explicit extraction route meets quality gates and reports fallback success as degraded success.
+- [ ] `graph-audit` provides authoritative human/JSON results and is clean after imports, restarts, cutovers, and rollbacks.
+- [ ] Synchronization completeness and graph quality have separate, enforced acceptance thresholds.
+- [ ] OpenRouter text supports streaming, structured output, and tool calling with selected models.
+- [ ] Ollama and OpenRouter embedders support validated batching and configurable dimensions.
+- [ ] No embedding-dependent operation can run against a mismatched profile or dimension.
+- [ ] Checked-in schemas and migrations reproduce the live supported state from a clean database.
+- [ ] `/api/v1/validate` no longer mixes the episode and legacy chunk vector spaces.
+- [ ] OpenRouter secrets work through local, production, and CI/CD secret-file transport.
+- [ ] Provider/model/dimension information is observable without exposing secrets.
+- [ ] Operators can explain every pending, leased, retrying, quarantined, or synchronized episode from durable state.
+- [ ] The local release gate covers Compose, API, MCP, browser SSE, Graphiti, audit, and preserved-volume restart.
+- [ ] Quality, latency, cost, privacy, rollout, and rollback gates are documented and passed.
+- [ ] Old embedding data is retained until the bake period and rollback window are formally complete.
+- [ ] Deployment and operator documentation covers every supported provider combination.
+
+---
+
+## 16. Open Decisions
+
+| Decision | Recommendation | Status / decision gate |
+|---|---|---|
+| First OpenRouter chat/creative/reasoning/tools models | Select per task and verify tools/structured-output support; do not assume one model fits every task | Open — owner/date required in Phase 0 |
+| Existing direct-OpenAI adapter | Retain for one deprecated compatibility window unless usage audit proves removal is safe | Open — decide in Phase 0 |
+| Initial PPLX embedding dimensions | Use native 1024 for the quality pilot | Proposed — approve in Phase 0 |
+| Initial local extraction route | Evaluate `qwen2.5:3b` primary with `qwen2.5:7b` fallback | Proposed — decide from Phase 0 corpus |
+| Cross-provider extraction fallback | Keep the first route within Ollama; add OpenRouter fallback only after explicit privacy, cost, and quality approval | Proposed — revisit in Phase 4 |
+| Error classes and nested attempt budgets | Adopt Section 5.4 taxonomy and one hard provider-call ceiling | Proposed — approve before Phase 1 exits |
+| Lease duration and heartbeat | Derive from measured p99 extraction duration with recovery headroom | Open — decide before Phase 1 implementation |
+| Quarantine policy and retention | Manual explicit retry; preserve immutable prior attempts under an operational retention policy | Open — decide before Phase 1 exits |
+| Graph-quality and fallback-rate thresholds | Set against the versioned 3B/7B baseline; never use completeness as a substitute | Open — decide in Phase 0 |
+| Legacy 384-dimensional chunk index | Retire its vector-search use and standardize on episodes | Proposed — approve in Phase 0 |
+| OpenRouter ZDR | Require if compatible endpoints meet capability and cost needs | Open — owner/date required in Phase 0 |
+| Embedding provider routing | Pin/disable fallbacks for reproducibility | Proposed — required before Phase 5 exits |
+| Migration mechanism | Add versioned SQL migrations and a migration ledger | Proposed — required before Phase 1 |
+| Shadow-vector storage | Choose shadow column versus shadow table after migration design review | Open — decide before Phase 7 |
+| Release-gate execution environment | Run the local gate on the target WSL2/GPU stack; run cloud/provider tests separately with restricted credentials | Proposed — approve before Phase 8 exits |
+| Bake period | Define objective duration and traffic/job thresholds before production cutover | Open — decide before Phase 9 |
+
+---
+
+## 17. Program Governance and Evidence
+
+### 17.1 Phase control
+
+- Assign one accountable owner and target date to each phase before implementation begins.
+- Do not begin a destructive or externally billed phase while its entry decisions remain open.
+- Close a phase only with links to its migrations, tests, benchmark output, audit output, operational documentation, and decision records.
+- Record deviations as explicit decisions; do not silently weaken an exit criterion to keep a rollout moving.
+- Update this plan and the supporting local workstream in the same change whenever a shared contract changes.
+- Keep backups, old vector spaces, graph snapshots, configuration fingerprints, and audit evidence until the bake period and rollback window close.
+
+### 17.2 Required evidence bundle
+
+Every staged release must retain:
+
+1. Sanitized resolved configuration and application revision.
+2. Text-route, sync-profile, and embedding-profile fingerprints.
+3. Database migration status and pre/post schema inventories.
+4. Backup/restore verification references.
+5. Unit, integration, fault-injection, provider-matrix, browser, security, and performance results.
+6. Retrieval and graph-quality comparison reports.
+7. Pre/post `graph-audit` JSON reports.
+8. Cost, latency, retry, fallback, quarantine, and resource summaries.
+9. Cutover approval, rollback commands, operator, timestamps, and bake-period result.
+
+### 17.3 Risk register
+
+| Risk | Primary control | Required proof |
+|---|---|---|
+| Retry amplification or cost runaway | Layered budgets plus total provider-call ceiling | Failure-path tests and cost-bound live test |
+| False synchronization or duplicate graph data | Leases, stable-ID idempotency, independent verification | Crash-window tests and clean audit |
+| Silent graph-quality regression | Versioned extraction corpus and separate quality metrics | Baseline comparison and reviewed failures |
+| Mixed embedding spaces | Persisted profile fingerprints and fail-closed guards | Mismatch tests and preflight output |
+| OpenRouter privacy/routing surprise | Explicit routing, ZDR/data policy, recorded actual upstream | Configuration review and sanitized provenance |
+| Ollama resource starvation | Separate queues, one-worker default, resource benchmark | API/browser latency plus GPU benchmark |
+| Incomplete rollback | Retained vector/graph generations and rehearsed runbook | Demonstrated staging rollback and audit |
+| Documentation drift | Umbrella governance and linked supporting workstream | Documentation consistency check in review |
+
+---
+
+## 18. Primary External References
+
+- [OpenRouter Chat Completions and API compatibility](https://openrouter.ai/docs/faq)
+- [OpenRouter Embeddings API](https://openrouter.ai/docs/api/reference/embeddings)
+- [OpenRouter embedding request reference](https://openrouter.ai/docs/api/api-reference/embeddings/create-embeddings)
+- [OpenRouter provider routing](https://openrouter.ai/docs/guides/routing/provider-selection)
+- [OpenRouter errors and streaming failures](https://openrouter.ai/docs/api/reference/errors-and-debugging)
+- [OpenRouter data collection](https://openrouter.ai/docs/guides/privacy/data-collection)
+- [Ollama OpenAI compatibility](https://docs.ollama.com/api/openai-compatibility)
+- [Ollama embedding endpoint](https://docs.ollama.com/api/embed)
+- [Perplexity standard embeddings](https://docs.perplexity.ai/docs/embeddings/standard-embeddings)
+- [Perplexity embedding best practices](https://docs.perplexity.ai/docs/embeddings/best-practices)
