@@ -36,10 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Durable Graph Sync Runtime (0.7.5)**
+- **Durable Graph Sync Runtime (0.7.5-0.7.6)**
   - Added atomic PostgreSQL job claims, expiring token-fenced leases, deterministic retry generations, bounded attempts, quarantine, run-level systemic pause, and exact stable-ID/source/profile success verification.
   - Added immutable provider-call/result ledger guards, safe upgrade backfill, sanitized operator status/retry/attempt commands, and isolated concurrency, recovery, redaction, and migration tests.
-  - Rehearsed migration `0002_graph_sync_runtime` against all 611 live jobs and rolled it back cleanly; activation and worker integration remain pending, and the legacy worker remains stopped.
+  - Rehearsed migration `0002_graph_sync_runtime` against all 611 live jobs, rolled it back cleanly, then activated it through the verified-backup gate with zero lifecycle or projection drift.
+  - Worker integration remains pending, and the legacy worker remains stopped by operator request.
 
 > The 2025 entries below record the project's historical self-assessment. Their
 > grade and compliance language was superseded by the evidence-based 2026 audit

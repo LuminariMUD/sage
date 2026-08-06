@@ -51,7 +51,7 @@ After the verified backup checkpoint, applied migration `0001_graph_sync_lifecyc
 
 The post-migration audit is clean and now uses `graph_sync_jobs` as its state source, with 611 job source/profile fingerprints, 305 verified source fingerprints, and 305 distinct Neo4j stable IDs. All services remain healthy. The legacy worker remains stopped and must not be restarted.
 
-### 2026-08-07 - L1 durable runtime checkpoint - staged, not activated
+### 2026-08-07 - L1 durable runtime activation checkpoint
 
 - Added `schemas/migrations/0002_graph_sync_runtime.sql` with per-generation attempt budgets, deterministic retry-policy capture, run heartbeats, a database-enforced provider-call ceiling, terminal-result count validation, and source-edit budget reset without deleting total attempt history.
 - Added typed lifecycle contracts in `src/graphiti/sync_models.py` and transactional run, claim, lease, attempt, completion, recovery, quarantine, and operator transitions in `src/graphiti/sync_state.py`.
@@ -62,7 +62,9 @@ The post-migration audit is clean and now uses `graph_sync_jobs` as its state so
 
 Focused verification passes 27 unit tests and 9 isolated PostgreSQL integration tests; the full fast suite passes 103 tests with 6 skips and 108 intentionally deselected tests. The complete `0002` SQL was also executed against the live 611-job schema in one explicit transaction: all runtime DDL and invariant checks passed, after which an unconditional rollback proved that the runtime columns/functions were absent, the migration ledger still contained only `0001`, and all 611 jobs remained unchanged. The post-rehearsal graph audit remains clean at 611 jobs, 305 synchronized PostgreSQL rows, and 305 distinct Neo4j stable IDs; all services are healthy.
 
-This checkpoint is code-staged only. Migration `0002_graph_sync_runtime` remains pending, the live schema still has no runs or attempts, and the legacy worker remains stopped by operator request. Do not run ingestion until the durable worker loop is integrated and separately authorized.
+Migration `0002_graph_sync_runtime` was applied at `2026-08-06T22:57:38Z` with checksum `773cbdfdfbf01a87e2a39c1a46bca6a1f07b124e9951451db078c8c6890f3cec`, verified backup `backups/provider-upgrade-20260806T222200Z`, application revision `4429d33bf4164a9e4b6b477b5e5c634a790a560a`, and 8 ms execution time. Migration status/check modes are current with two applied migrations and no pending SQL.
+
+Post-activation evidence remains unchanged: 611 jobs consist of 305 `synced` and 306 `pending`; there are zero runs, attempts, results, provider calls, leases, retry-wait rows, quarantines, nonzero runtime counters, or compatibility-projection mismatches. The operator status/list commands report the same state, required ledger guards are present, the graph audit remains clean, and every service is healthy. Applying the runtime migration did not start ingestion. The legacy worker remains stopped by operator request; do not run ingestion until the durable worker loop is integrated and separately authorized.
 
 ### 2026-08-07 - L1 backup and restore gate tooling checkpoint
 

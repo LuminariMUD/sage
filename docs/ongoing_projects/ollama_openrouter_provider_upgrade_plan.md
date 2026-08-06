@@ -3,7 +3,7 @@
 | Field                 | Value                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | Status                | Active phased implementation                                                                           |
-| Implementation        | Phase 1 in progress; durable runtime staged, migration 0001 active                                     |
+| Implementation        | Phase 1 in progress; durable runtime activated, worker integration pending                             |
 | Last updated          | 2026-08-07                                                                                             |
 | Scope                 | Text generation, embeddings, Graphiti, configuration, storage migrations, deployment, and tests        |
 | Compatibility target  | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
@@ -24,7 +24,7 @@ The first additive Phase 1 checkpoint delivers the provider-neutral reconciliati
 
 Live evidence at this checkpoint: 611 PostgreSQL episodes, 305 synchronized, 306 pending, 305 Neo4j Episodic nodes, 305 populated/distinct stable IDs, and zero audit drift. The focused audit/security suite passed 18 tests; the full fast suite passed 71 tests with 5 skips.
 
-The operator stopped the legacy graph sync worker at this checkpoint and requested that it not continue. Do not restart the Boolean-based worker without explicit operator direction. Durable migrations, leases, attempts, and worker integration are the next implementation slice; the current command is ready to audit both the legacy projection and the future durable tables.
+The operator stopped the legacy graph sync worker at this checkpoint and requested that it not continue. Do not restart the Boolean-based worker without explicit operator direction. The durable migrations, leases, attempts, and operator controls are now active; worker integration remains the next ingestion slice, and the audit covers both the compatibility projection and authoritative durable tables.
 
 ### Durable migration checkpoint - activated
 
@@ -42,7 +42,7 @@ The seed created exactly 611 durable jobs: 305 `synced` and 306 `pending`. All 6
 
 The post-migration graph audit now reports `graph_sync_jobs` as its authoritative state source, 611 job source/profile fingerprints, 305 verified source fingerprints, 305 distinct Neo4j stable IDs, and zero drift findings. All services remain healthy and the legacy worker remains stopped.
 
-### Durable runtime checkpoint - staged, not activated
+### Durable runtime checkpoint - activated
 
 The next Phase 1 artifact is implemented and tested without starting ingestion:
 
@@ -54,7 +54,9 @@ The next Phase 1 artifact is implemented and tested without starting ingestion:
 
 Focused verification passes 27 unit tests and 9 isolated PostgreSQL integration tests; the full fast suite passes 103 tests with 6 skips and 108 intentionally deselected tests. A live-schema rehearsal executed the complete `0002` SQL against all 611 current jobs inside one explicit transaction, verified zero invalid jobs and both new ledger guards, and rolled back unconditionally. Post-rollback proof showed no runtime column/function, one unchanged migration-ledger row, and all 611 jobs intact. The graph audit remains clean at 305 synchronized records and 305 distinct Neo4j stable IDs, and every service is healthy.
 
-Migration `0002_graph_sync_runtime` is still pending and must not be described as activated. The live database remains at `0001`, with no runs, attempts, results, provider calls, leases, retries, or quarantines. The legacy Boolean worker remains stopped by operator request; worker integration and fault-injection around Neo4j crash windows remain required before any ingestion is authorized.
+Migration `0002_graph_sync_runtime` was applied on `2026-08-06T22:57:38Z`. The immutable ledger records checksum `773cbdfdfbf01a87e2a39c1a46bca6a1f07b124e9951451db078c8c6890f3cec`, verified backup `backups/provider-upgrade-20260806T222200Z`, application revision `4429d33bf4164a9e4b6b477b5e5c634a790a560a`, and 8 ms execution time. Status and check modes report current with two applied migrations and no pending SQL.
+
+Activation preserved all live state: 611 jobs remain 305 `synced` and 306 `pending`, with zero runs, attempts, results, provider calls, leases, retry-wait rows, quarantines, nonzero runtime counters, and compatibility-projection mismatches. Required provider/result/append-only/source triggers are present; operator status and list commands return the expected empty runtime ledger; the graph audit remains clean; and all services are healthy. Applying the migration did not start ingestion. The legacy Boolean worker remains stopped by operator request; worker integration and fault-injection around Neo4j crash windows remain required before any ingestion is authorized.
 
 ### Backup and activation safety checkpoint - verified
 
@@ -700,11 +702,11 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 
 - [x] Add versioned migrations for durable graph-sync state and an append-only attempt ledger.
 - [x] Preserve `graphiti_synced` temporarily as a derived compatibility field, not the worker queue.
-- [ ] Implement atomic claims, expiring leases, deterministic backoff, bounded job attempts, and quarantine.
-- [ ] Add run-level pause/circuit state so systemic failures stop claims without consuming item attempts.
+- [x] Implement atomic claims, expiring leases, deterministic backoff, bounded job attempts, and quarantine.
+- [x] Add run-level pause/circuit state so systemic failures stop claims without consuming item attempts.
 - [ ] Make stable-ID Neo4j writes and post-write verification idempotent under process crashes and duplicate delivery.
-- [ ] Bind claims and success to a source-content fingerprint and requeue changes detected during an active lease.
-- [ ] Add CLI commands to list state, retry eligible failures, retry quarantined rows explicitly, and inspect sanitized attempt chains.
+- [x] Bind claims and success to a source-content fingerprint and requeue changes detected during an active lease.
+- [x] Add CLI commands to list state, retry eligible failures, retry quarantined rows explicitly, and inspect sanitized attempt chains.
 - [x] Add the read-only `graph-audit` command with human/JSON output and exit codes `0`, `1`, and `2`.
 - [ ] Add structured run summaries, progress, rolling throughput, approximate ETA, and failure-class counts.
 - [ ] Add fault-injection tests for termination before write, after write, before verification, and after verification.
