@@ -13,9 +13,9 @@ Keep the real `.env` mode `0600` and never commit it.
   Ollama, API/MCP, and the static chat UI.
 - PostgreSQL contains 14 lore documents and 611 episodes. All 611 episodes have
   768-dimensional embeddings.
-- The active incremental Graphiti pass was last audited at 150 linked episodes
-  and 461 pending. Neo4j had exactly 150 episode nodes, 150 populated stable
-  IDs, and 150 distinct stable IDs. Three 3B extractions exhausted
+- The active incremental Graphiti pass was last audited at 202 linked episodes
+  and 409 pending. Neo4j had exactly 202 episode nodes, 202 populated stable
+  IDs, and 202 distinct stable IDs. Three 3B extractions exhausted
   structured-output retries: `50480869-ff15-41b2-b1ae-a4f1a81b88c8`,
   `f2679d10-f47a-49bc-b9bd-4476e8516f69`, and
   `77f8cd22-8959-4756-bb60-f6aebbac09d5`. They remain unsynced, have no orphan
