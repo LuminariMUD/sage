@@ -13,11 +13,13 @@ Keep the real `.env` mode `0600` and never commit it.
   Ollama, API/MCP, and the static chat UI.
 - PostgreSQL contains 14 lore documents and 611 episodes. All 611 episodes have
   768-dimensional embeddings.
-- Graphiti/Neo4j currently contains 12 linked episodes. The validated,
-  resumable extraction path still has 599 episodes to process.
+- Graphiti/Neo4j currently contains 13 linked episodes. The validated,
+  resumable extraction path still has 598 episodes to process. A live
+  post-hardening extraction completed in about 29 seconds with exactly one
+  matching stable ID in each store.
 - The development image builds successfully. The fast deterministic suite is
-  green: 59 passed, 5 service-dependent skips, and 99 live/slow tests excluded.
-- Black and Ruff checks pass across all 129 Python files in `src` and `tests`.
+  green: 62 passed, 5 service-dependent skips, and 99 live/slow tests excluded.
+- Black and Ruff checks pass across all 130 Python files in `src` and `tests`.
 - An authenticated desktop/mobile browser check now passes through the real
   LangChain/Ollama chat path: message creation and the SSE stream both return
   `200`, an answer renders, and there are no console/page errors, leaked API
@@ -193,9 +195,11 @@ docker compose exec -T api \
 ```
 
 Graph sync defaults to incremental mode, marks PostgreSQL rows complete only
-after the corresponding Neo4j episode has a stable UUID link, and skips a
-failed episode for the remainder of one invocation so a bad row cannot cause an
-infinite retry loop. Bulk mode works in bounded batches, but should normally be
+after proving exactly one Neo4j episode has both the expected stable UUID and
+source description, and skips a failed episode for the remainder of one
+invocation so a bad row cannot cause an infinite retry loop. A pre-existing
+exact link is resumed without repeating LLM extraction; any missing or ambiguous
+link fails closed. Bulk mode works in bounded batches, but should normally be
 reserved for an empty graph:
 
 ```bash
@@ -249,12 +253,17 @@ git status --short --branch
   extraction responses.
 - Bulk sync now calls graphiti-core's real bulk API and refuses to mark rows
   synced until cross-store stable IDs are verified.
+- Incremental sync now independently verifies a unique Neo4j stable-ID/source
+  link before marking PostgreSQL complete, and safely resumes an already-linked
+  row without repeating extraction.
+- The graph status command now closes PostgreSQL with the supported connection
+  API and returns a failing process status when inspection itself fails.
 - Make targets use the active Compose project and noninteractive execution where
   appropriate; log cleanup no longer runs a destructive Docker volume prune.
 
 ## Remaining work at this checkpoint
 
-1. Finish syncing the remaining 599 real episodes to Neo4j and verify every
+1. Finish syncing the remaining 598 real episodes to Neo4j and verify every
    PostgreSQL UUID is linked exactly once.
 2. Perform a clean preserved-volume restart audit, rerun all gates, update this
    runbook with the final counts, and publish the final checkpoint.

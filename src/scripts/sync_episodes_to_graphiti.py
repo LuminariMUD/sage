@@ -31,6 +31,90 @@ from src.graphiti import initialize_graphiti
 console = Console(force_terminal=True, force_interactive=True)
 
 
+async def get_episode_link_state(graphiti, episode_id) -> dict[str, int]:
+    """Count every Neo4j episode that could represent one PostgreSQL row."""
+    stable_id = str(episode_id)
+    source_description = f"episode_{stable_id}"
+    result = await graphiti.driver.execute_query(
+        """
+        MATCH (ep:Episodic)
+        WHERE ep.stable_id = $stable_id
+           OR ep.source_description = $source_description
+        RETURN count(DISTINCT ep) AS candidate_count,
+               count(DISTINCT CASE
+                   WHEN ep.stable_id = $stable_id THEN ep
+               END) AS stable_id_count,
+               count(DISTINCT CASE
+                   WHEN ep.source_description = $source_description THEN ep
+               END) AS source_description_count,
+               count(DISTINCT CASE
+                   WHEN ep.stable_id = $stable_id
+                    AND ep.source_description = $source_description THEN ep
+               END) AS exact_count
+        """,
+        {
+            "stable_id": stable_id,
+            "source_description": source_description,
+        },
+    )
+    records = result.records if hasattr(result, "records") else result
+    if not records:
+        return {
+            "candidate_count": 0,
+            "stable_id_count": 0,
+            "source_description_count": 0,
+            "exact_count": 0,
+        }
+    return {
+        key: int(records[0][key])
+        for key in (
+            "candidate_count",
+            "stable_id_count",
+            "source_description_count",
+            "exact_count",
+        )
+    }
+
+
+def episode_link_is_exact(state: dict[str, int]) -> bool:
+    """Return whether one and only one node has both cross-store identifiers."""
+    return state == {
+        "candidate_count": 1,
+        "stable_id_count": 1,
+        "source_description_count": 1,
+        "exact_count": 1,
+    }
+
+
+async def ensure_episode_link(graphiti, episode) -> None:
+    """Set link metadata only when the episode source identifies one node."""
+    stable_id = str(episode["id"])
+    await graphiti.driver.execute_query(
+        """
+        MATCH (ep:Episodic {source_description: $source_description})
+        WITH collect(ep) AS candidates
+        FOREACH (ep IN CASE WHEN size(candidates) = 1 THEN candidates ELSE [] END |
+            SET ep.stable_id = $stable_id
+            SET ep += $extra_props
+        )
+        RETURN size(candidates) AS source_description_count
+        """,
+        {
+            "source_description": f"episode_{stable_id}",
+            "stable_id": stable_id,
+            "extra_props": {
+                "document_id": str(episode["document_id"]),
+                "episode_index": episode["episode_index"],
+                "synced_at": datetime.now(UTC).isoformat(),
+            },
+        },
+    )
+
+    state = await get_episode_link_state(graphiti, episode["id"])
+    if not episode_link_is_exact(state):
+        raise RuntimeError("Neo4j episode linkage is missing or ambiguous")
+
+
 async def sync_episodes_bulk(
     postgres,
     graphiti,
@@ -229,54 +313,30 @@ async def sync_episodes_incremental(
                     episode_id = episode["id"]
                     document_id = episode["document_id"]
 
-                    # Send episode to Graphiti using the working method with custom relationships
-                    # This is critical for linking PostgreSQL episodes with Neo4j episodes
-                    await graphiti.add_episode_with_lore_relationships(
-                        content=episode["text"],
-                        source_file=f"episode_{episode_id}",
-                        metadata={
-                            "episode_uuid": str(episode_id),  # Critical: Store PostgreSQL UUID
-                            "document_id": str(document_id),
-                            "episode_index": episode["episode_index"],
-                            "synced_at": datetime.now(UTC).isoformat(),
-                        },
-                    )
-
-                    # Ensure stable_id is set for GraphRAG linkage
-                    # This is a fallback in case the automatic setting in add_episode_with_lore_relationships fails
-                    try:
-                        from src.db import get_neo4j_db
-
-                        neo4j_db = await get_neo4j_db()
-
-                        # Update any Episodic nodes that match our episode and don't have stable_id
-                        await neo4j_db.execute_query(
-                            """
-                            MATCH (ep:Episodic)
-                            WHERE ep.source_description = $source_description
-                              AND ep.stable_id IS NULL
-                            SET ep.stable_id = $stable_id
-                            RETURN COUNT(ep) as updated_count
-                        """,
-                            {
-                                "source_description": f"episode_{episode_id}",
-                                "stable_id": str(episode_id),
+                    link_state = await get_episode_link_state(graphiti, episode_id)
+                    if episode_link_is_exact(link_state):
+                        if debug:
+                            console.print(
+                                f"🔗 [cyan]Recovered existing link for episode {episode_id}[/cyan]"
+                            )
+                    elif any(link_state.values()):
+                        raise RuntimeError("Existing Neo4j episode linkage is missing or ambiguous")
+                    else:
+                        # Send episode to Graphiti using the working method with custom
+                        # relationships, then independently prove cross-store linkage.
+                        await graphiti.add_episode_with_lore_relationships(
+                            content=episode["text"],
+                            source_file=f"episode_{episode_id}",
+                            metadata={
+                                "episode_uuid": str(episode_id),
+                                "document_id": str(document_id),
+                                "episode_index": episode["episode_index"],
+                                "synced_at": datetime.now(UTC).isoformat(),
                             },
                         )
+                        await ensure_episode_link(graphiti, episode)
 
-                        # Close the Neo4j connection
-                        if hasattr(neo4j_db, "close"):
-                            await neo4j_db.close()
-                        elif hasattr(neo4j_db, "driver") and hasattr(neo4j_db.driver, "close"):
-                            await neo4j_db.driver.close()
-
-                    except Exception as stable_id_error:
-                        console.print(
-                            "[yellow]Warning: Could not set stable_id for episode "
-                            f"{episode_id} ({type(stable_id_error).__name__})[/yellow]"
-                        )
-
-                    # Mark as synced in PostgreSQL
+                    # Mark as synced only after exactly one linked Neo4j node is proven.
                     await postgres.execute(
                         """
                         UPDATE episodes
@@ -437,8 +497,9 @@ async def sync_episodes(
     return total_failed == 0
 
 
-async def check_sync_status():
+async def check_sync_status() -> bool:
     """Check current sync status"""
+    postgres = None
     try:
         postgres = await get_postgres_db()
 
@@ -458,10 +519,16 @@ async def check_sync_status():
         print(f"  Unsynced: {stats['unsynced_episodes']}")
         print(f"  With embeddings: {stats['episodes_with_embeddings']}")
 
-        await postgres.close()
-
+        return True
     except Exception as e:
         print(f"❌ Failed to check sync status ({type(e).__name__})")
+        return False
+    finally:
+        if postgres is not None:
+            try:
+                await postgres.disconnect()
+            except Exception as cleanup_error:
+                print(f"⚠️ Failed to close status connection ({type(cleanup_error).__name__})")
 
 
 if __name__ == "__main__":
@@ -517,7 +584,7 @@ Use incremental mode for:
     args = parser.parse_args()
 
     if args.status:
-        asyncio.run(check_sync_status())
+        sys.exit(0 if asyncio.run(check_sync_status()) else 1)
     else:
         # Enable bulk mode if --bulk or --force-bulk is specified
         bulk_mode = args.bulk or args.force_bulk
