@@ -26,6 +26,8 @@ POSTGRES_JOB_QUERY = """
            state,
            desired_source_fingerprint,
            sync_profile_fingerprint,
+           verified_source_fingerprint,
+           verified_sync_profile_fingerprint,
            verified_at
     FROM graph_sync_jobs
     ORDER BY episode_id
@@ -84,10 +86,16 @@ def render_human(report: dict[str, Any]) -> str:
         ),
         "Lifecycle: " + ", ".join(f"{key}={value}" for key, value in counts["lifecycle"].items()),
         (
-            "Metadata coverage: "
+            "Neo4j metadata coverage: "
             f"source={coverage['source_fingerprint']}, "
             f"sync_profile={coverage['sync_profile_fingerprint']}, "
             f"embedding_profile={coverage['embedding_profile_fingerprint']}"
+        ),
+        (
+            "Job metadata coverage: "
+            f"desired_source={coverage['job_source_fingerprint']}, "
+            f"verified_source={coverage['job_verified_source_fingerprint']}, "
+            f"sync_profile={coverage['job_sync_profile_fingerprint']}"
         ),
         f"Drift findings: {counts['drift_findings']}",
     ]

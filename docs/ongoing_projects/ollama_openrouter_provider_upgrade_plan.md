@@ -3,7 +3,7 @@
 | Field                 | Value                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | Status                | Active phased implementation                                                                           |
-| Implementation        | Phase 1 started; read-only graph audit delivered                                                       |
+| Implementation        | Phase 1 in progress; audit and durable migration artifacts delivered                                   |
 | Last updated          | 2026-08-07                                                                                             |
 | Scope                 | Text generation, embeddings, Graphiti, configuration, storage migrations, deployment, and tests        |
 | Compatibility target  | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
@@ -25,6 +25,18 @@ The first additive Phase 1 checkpoint delivers the provider-neutral reconciliati
 Live evidence at this checkpoint: 611 PostgreSQL episodes, 305 synchronized, 306 pending, 305 Neo4j Episodic nodes, 305 populated/distinct stable IDs, and zero audit drift. The focused audit/security suite passed 18 tests; the full fast suite passed 71 tests with 5 skips.
 
 The operator stopped the legacy graph sync worker at this checkpoint and requested that it not continue. Do not restart the Boolean-based worker without explicit operator direction. Durable migrations, leases, attempts, and worker integration are the next implementation slice; the current command is ready to audit both the legacy projection and the future durable tables.
+
+### Durable migration checkpoint - activation pending
+
+The next Phase 1 artifact is implemented but has not been applied to the live schema:
+
+- `schemas/migrations/0001_graph_sync_lifecycle.sql` defines run circuits, authoritative jobs, immutable attempt identities/results/provider calls, lifecycle constraints, deterministic source fingerprints, the derived Boolean compatibility projection, and source-edit requeue behavior.
+- `src/scripts/migrate_database.py` discovers ASCII-only numbered migrations, verifies immutable SHA-256 checksums, detects missing or out-of-order history, reports status without mutation, and applies one transaction at a time under an advisory lock.
+- Apply mode requires a sanitized verified-backup reference and immutable application revision; the migration ledger retains both with execution time and checksum.
+- The complete SQL seeded and reconciled all 611 current episodes in a live-schema transaction and then rolled back. A separate isolated-schema integration test proved projection guards, ledger immutability, one active run, source-fingerprint parity, durable success, and automatic requeue after a source edit.
+- Migration/security/audit focused verification passed 34 tests, and the PostgreSQL migration integration test passed independently.
+
+Current live status remains unchanged: migration `0001_graph_sync_lifecycle` is pending, `schema_migrations` does not exist, the audit is still clean through the legacy projection, and the legacy worker remains stopped. Activation must wait for current PostgreSQL and Neo4j backup/restore evidence.
 
 ---
 
@@ -642,8 +654,8 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 
 ### Phase 1 — Operational truth and recoverability
 
-- [ ] Add versioned migrations for durable graph-sync state and an append-only attempt ledger.
-- [ ] Preserve `graphiti_synced` temporarily as a derived compatibility field, not the worker queue.
+- [x] Add versioned migrations for durable graph-sync state and an append-only attempt ledger.
+- [x] Preserve `graphiti_synced` temporarily as a derived compatibility field, not the worker queue.
 - [ ] Implement atomic claims, expiring leases, deterministic backoff, bounded job attempts, and quarantine.
 - [ ] Add run-level pause/circuit state so systemic failures stop claims without consuming item attempts.
 - [ ] Make stable-ID Neo4j writes and post-write verification idempotent under process crashes and duplicate delivery.
@@ -725,7 +737,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 
 ### Phase 7 — Schema reconciliation and vector migration tooling
 
-- [ ] Establish a versioned migration directory and migration ledger.
+- [x] Establish a versioned migration directory and migration ledger.
 - [ ] Make the checked-in schema match the actual supported dimensions and indexes.
 - [ ] Add embedding-profile/index-state metadata.
 - [ ] Restore or replace the missing episode vector index.

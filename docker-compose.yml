@@ -193,6 +193,7 @@ services:
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./.env.example:/app/.env.example:ro
       - ./scripts:/app/scripts:ro
+      - ./schemas:/app/schemas:ro
       - ./lore_docs:/app/lore_docs:ro # Mount the lore documentation directory
       # A named volume inherits the image's non-root ownership. A host bind mount
       # would be owned by the developer's UID and block the UID 1013 app process.

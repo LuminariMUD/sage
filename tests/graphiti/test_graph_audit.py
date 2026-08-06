@@ -97,12 +97,18 @@ def test_durable_jobs_replace_boolean_as_authoritative_state():
             "stable_id": "ep-1",
             "state": "synced",
             "desired_source_fingerprint": fingerprint,
+            "verified_source_fingerprint": fingerprint,
+            "sync_profile_fingerprint": "legacy:unversioned",
+            "verified_sync_profile_fingerprint": "legacy:unversioned",
             "verified_at": NOW,
         },
         {
             "stable_id": "ep-2",
             "state": "pending",
             "desired_source_fingerprint": fingerprint,
+            "verified_source_fingerprint": None,
+            "sync_profile_fingerprint": "legacy:unversioned",
+            "verified_sync_profile_fingerprint": None,
             "verified_at": None,
         },
     ]
@@ -128,6 +134,9 @@ def test_durable_job_projection_and_fingerprint_errors_are_drift():
                 "stable_id": "ep-1",
                 "state": "pending",
                 "desired_source_fingerprint": source_content_fingerprint("Old"),
+                "verified_source_fingerprint": None,
+                "sync_profile_fingerprint": "legacy:unversioned",
+                "verified_sync_profile_fingerprint": None,
                 "verified_at": None,
             }
         ],
@@ -138,6 +147,32 @@ def test_durable_job_projection_and_fingerprint_errors_are_drift():
     assert report["status"] == "drift"
     assert reasons == {"non_synced_job_legacy_flag_true"}
     assert len(report["drift"]["stale_job_source_fingerprints"]) == 1
+
+
+def test_synced_job_requires_current_verified_source_and_profile():
+    current_fingerprint = source_content_fingerprint("Current")
+    report = build_graph_audit(
+        [_episode("ep-1", text="Current")],
+        [_node("ep-1")],
+        [
+            {
+                "stable_id": "ep-1",
+                "state": "synced",
+                "desired_source_fingerprint": current_fingerprint,
+                "verified_source_fingerprint": source_content_fingerprint("Old"),
+                "sync_profile_fingerprint": "sync-current",
+                "verified_sync_profile_fingerprint": "sync-old",
+                "verified_at": NOW,
+            }
+        ],
+        expected_sync_profile="sync-required",
+        generated_at=NOW,
+    )
+
+    assert report["status"] == "drift"
+    assert len(report["drift"]["verified_source_fingerprint_mismatches"]) == 1
+    assert len(report["drift"]["verified_sync_profile_mismatches"]) == 1
+    assert len(report["drift"]["job_sync_profile_mismatches"]) == 1
 
 
 async def test_collect_graph_audit_uses_only_read_queries():

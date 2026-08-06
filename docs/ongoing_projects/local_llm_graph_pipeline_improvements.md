@@ -37,6 +37,18 @@ The operator stopped the legacy Boolean-based worker at 305 of 611 episodes and 
 
 The live graph currently has no source, sync-profile, or embedding-profile fingerprint metadata. The audit reports that coverage as zero without treating absent legacy metadata as a false drift result; the durable migration and profile work remain required.
 
+### 2026-08-07 - L1 durable schema and migration tooling checkpoint
+
+- Added the immutable, checksum-tracked migration runner `src/scripts/migrate_database.py` with read-only status/check modes, per-migration transactions, a PostgreSQL advisory lock, application revision capture, and a required verified-backup reference for apply mode.
+- Added `schemas/migrations/0001_graph_sync_lifecycle.sql` for run-level circuit state, authoritative jobs, immutable attempt identities, immutable attempt results, and immutable provider-call provenance.
+- Added database constraints for lifecycle states, lease ownership/tokens/expiry, retry timing, verified source/profile identity, failure taxonomy, nonnegative usage/counts, one active run, and degraded fallback success.
+- Added triggers that derive `episodes.graphiti_synced` from durable state, reject divergent direct writes, deterministically requeue a changed source revision, and prohibit update/delete operations on ledger tables.
+- Added `make db-migrate-status`, `make db-migrate-check`, and backup-gated `make db-migrate` targets.
+- Verified the migration in an isolated PostgreSQL schema, including seed reconciliation, Python/SQL fingerprint parity, direct-projection rejection, one-active-run enforcement, immutable-ledger rejection, durable success projection, and source-edit requeue behavior.
+- Executed the complete migration against the current 611-row schema inside an explicit transaction; all DDL, the 611-row seed, and internal verification passed, then `ROLLBACK` removed every test artifact.
+
+Live activation is intentionally pending. The migration command reports `0001_graph_sync_lifecycle` pending and no migration ledger. Capture and verify current PostgreSQL and Neo4j backups before applying it. The legacy worker remains stopped and must not be restarted.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.

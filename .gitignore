@@ -103,6 +103,7 @@ neo4j-backups/
 
 # SQL source and migrations are code, not database backups
 !schemas/*.sql
+!schemas/**/*.sql
 !src/scripts/*.sql
 
 # Cache directories

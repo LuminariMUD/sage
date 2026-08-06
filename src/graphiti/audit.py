@@ -161,6 +161,12 @@ def build_graph_audit(
 
     incorrectly_synchronized_jobs = []
     stale_job_source_fingerprints = []
+    verified_source_fingerprint_mismatches = []
+    verified_sync_profile_mismatches = []
+    job_sync_profile_mismatches = []
+    job_source_fingerprints = 0
+    job_verified_source_fingerprints = 0
+    job_sync_profile_fingerprints = 0
     if job_rows is not None:
         for stable_id in sorted(set(jobs) - set(episodes)):
             incorrectly_synchronized_jobs.append(
@@ -177,6 +183,16 @@ def build_graph_audit(
 
             state = str(job.get("state") or "")
             legacy_synced = episode["graphiti_synced"]
+            desired_fingerprint = _string(job.get("desired_source_fingerprint"))
+            verified_source_fingerprint = _string(job.get("verified_source_fingerprint"))
+            sync_profile_fingerprint = _string(job.get("sync_profile_fingerprint"))
+            verified_sync_profile_fingerprint = _string(
+                job.get("verified_sync_profile_fingerprint")
+            )
+            job_source_fingerprints += int(desired_fingerprint is not None)
+            job_verified_source_fingerprints += int(verified_source_fingerprint is not None)
+            job_sync_profile_fingerprints += int(sync_profile_fingerprint is not None)
+
             if state not in GRAPH_SYNC_STATES:
                 incorrectly_synchronized_jobs.append(
                     {"stable_id": stable_id, "reason": "invalid_job_state"}
@@ -195,13 +211,39 @@ def build_graph_audit(
                     {"stable_id": stable_id, "reason": "synced_job_missing_verified_at"}
                 )
 
-            desired_fingerprint = _string(job.get("desired_source_fingerprint"))
             if desired_fingerprint != episode["source_fingerprint"]:
                 stale_job_source_fingerprints.append(
                     {
                         "stable_id": stable_id,
                         "expected": episode["source_fingerprint"],
                         "actual": desired_fingerprint,
+                    }
+                )
+
+            if state == "synced":
+                if verified_source_fingerprint != episode["source_fingerprint"]:
+                    verified_source_fingerprint_mismatches.append(
+                        {
+                            "stable_id": stable_id,
+                            "expected": episode["source_fingerprint"],
+                            "actual": verified_source_fingerprint,
+                        }
+                    )
+                if verified_sync_profile_fingerprint != sync_profile_fingerprint:
+                    verified_sync_profile_mismatches.append(
+                        {
+                            "stable_id": stable_id,
+                            "expected": sync_profile_fingerprint,
+                            "actual": verified_sync_profile_fingerprint,
+                        }
+                    )
+
+            if expected_sync_profile and sync_profile_fingerprint != expected_sync_profile:
+                job_sync_profile_mismatches.append(
+                    {
+                        "stable_id": stable_id,
+                        "expected": expected_sync_profile,
+                        "actual": sync_profile_fingerprint,
                     }
                 )
 
@@ -223,6 +265,13 @@ def build_graph_audit(
         "stale_job_source_fingerprints": _sorted_records(
             stale_job_source_fingerprints, "stable_id"
         ),
+        "verified_source_fingerprint_mismatches": _sorted_records(
+            verified_source_fingerprint_mismatches, "stable_id"
+        ),
+        "verified_sync_profile_mismatches": _sorted_records(
+            verified_sync_profile_mismatches, "stable_id"
+        ),
+        "job_sync_profile_mismatches": _sorted_records(job_sync_profile_mismatches, "stable_id"),
         "sync_profile_mismatches": _sorted_records(sync_profile_mismatches, "stable_id"),
         "embedding_profile_mismatches": _sorted_records(embedding_profile_mismatches, "stable_id"),
     }
@@ -248,6 +297,9 @@ def build_graph_audit(
             "source_fingerprint": fingerprinted_nodes,
             "sync_profile_fingerprint": sync_profiled_nodes,
             "embedding_profile_fingerprint": embedding_profiled_nodes,
+            "job_source_fingerprint": job_source_fingerprints,
+            "job_verified_source_fingerprint": job_verified_source_fingerprints,
+            "job_sync_profile_fingerprint": job_sync_profile_fingerprints,
         },
         "drift": drift,
     }

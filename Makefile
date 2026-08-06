@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json benchmark-graphiti benchmark-graphiti-openai
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json db-migrate-status db-migrate-check db-migrate benchmark-graphiti benchmark-graphiti-openai
 
 # Support for verbose mode
 ifdef VERBOSE
@@ -36,6 +36,9 @@ help:
 	@echo "  make graphiti-status           - Show Graphiti/Neo4j statistics"
 	@echo "  make graph-audit              - Reconcile PostgreSQL and Neo4j (read-only)"
 	@echo "  make graph-audit-json         - Emit machine-readable reconciliation JSON"
+	@echo "  make db-migrate-status        - Show immutable PostgreSQL migration status"
+	@echo "  make db-migrate-check         - Fail when PostgreSQL migrations are pending"
+	@echo "  make db-migrate BACKUP_REFERENCE=... - Apply after verified backups"
 	@echo "  make benchmark-graphiti        - Benchmark entity extraction (Ollama)"
 	@echo "  make benchmark-graphiti-openai - Benchmark entity extraction (OpenAI)"
 	@echo ""
@@ -275,6 +278,25 @@ graph-audit:
 .PHONY: graph-audit-json
 graph-audit-json:
 	@docker compose exec -T api python src/scripts/graph_audit.py --json
+
+.PHONY: db-migrate-status
+db-migrate-status:
+	@docker compose run --rm --no-deps api python src/scripts/migrate_database.py
+
+.PHONY: db-migrate-check
+db-migrate-check:
+	@docker compose run --rm --no-deps api python src/scripts/migrate_database.py --check
+
+.PHONY: db-migrate
+db-migrate:
+	@test -n "$(BACKUP_REFERENCE)" || \
+		(echo "BACKUP_REFERENCE is required and must identify verified backups" >&2; exit 2)
+	@test -z "$(shell git status --porcelain)" || \
+		(echo "Commit the exact migration and application revision before applying" >&2; exit 2)
+	@docker compose run --rm --no-deps api python src/scripts/migrate_database.py \
+		--apply \
+		--backup-reference "$(BACKUP_REFERENCE)" \
+		--application-revision "$(shell git rev-parse --verify HEAD)"
 
 .PHONY: benchmark-graphiti
 benchmark-graphiti:
