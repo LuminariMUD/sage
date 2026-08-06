@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 
 from src.api.main import app
 
+pytestmark = [pytest.mark.integration, pytest.mark.data_dependent]
+
 # Test configuration
 TEST_ENTITY_ID = "40dd54d0-e6f0-43a1-a8ad-2e5c9dc17c14"  # Void's Wake
 TEST_RELATIONSHIP_ID = 894  # Known working relationship

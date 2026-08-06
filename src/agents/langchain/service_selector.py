@@ -36,7 +36,8 @@ def get_chat_service(force_legacy: bool = False, enable_react: bool | None = Non
     # Get model configuration
     model = os.getenv("LANGCHAIN_MODEL", "gpt-4o-mini")
 
-    if not os.getenv("OPENAI_API_KEY"):
+    provider = os.getenv("LLM_PROVIDER", "openai").lower()
+    if provider == "openai" and not os.getenv("OPENAI_API_KEY"):
         from .legacy_service import LangChainChatService as LegacyLangChainService
 
         logger.warning("No OpenAI API key found, falling back to legacy service")

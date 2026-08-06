@@ -3,6 +3,7 @@
 # when their names do not match a secret-file pattern.
 **
 !requirements-core.txt
+!requirements-dev.txt
 !src/
 !src/**
 !schemas/

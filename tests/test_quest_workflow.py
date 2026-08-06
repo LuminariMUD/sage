@@ -6,10 +6,14 @@ import json
 import logging
 import sys
 
-# Add src to path
-sys.path.insert(0, "/app/src")
+import pytest
 
-from agents.langchain.quest_workflow import QuestWorkflow
+# Add the repository root to the path when this file is run directly.
+sys.path.insert(0, "/app")
+
+from src.agents.langchain.quest_workflow import QuestWorkflow
+
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)

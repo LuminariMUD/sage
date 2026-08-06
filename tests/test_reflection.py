@@ -11,10 +11,14 @@ import asyncio
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.agents.langchain.chains.reflection import ReflectionChain
 from src.agents.langchain.service import LangChainChatService
+
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 # Test queries that should trigger different reflection behaviors
 TEST_QUERIES = [

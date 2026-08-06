@@ -4,7 +4,11 @@
 import asyncio
 import json
 
+import pytest
+
 from src.agents.langchain.service import LangChainChatService
+
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 
 async def test_story_development():

@@ -44,12 +44,8 @@ async def get_graph_stats() -> dict | None:
             ORDER BY count DESC
         """)
 
-        # Get total counts
-        totals = await neo4j.execute_query("""
-            MATCH (n)
-            OPTIONAL MATCH ()-[r]->()
-            RETURN count(DISTINCT n) as total_nodes, count(r) as total_relationships
-        """)
+        node_records = node_stats.records if hasattr(node_stats, "records") else node_stats
+        relationship_records = rel_stats.records if hasattr(rel_stats, "records") else rel_stats
 
         if hasattr(neo4j, "close"):
             await neo4j.close()
@@ -57,13 +53,12 @@ async def get_graph_stats() -> dict | None:
             await neo4j.driver.close()
 
         return {
-            "nodes": node_stats.records if hasattr(node_stats, "records") else node_stats,
-            "relationships": rel_stats.records if hasattr(rel_stats, "records") else rel_stats,
-            "totals": (
-                totals.records[0]
-                if (hasattr(totals, "records") and totals.records)
-                else totals[0] if totals else {"total_nodes": 0, "total_relationships": 0}
-            ),
+            "nodes": node_records,
+            "relationships": relationship_records,
+            "totals": {
+                "total_nodes": sum(record["count"] for record in node_records),
+                "total_relationships": sum(record["count"] for record in relationship_records),
+            },
         }
 
     except Exception as e:
@@ -199,6 +194,7 @@ async def main():
         epilog="""
 Examples:
   python clear_graph.py                    # Interactive confirmation
+  python clear_graph.py --status           # Show graph statistics without changing data
   python clear_graph.py --yes             # Skip confirmation
   python clear_graph.py --yes --debug     # Skip confirmation with debug output
 
@@ -208,10 +204,20 @@ Warning: This operation permanently deletes all graph data and cannot be undone!
 
     parser.add_argument("--yes", action="store_true", help="Skip confirmation prompt (dangerous!)")
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
+    parser.add_argument(
+        "--status", action="store_true", help="Show graph statistics and exit without deleting data"
+    )
 
     args = parser.parse_args()
 
     try:
+        if args.status:
+            stats = await get_graph_stats()
+            if not stats:
+                sys.exit(1)
+            format_graph_stats(stats)
+            return
+
         success = await clear_graph(confirm=args.yes, debug=args.debug)
         sys.exit(0 if success else 1)
     except KeyboardInterrupt:

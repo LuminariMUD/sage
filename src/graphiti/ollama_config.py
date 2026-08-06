@@ -49,8 +49,9 @@ def get_graphiti_llm_client(verbose: bool = False) -> LLMClient:
         if not base_url.endswith("/v1"):
             base_url = f"{base_url}/v1"
 
-        # Use reasoning model for entity extraction (best for structured output)
-        model = os.getenv("OLLAMA_REASONING_MODEL", "deepseek-r1:8b")
+        # Graphiti requires reliable structured JSON. Qwen supports constrained
+        # output without spending the response budget on a hidden reasoning trace.
+        model = os.getenv("OLLAMA_REASONING_MODEL", "qwen2.5:3b")
         temperature = float(os.getenv("OLLAMA_EXTRACTION_TEMPERATURE", "0.3"))
 
         llm_config = LLMConfig(
@@ -183,7 +184,7 @@ def get_graphiti_config_summary() -> dict:
     if provider == "ollama":
         return {
             "provider": "ollama",
-            "llm_model": os.getenv("OLLAMA_REASONING_MODEL", "deepseek-r1:8b"),
+            "llm_model": os.getenv("OLLAMA_REASONING_MODEL", "qwen2.5:3b"),
             "embedding_model": os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
             "base_url": os.getenv("OLLAMA_BASE_URL", "http://ollama:11434"),
             "temperature": float(os.getenv("OLLAMA_EXTRACTION_TEMPERATURE", "0.3")),

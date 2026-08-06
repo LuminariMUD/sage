@@ -26,6 +26,15 @@ RUN pip install --no-cache-dir --target=/opt/python-packages -r requirements-cor
     find /opt/python-packages -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true && \
     rm -rf /tmp/* /var/tmp/*
 
+# Development images add test/lint tooling without bloating production builds.
+ARG INSTALL_DEV=false
+COPY requirements-dev.txt .
+RUN mkdir -p /opt/dev-tools && \
+    if [ "$INSTALL_DEV" = "true" ]; then \
+      pip install --no-cache-dir --target=/opt/python-packages -r requirements-dev.txt && \
+      pip install --no-cache-dir --prefix=/opt/dev-tools ruff==0.16.0; \
+    fi
+
 # Install the compatible spaCy model from its immutable release asset and verify
 # the publisher-provided SHA-256 before pip sees the wheel.
 ARG SPACY_MODEL_VERSION=3.8.0
@@ -50,6 +59,7 @@ RUN useradd -m -u 1013 sage && \
 
 # Copy Python packages from builder
 COPY --from=builder --chown=sage:sage /opt/python-packages /opt/python-packages
+COPY --from=builder --chown=sage:sage /opt/dev-tools /opt/dev-tools
 
 # Debug: List what was actually installed
 RUN ls -la /opt/python-packages/ | head -20 || echo "No packages directory" && \
@@ -93,6 +103,7 @@ RUN chmod +x ./src/scripts/entrypoint.sh && \
 
 # Set Python path
 ENV PYTHONPATH=/app:/opt/python-packages
+ENV PATH=/opt/dev-tools/bin:/opt/python-packages/bin:$PATH
 
 # LangSmith Configuration (non-secret values)
 # Tracing is opt-in: with it on and no LANGSMITH_API_KEY, every LLM step emits a

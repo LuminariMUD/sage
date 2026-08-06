@@ -25,16 +25,28 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
-python -m uvicorn src.api.main:app \
-    --host 0.0.0.0 \
-    --port "${API_PORT:-8003}" \
-    --log-level "${UVICORN_LOG_LEVEL:-info}" &
+api_args=(
+    python -m uvicorn src.api.main:app
+    --host 0.0.0.0
+    --port "${API_PORT:-8003}"
+    --log-level "${UVICORN_LOG_LEVEL:-info}"
+)
+mcp_args=(
+    python -m uvicorn src.mcp.server:app
+    --host 0.0.0.0
+    --port "${MCP_PORT:-8004}"
+    --log-level "${UVICORN_LOG_LEVEL:-info}"
+)
+
+if [[ "${API_RELOAD:-false}" == "true" ]]; then
+    api_args+=(--reload --reload-dir /app/src)
+    mcp_args+=(--reload --reload-dir /app/src)
+fi
+
+"${api_args[@]}" &
 service_pids+=("$!")
 
-python -m uvicorn src.mcp.server:app \
-    --host 0.0.0.0 \
-    --port "${MCP_PORT:-8004}" \
-    --log-level "${UVICORN_LOG_LEVEL:-info}" &
+"${mcp_args[@]}" &
 service_pids+=("$!")
 
 set +e

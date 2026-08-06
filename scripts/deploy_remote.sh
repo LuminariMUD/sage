@@ -66,7 +66,11 @@ if [[ ! "$expected_uid" =~ ^[0-9]+$ ]] || (( $(id -u) != expected_uid )); then
     exit 1
 fi
 
-if groups | grep -qw docker; then
+if [[ -n "${SAGE_DOCKER_BIN:-}" ]]; then
+    # An explicit binary is used by the isolated deployment contract test and
+    # by operators who provide a Docker-compatible wrapper.
+    docker_cmd=("$docker_bin")
+elif groups | grep -qw docker; then
     docker_cmd=("$docker_bin")
 elif sudo -n true 2>/dev/null; then
     docker_cmd=(sudo "$docker_bin")

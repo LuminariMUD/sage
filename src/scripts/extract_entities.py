@@ -306,7 +306,7 @@ class GraphitiEntityProcessor:
 
         # Create metadata including the PostgreSQL episode UUID for linkage
         episode_metadata = {
-            "episode_id": str(episode_id),  # PostgreSQL UUID for hybrid RAG linkage
+            "episode_uuid": str(episode_id),  # PostgreSQL UUID for hybrid RAG linkage
             "source_file": source_file,
             "episode_index": episode_index,
             "title": episode_row["title"] or "",

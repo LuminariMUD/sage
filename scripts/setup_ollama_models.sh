@@ -16,8 +16,8 @@ docker exec luminari-ollama ollama pull nomic-embed-text
 echo "📥 Pulling qwen2.5:7b (chat/creative)..."
 docker exec luminari-ollama ollama pull qwen2.5:7b
 
-echo "📥 Pulling deepseek-r1:8b (reasoning)..."
-docker exec luminari-ollama ollama pull deepseek-r1:8b
+echo "📥 Pulling qwen2.5:3b (Graphiti extraction)..."
+docker exec luminari-ollama ollama pull qwen2.5:3b
 
 # Verify models
 echo ""

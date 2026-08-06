@@ -15,7 +15,11 @@ services:
       - postgres_data:/var/lib/postgresql
       - ./schemas/postgresql_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-luminari}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-luminari} -d ${POSTGRES_DB:-luminari_sage}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -73,15 +77,20 @@ services:
       # GPU Configuration
       OLLAMA_NUM_GPU: "1" # Single GPU
       OLLAMA_GPU_MEMORY_FRACTION: "0.8" # Use 80% of 8GB VRAM (~6.4GB)
-      OLLAMA_NUM_PARALLEL: "1" # One inference at a time
-      OLLAMA_MAX_LOADED_MODELS: "1" # Unload unused models to save VRAM
+      OLLAMA_NUM_PARALLEL: "2" # Two inference slots fit alongside the 7B model
+      # Keep the 7B chat model and the small embedding model resident together.
+      # This avoids reloading ~5 GB several times for every Graphiti episode.
+      OLLAMA_MAX_LOADED_MODELS: "2"
 
       # Timeout & Keep-Alive
       OLLAMA_LOAD_TIMEOUT: "10m" # Model load timeout (default 5m)
       OLLAMA_KEEP_ALIVE: "10m" # Keep model in VRAM after request
 
       # Context Management
-      OLLAMA_NUM_CTX: "8192" # Context window size (watch VRAM usage)
+      # Ollama 0.12+ reads OLLAMA_CONTEXT_LENGTH at server startup. OLLAMA_NUM_CTX
+      # is a per-request option and was silently ignored here, leaving Graphiti at
+      # the 4096-token default even when the API requested a larger context.
+      OLLAMA_CONTEXT_LENGTH: ${OLLAMA_MAX_CONTEXT_TOKENS:-12288}
       OLLAMA_NUM_THREAD: "8" # Half of 16 CPU cores
 
       # Performance Tuning
@@ -94,11 +103,37 @@ services:
       retries: 5
     restart: "no"
 
+  # Pull every model required by the local profile before the API starts. This
+  # is idempotent: an existing model is verified rather than downloaded again.
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: luminari-ollama-init
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        ollama pull "$${OLLAMA_EMBEDDING_MODEL}"
+        ollama pull "$${OLLAMA_REASONING_MODEL}"
+        ollama pull "$${OLLAMA_CHAT_MODEL}"
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      OLLAMA_REASONING_MODEL: ${OLLAMA_REASONING_MODEL:-qwen2.5:3b}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen2.5:7b}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - luminari-network
+    restart: "no"
+
   # FastAPI application
   api:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        INSTALL_DEV: "true"
     container_name: luminari-api
     environment:
       POSTGRES_HOST: postgres
@@ -111,6 +146,7 @@ services:
       NEO4J_PASSWORD: "${NEO4J_PASSWORD:?Error: NEO4J_PASSWORD must be set in .env file}"
       API_HOST: 0.0.0.0
       API_PORT: 8003
+      API_RELOAD: ${API_RELOAD:-true}
       LORE_DIR: /app/lore_docs
       LORE_SOURCE: ${LORE_SOURCE:-canon}
       # LLM Provider Configuration
@@ -118,12 +154,15 @@ services:
       OLLAMA_BASE_URL: "http://ollama:11434"
       OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen2.5:7b}
       OLLAMA_CREATIVE_MODEL: ${OLLAMA_CREATIVE_MODEL:-qwen2.5:7b}
-      OLLAMA_REASONING_MODEL: ${OLLAMA_REASONING_MODEL:-deepseek-r1:8b}
+      OLLAMA_REASONING_MODEL: ${OLLAMA_REASONING_MODEL:-qwen2.5:3b}
       # Tool-calling agents need a tool-capable model (deepseek-r1 cannot call tools)
       OLLAMA_TOOLS_MODEL: ${OLLAMA_TOOLS_MODEL:-qwen2.5:7b}
       OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
       OLLAMA_EMBEDDING_BATCH_SIZE: ${OLLAMA_EMBEDDING_BATCH_SIZE:-32}
-      OLLAMA_MAX_CONTEXT_TOKENS: ${OLLAMA_MAX_CONTEXT_TOKENS:-8192}
+      OLLAMA_MAX_CONTEXT_TOKENS: ${OLLAMA_MAX_CONTEXT_TOKENS:-12288}
+      GRAPHITI_MAX_OUTPUT_TOKENS: ${GRAPHITI_MAX_OUTPUT_TOKENS:-4096}
+      GRAPHITI_MAX_ENTITIES_PER_EPISODE: ${GRAPHITI_MAX_ENTITIES_PER_EPISODE:-25}
+      GRAPHITI_MAX_RELATIONSHIPS_PER_EPISODE: ${GRAPHITI_MAX_RELATIONSHIPS_PER_EPISODE:-25}
       # Embedding Configuration
       USE_LOCAL_EMBEDDINGS: ${USE_LOCAL_EMBEDDINGS:-true}
       # Observability (off unless a LangSmith key is supplied)
@@ -133,6 +172,7 @@ services:
       # Authentication
       DISABLE_AUTH: ${DISABLE_AUTH:-false}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,testserver,api,luminari-api}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
       SAGE_API_KEY: ${SAGE_API_KEY:-}
       SAGE_MCP_KEY: ${SAGE_MCP_KEY:-}
       SAGE_MCP_BACKEND_KEY: ${SAGE_MCP_BACKEND_KEY:-}
@@ -144,8 +184,18 @@ services:
       # MCP clients on the host can reach it. Production uses host networking instead.
       - "127.0.0.1:${MCP_PORT:-8004}:8004"
     volumes:
+      # Bind-mount application code so the reload-enabled development servers see
+      # edits without rebuilding the image.
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+      - ./pytest.ini:/app/pytest.ini:ro
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./.env.example:/app/.env.example:ro
+      - ./scripts:/app/scripts:ro
       - ./lore_docs:/app/lore_docs:ro # Mount the lore documentation directory
-      - ./logs:/app/logs
+      # A named volume inherits the image's non-root ownership. A host bind mount
+      # would be owned by the developer's UID and block the UID 1013 app process.
+      - api_logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -153,6 +203,35 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+    networks:
+      - luminari-network
+    restart: "no"
+
+  # Static developer chat UI
+  ui:
+    image: python:3.13-slim-bookworm
+    container_name: luminari-ui
+    command: ["python", "/app/ui/serve.py", "8080", "--host", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:${UI_PORT:-8080}:8080"
+    volumes:
+      - ./ui:/app/ui:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/chat-ui.html', timeout=5).read(1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - luminari-network
     restart: "no"
@@ -169,4 +248,6 @@ volumes:
   neo4j_logs:
     driver: local
   ollama_models:
+    driver: local
+  api_logs:
     driver: local

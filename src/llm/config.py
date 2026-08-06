@@ -56,7 +56,7 @@ def get_llm_provider_config() -> dict[str, Any]:
             "base_url": os.getenv("OLLAMA_BASE_URL", "http://ollama:11434"),
             "chat_model": os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:7b"),
             "creative_model": os.getenv("OLLAMA_CREATIVE_MODEL", "qwen2.5:7b"),
-            "reasoning_model": os.getenv("OLLAMA_REASONING_MODEL", "deepseek-r1:8b"),
+            "reasoning_model": os.getenv("OLLAMA_REASONING_MODEL", "qwen2.5:3b"),
             # Agents that bind tools need a tool-calling model. Pure reasoning models
             # (e.g. deepseek-r1) emit chain-of-thought that Ollama's grammar-constrained
             # tool parser rejects outright, so they cannot be used here.
@@ -65,7 +65,7 @@ def get_llm_provider_config() -> dict[str, Any]:
             ),
             "embedding_model": os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
             "temperature": float(os.getenv("OLLAMA_CHAT_TEMPERATURE", "0.7")),
-            "max_context_tokens": int(os.getenv("OLLAMA_MAX_CONTEXT_TOKENS", "4096")),
+            "max_context_tokens": int(os.getenv("OLLAMA_MAX_CONTEXT_TOKENS", "12288")),
             "timeout": int(os.getenv("OLLAMA_REQUEST_TIMEOUT", "120")),
         }
     elif provider == "openai":

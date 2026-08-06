@@ -16,6 +16,7 @@ Environment variables used (from Docker container):
 
 import argparse
 import asyncio
+import os
 import sys
 from datetime import UTC, datetime
 
@@ -31,18 +32,30 @@ console = Console(force_terminal=True, force_interactive=True)
 
 
 async def sync_episodes_bulk(
-    postgres, graphiti, debug: bool = False, max_episodes: int | None = None
+    postgres,
+    graphiti,
+    batch_size: int,
+    debug: bool = False,
+    max_episodes: int | None = None,
 ):
-    """Bulk sync episodes using Graphiti's add_episode_bulk for speed"""
-    try:
-        # Import RawEpisode for bulk operations
-        from graphiti_core.nodes import EpisodeType
-        from graphiti_core.utils.bulk_utils import RawEpisode
+    """Bulk sync all pending episodes in bounded, resumable batches."""
+    from graphiti_core.nodes import EpisodeType
+    from graphiti_core.utils.bulk_utils import RawEpisode
 
-        console.print("📦 [bold blue]Using bulk sync mode (faster for large datasets)[/bold blue]")
+    from src.graphiti.edge_types import EDGE_TYPES
+    from src.graphiti.entity_types import ENTITY_TYPES
 
-        # Get all unsynced episodes (much smaller batches for rate limiting)
-        limit = max_episodes or 20  # Very conservative limit to avoid rate limiting
+    total_synced = 0
+    total_failed = 0
+    batch_size = max(1, batch_size)
+    max_entities = max(1, int(os.getenv("GRAPHITI_MAX_ENTITIES_PER_EPISODE", "25")))
+    max_relationships = max(1, int(os.getenv("GRAPHITI_MAX_RELATIONSHIPS_PER_EPISODE", "25")))
+
+    console.print("📦 [bold blue]Using bulk sync mode (faster for large datasets)[/bold blue]")
+
+    while max_episodes is None or total_synced < max_episodes:
+        remaining = None if max_episodes is None else max_episodes - total_synced
+        limit = batch_size if remaining is None else min(batch_size, remaining)
         episodes = await postgres.fetch(
             """
             SELECT id, text, document_id, episode_index, created_at
@@ -56,11 +69,13 @@ async def sync_episodes_bulk(
 
         if not episodes:
             print("✅ No unsynced episodes found")
-            return 0, 0
+            break
 
-        print(f"📊 Preparing {len(episodes)} episodes for bulk sync...")
+        print(
+            f"📊 Preparing batch of {len(episodes)} episodes "
+            f"({total_synced} synced this run)..."
+        )
 
-        # Prepare bulk episodes
         bulk_episodes = []
         episode_ids = []
         episode_props = {}
@@ -89,73 +104,77 @@ async def sync_episodes_bulk(
             bulk_episodes.append(raw_episode)
             episode_ids.append(episode_id)
 
-        print(f"🚀 Bulk syncing {len(bulk_episodes)} episodes...")
-
-        # Perform bulk sync
-        await graphiti.add_episode_bulk(bulk_episodes)
-
-        print("✅ Bulk sync completed, setting stable_id fields...")
-
-        # Set stable_id for all synced episodes for GraphRAG linkage
         try:
-            from src.db import get_neo4j_db
+            print(f"🚀 Bulk syncing {len(bulk_episodes)} episodes...")
 
-            neo4j_db = await get_neo4j_db()
+            # LuminariGraphiti is a wrapper; graphiti-core's bulk API lives on
+            # its ``graphiti`` member.
+            await graphiti.graphiti.add_episode_bulk(
+                bulk_episodes,
+                entity_types=ENTITY_TYPES,
+                edge_types=EDGE_TYPES,
+                edge_type_map={("Entity", "Entity"): list(EDGE_TYPES.keys())},
+                custom_extraction_instructions=(
+                    "Return only the most important facts from each episode. "
+                    f"Extract at most {max_entities} entities and at most "
+                    f"{max_relationships} relationships per episode. "
+                    "Do not repeat equivalent entities or relationships."
+                ),
+            )
 
+            print("✅ Bulk sync completed, setting stable_id fields...")
+
+            # Do not mark PostgreSQL rows synced unless cross-store linkage is
+            # complete for every episode in this batch.
+            linked_episodes = 0
             for episode in episodes:
                 episode_id = episode["id"]
-
-                # Update Episodic node with stable_id and the episode metadata
-                await neo4j_db.execute_query(
+                result = await graphiti.driver.execute_query(
                     """
-                    MATCH (ep:Episodic)
-                    WHERE ep.source_description = $source_description
-                      AND ep.stable_id IS NULL
+                    MATCH (ep:Episodic {source_description: $source_description})
                     SET ep.stable_id = $stable_id
                     SET ep += $extra_props
-                    RETURN COUNT(ep) as updated_count
-                """,
+                    RETURN COUNT(ep) AS updated_count
+                    """,
                     {
-                        "source_description": f"episode_{episode_id}",  # Match the format used above
+                        "source_description": f"episode_{episode_id}",
                         "stable_id": str(episode_id),
                         "extra_props": episode_props[episode_id],
                     },
                 )
+                records = result.records if hasattr(result, "records") else result
+                linked_episodes += records[0]["updated_count"] if records else 0
 
-            # Close the Neo4j connection
-            if hasattr(neo4j_db, "close"):
-                await neo4j_db.close()
-            elif hasattr(neo4j_db, "driver") and hasattr(neo4j_db.driver, "close"):
-                await neo4j_db.driver.close()
+            if linked_episodes != len(episodes):
+                raise RuntimeError(
+                    f"Linked {linked_episodes} of {len(episodes)} bulk episodes; "
+                    "refusing to mark sync complete"
+                )
 
-            print(f"✅ Set stable_id fields for {len(episodes)} episodes")
+            print(f"✅ Set stable_id fields for {linked_episodes} episodes")
 
-        except Exception as bulk_stable_id_error:
-            print(
-                "⚠️  Warning: Could not set stable_id fields in bulk mode "
-                f"({type(bulk_stable_id_error).__name__})"
-            )
+            for episode_id in episode_ids:
+                await postgres.execute(
+                    """
+                    UPDATE episodes
+                    SET graphiti_synced = TRUE,
+                        graphiti_synced_at = NOW()
+                    WHERE id = $1
+                    """,
+                    episode_id,
+                )
 
-        print("✅ Marking episodes as synced...")
+            total_synced += len(episodes)
+            print(f"🎉 Batch complete: {total_synced} episodes synced this run")
 
-        # Mark all episodes as synced
-        for episode_id in episode_ids:
-            await postgres.execute(
-                """
-                UPDATE episodes
-                SET graphiti_synced = TRUE,
-                    graphiti_synced_at = NOW()
-                WHERE id = $1
-            """,
-                episode_id,
-            )
+        except Exception as error:
+            total_failed += len(episodes)
+            print(f"❌ Bulk sync batch failed ({type(error).__name__})")
+            if debug:
+                console.print_exception(show_locals=False)
+            break
 
-        print(f"🎉 Bulk sync complete: {len(episodes)} episodes synced")
-        return len(episodes), 0
-
-    except Exception as e:
-        print(f"❌ Bulk sync failed ({type(e).__name__})")
-        return 0, len(episodes) if "episodes" in locals() else 0
+    return total_synced, total_failed
 
 
 async def sync_episodes_incremental(
@@ -164,20 +183,34 @@ async def sync_episodes_incremental(
     """Incremental sync episodes one by one (with resume capability)"""
     total_synced = 0
     total_failed = 0
+    total_attempted = 0
+    failed_episode_ids = []
 
     print("🔄 Using incremental sync mode (with resume capability)")
 
     while True:
-        # Get next batch of unsynced episodes
+        if max_episodes is not None and total_attempted >= max_episodes:
+            print(f"🛑 Reached maximum episode limit ({max_episodes})")
+            break
+
+        fetch_limit = batch_size
+        if max_episodes is not None:
+            fetch_limit = min(fetch_limit, max_episodes - total_attempted)
+
+        # Successful episodes disappear from this query after their status update.
+        # Exclude failures seen during this invocation so one bad episode cannot
+        # make an unattended resume loop forever.
         episodes = await postgres.fetch(
             """
             SELECT id, text, document_id, episode_index
             FROM episodes
             WHERE graphiti_synced = FALSE
+              AND NOT (id = ANY($2::uuid[]))
             ORDER BY created_at
             LIMIT $1
         """,
-            batch_size,
+            fetch_limit,
+            failed_episode_ids,
         )
 
         if not episodes:
@@ -187,10 +220,6 @@ async def sync_episodes_incremental(
         print(f"📦 Processing batch of {len(episodes)} episodes...")
 
         for episode in episodes:
-            if max_episodes and total_synced >= max_episodes:
-                print(f"🛑 Reached maximum episode limit ({max_episodes})")
-                break
-
             # Retry logic with exponential backoff for rate limiting
             max_retries = 5
             base_delay = 1.0  # Start with 1 second
@@ -290,24 +319,25 @@ async def sync_episodes_incremental(
                                 f"\n❌ [red]Rate limit exceeded for episode {episode['id']} after {max_retries} attempts - skipping[/red]"
                             )
                             total_failed += 1
+                            failed_episode_ids.append(episode["id"])
                             break
                     else:
                         # Non-rate-limit error - fail immediately
                         total_failed += 1
+                        failed_episode_ids.append(episode["id"])
                         console.print(
                             f"\n❌ [red]Failed to sync episode {episode['id']} "
                             f"({type(e).__name__})[/red]"
                         )
                         break
 
+            total_attempted += 1
+
             # Base throttling between episodes (reduced since we have retry logic)
             await asyncio.sleep(0.2)  # 200ms base delay
 
         if not debug:
             print()  # New line after dots
-
-        if max_episodes and total_synced >= max_episodes:
-            break
 
     return total_synced, total_failed
 
@@ -322,6 +352,8 @@ async def sync_episodes(
     """Sync episodes from PostgreSQL to Neo4j via Graphiti"""
 
     print(f"🔄 Starting episode sync (batch_size={batch_size}, bulk_mode={bulk_mode})")
+    total_synced = 0
+    total_failed = 0
 
     # Get PostgreSQL connection
     try:
@@ -377,7 +409,7 @@ async def sync_episodes(
         if bulk_mode:
             # Bulk sync mode - much faster for large datasets
             total_synced, total_failed = await sync_episodes_bulk(
-                postgres, graphiti, debug, max_episodes
+                postgres, graphiti, batch_size, debug, max_episodes
             )
         else:
             # Standard incremental sync mode

@@ -6,6 +6,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
@@ -13,6 +15,8 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
 os.environ["SAGE_API_KEY"] = os.getenv("SAGE_API_KEY", "")
 os.environ["SAGE_API_BASE_URL"] = os.getenv("SAGE_API_BASE_URL", "http://localhost:8003")
+
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 
 async def test_direct_agent():

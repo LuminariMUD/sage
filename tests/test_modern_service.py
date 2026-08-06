@@ -7,10 +7,14 @@ import asyncio
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.agents.langchain.modern_service import ModernLangChainService
 from src.agents.langchain.service import LangChainChatService
+
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 # Test cases that were problematic with keyword routing
 TEST_CASES = [

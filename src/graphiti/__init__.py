@@ -15,7 +15,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("openai").setLevel(logging.WARNING)
 logging.getLogger("graphiti_core").setLevel(logging.WARNING)
 logging.getLogger("neo4j").setLevel(logging.WARNING)
-logging.getLogger("neo4j.notifications").setLevel(logging.WARNING)
+logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -110,9 +110,23 @@ class LuminariGraphiti:
 
         # Add LLM logging to see what relationship types are being generated
         original_generate = self.graphiti.llm_client.generate_response
+        max_output_tokens = max(256, int(os.getenv("GRAPHITI_MAX_OUTPUT_TOKENS", "4096")))
 
         async def logged_generate_response(*args, **kwargs):
             try:
+                # graphiti-core requests up to 16K output tokens for edge extraction,
+                # which lets small local models repeat edges for minutes. Keep every
+                # structured response within the configured local inference budget.
+                if len(args) >= 3 and args[2] is not None:
+                    args = (*args[:2], min(args[2], max_output_tokens), *args[3:])
+                else:
+                    requested_tokens = kwargs.get("max_tokens")
+                    kwargs["max_tokens"] = (
+                        max_output_tokens
+                        if requested_tokens is None
+                        else min(requested_tokens, max_output_tokens)
+                    )
+
                 # Only show debug output in verbose mode
                 if self.verbose:
                     # Log the prompt being sent to the LLM
@@ -480,7 +494,11 @@ class LuminariGraphiti:
             edge_map[("Entity", "Entity")] = list(edge_types.keys())
             return edge_map
 
-        edge_type_map = build_edge_type_map(list(entity_types.keys()))
+        # Every extracted node also carries the base ``Entity`` label. A single
+        # generic signature therefore enables all custom edge types while keeping
+        # Graphiti's prompt small; enumerating all 169 type pairs added thousands
+        # of repeated prompt tokens without changing validation behavior.
+        edge_type_map = {("Entity", "Entity"): list(edge_types.keys())}
 
         # Add episode with rich relationship types
         try:
@@ -511,6 +529,16 @@ class LuminariGraphiti:
                     )
 
             # Add episode with our custom types
+            max_entities = max(1, int(os.getenv("GRAPHITI_MAX_ENTITIES_PER_EPISODE", "25")))
+            max_relationships = max(
+                1, int(os.getenv("GRAPHITI_MAX_RELATIONSHIPS_PER_EPISODE", "25"))
+            )
+            extraction_instructions = (
+                "Return only the most important facts from this episode. "
+                f"Extract at most {max_entities} entities and at most "
+                f"{max_relationships} relationships. "
+                "Do not repeat equivalent entities or relationships."
+            )
             if self.verbose:
                 console.print(
                     "[yellow]🔄 Calling graphiti.add_episode with custom types...[/yellow]"
@@ -524,6 +552,7 @@ class LuminariGraphiti:
                 entity_types=entity_types,
                 edge_types=edge_types,
                 edge_type_map=edge_type_map,
+                custom_extraction_instructions=extraction_instructions,
             )
             console.print("[green]✅ Episode created with custom types![/green]")
 
@@ -578,6 +607,7 @@ class LuminariGraphiti:
                         source_description=source_file,
                         reference_time=timestamp,
                         entity_types=entity_types,
+                        custom_extraction_instructions=extraction_instructions,
                         # Try without edge_types and edge_type_map
                     )
                     console.print("[green]✅ Succeeded with basic configuration[/green]")
@@ -716,72 +746,6 @@ async def initialize_graphiti(
         logger.info("Creating Graphiti schema manually (bypassing build_indices_and_constraints)")
     try:
         async with graphiti.driver.session() as session:
-            # Drop ALL existing indexes and constraints to start fresh (verbose only)
-            if verbose:
-                logger.info("🗑️  Cleaning up existing Neo4j schema...")
-            try:
-                # Get all existing indexes and drop them (correct Neo4j 5.x syntax)
-                result = await session.run("SHOW INDEXES YIELD name, type")
-                indexes = await result.data()
-                non_lookup_indexes = [idx for idx in indexes if idx.get("type") != "LOOKUP"]
-                if verbose:
-                    logger.info(f"📊 Found {len(non_lookup_indexes)} non-lookup indexes to drop")
-
-                for index in non_lookup_indexes:
-                    try:
-                        index_name = _validate_cypher_identifier(index.get("name"), "index name")
-                        await session.run(f"DROP INDEX `{index_name}`")
-                        if verbose:
-                            logger.info("  ✅ Dropped index")
-                    except Exception as drop_error:
-                        if verbose:
-                            logger.debug(
-                                "  ❌ Failed to drop index (%s)",
-                                type(drop_error).__name__,
-                            )
-
-                # Get all existing constraints and drop them
-                result = await session.run("SHOW CONSTRAINTS YIELD name")
-                constraints = await result.data()
-                if verbose:
-                    logger.info(f"🔒 Found {len(constraints)} existing constraints to drop")
-
-                for constraint in constraints:
-                    try:
-                        constraint_name = _validate_cypher_identifier(
-                            constraint.get("name"), "constraint name"
-                        )
-                        await session.run(f"DROP CONSTRAINT `{constraint_name}`")
-                        if verbose:
-                            logger.info("  ✅ Dropped constraint")
-                    except Exception as drop_error:
-                        if verbose:
-                            logger.debug(
-                                "  ❌ Failed to drop constraint (%s)",
-                                type(drop_error).__name__,
-                            )
-
-                # Also specifically drop the incorrectly created edge_name_and_fact index if it exists
-                try:
-                    await session.run("DROP INDEX edge_name_and_fact IF EXISTS")
-                    if verbose:
-                        logger.info(
-                            "  ✅ Dropped incorrectly created edge_name_and_fact node index"
-                        )
-                except Exception as drop_error:
-                    if verbose:
-                        logger.debug(
-                            "  ❌ Failed to drop edge_name_and_fact index (%s)",
-                            type(drop_error).__name__,
-                        )
-
-            except Exception as cleanup_error:
-                logger.warning(
-                    "⚠️  Error during index/constraint cleanup (%s)",
-                    type(cleanup_error).__name__,
-                )
-                # Continue anyway
-
             # Manually create the COMPLETE schema Graphiti expects
             schema_commands = [
                 # Entity constraints and indexes

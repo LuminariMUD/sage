@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 
 from src.api.main import app
 
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
+
 
 @pytest.fixture
 def client():

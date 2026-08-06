@@ -16,8 +16,11 @@ from src.auth.api_key import KeyType, MultiKeyAuth
 from src.auth.exceptions import InvalidAPIKeyError, MissingAPIKeyError
 
 
-def test_multikey_auth():
+def test_multikey_auth(monkeypatch):
     """Test the MultiKeyAuth class with different scenarios."""
+
+    for name in ("SAGE_API_KEY", "SAGE_MCP_KEY", "SAGE_MCP_BACKEND_KEY"):
+        monkeypatch.delenv(name, raising=False)
 
     print("🧪 Testing MultiKeyAuth System")
     print("=" * 50)
@@ -101,16 +104,16 @@ def test_multikey_auth():
     return True
 
 
-def test_environment_keys():
+def test_environment_keys(monkeypatch):
     """Test authentication with environment variables."""
 
     print("\n🧪 Testing Environment Variable Integration")
     print("=" * 50)
 
     # Set test environment variables
-    os.environ["SAGE_API_KEY"] = "unit-test-env-api-key"
-    os.environ["SAGE_MCP_KEY"] = "unit-test-env-mcp-key"
-    os.environ["SAGE_MCP_BACKEND_KEY"] = "unit-test-env-backend-key"
+    monkeypatch.setenv("SAGE_API_KEY", "unit-test-env-api-key")
+    monkeypatch.setenv("SAGE_MCP_KEY", "unit-test-env-mcp-key")
+    monkeypatch.setenv("SAGE_MCP_BACKEND_KEY", "unit-test-env-backend-key")
 
     # Create new auth instance to pick up env vars
     auth = MultiKeyAuth()
@@ -124,7 +127,7 @@ def test_environment_keys():
 
     # Test DISABLE_AUTH functionality
     print("\nTesting DISABLE_AUTH functionality:")
-    os.environ["DISABLE_AUTH"] = "true"
+    monkeypatch.setenv("DISABLE_AUTH", "true")
     auth_disabled = MultiKeyAuth()
 
     if auth_disabled.is_auth_disabled():
@@ -132,12 +135,6 @@ def test_environment_keys():
     else:
         print("❌ DISABLE_AUTH=true not working")
         return False
-
-    # Clean up
-    del os.environ["DISABLE_AUTH"]
-    del os.environ["SAGE_API_KEY"]
-    del os.environ["SAGE_MCP_KEY"]
-    del os.environ["SAGE_MCP_BACKEND_KEY"]
 
     return True
 

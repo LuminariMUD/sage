@@ -27,13 +27,16 @@ def should_enable_reflection() -> bool:
     """Check if reflection should be enabled based on environment.
 
     Reflection requires:
-    - OPENAI_API_KEY to be set
+    - a local Ollama provider, or an OpenAI API key for the OpenAI provider
     - LANGCHAIN_ENABLE_REFLECTION not set to false
 
     Returns:
         True if reflection should be enabled
     """
-    has_api_key = bool(os.getenv("OPENAI_API_KEY"))
+    provider = os.getenv("LLM_PROVIDER", "openai").lower()
+    provider_available = provider == "ollama" or (
+        provider == "openai" and bool(os.getenv("OPENAI_API_KEY"))
+    )
     reflection_enabled = os.getenv("LANGCHAIN_ENABLE_REFLECTION", "true").lower() != "false"
 
-    return has_api_key and reflection_enabled
+    return provider_available and reflection_enabled

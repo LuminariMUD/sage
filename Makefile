@@ -1,5 +1,5 @@
 # Luminari Sage - Hybrid Graph RAG System with Semantic Chunking
-.PHONY: help status logs restart
+.PHONY: help dev down status logs restart test test-all
 .PHONY: load-canon load-draft load-all create-episodes generate-embeddings sync-to-graphiti sync-to-graphiti-ollama sync-to-graphiti-openai
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
@@ -9,6 +9,7 @@
 # Support for verbose mode
 ifdef VERBOSE
 	VERBOSE_FLAG = --verbose
+	GRAPHITI_DEBUG_FLAG = --debug
 endif
 
 # Default target
@@ -57,6 +58,8 @@ help:
 	@echo "  make embedding-status     - Check embedding generation progress"
 	@echo "  make logs                 - Show API container logs"
 	@echo "  make restart              - Restart all services"
+	@echo "  make test                 - Run fast tests in the API container"
+	@echo "  make test-all             - Run every test, including live/slow suites"
 	@echo ""
 	@echo "⚙️  SEMANTIC CHUNKING PARAMETERS:"
 	@echo "  • Base tokens: 200 (dynamic 100-500 based on complexity)"
@@ -75,17 +78,17 @@ help:
 .PHONY: load-canon
 load-canon:
 	@echo "📚 Loading canon documents into PostgreSQL..."
-	@docker exec -it luminari-api python src/scripts/load_documents.py --source canon $(VERBOSE_FLAG)
+	@docker compose exec -T api python src/scripts/load_documents.py --source canon $(VERBOSE_FLAG)
 
 .PHONY: load-draft
 load-draft:
 	@echo "📚 Loading draft documents into PostgreSQL..."
-	@docker exec -it luminari-api python src/scripts/load_documents.py --source draft $(VERBOSE_FLAG)
+	@docker compose exec -T api python src/scripts/load_documents.py --source draft $(VERBOSE_FLAG)
 
 .PHONY: load-all
 load-all:
 	@echo "📚 Loading all documents (canon + draft) into PostgreSQL..."
-	@docker exec -it luminari-api python src/scripts/load_documents.py --source all $(VERBOSE_FLAG)
+	@docker compose exec -T api python src/scripts/load_documents.py --source all $(VERBOSE_FLAG)
 
 # =============================================================================
 # SEMANTIC CHUNKING PIPELINE
@@ -94,36 +97,38 @@ load-all:
 .PHONY: create-episodes
 create-episodes:
 	@echo "🧠 Creating episodes with semantic chunking (200-500 tokens, 25% overlap)..."
-	@docker exec -it luminari-api python src/scripts/create_episodes_from_documents.py \
+	@docker compose exec -T api python src/scripts/create_episodes_from_documents.py \
 		--base-tokens 200 --max-tokens 500 --overlap-percentage 0.25 \
 		--similarity-threshold 0.7 --complexity-factor 1.5 $(VERBOSE_FLAG)
 
 .PHONY: create-episodes-large
 create-episodes-large:
 	@echo "🧠 Creating large episodes with semantic chunking (300-800 tokens)..."
-	@docker exec -it luminari-api python src/scripts/create_episodes_from_documents.py \
+	@docker compose exec -T api python src/scripts/create_episodes_from_documents.py \
 		--base-tokens 400 --max-tokens 800 --overlap-percentage 0.3 \
 		--similarity-threshold 0.7 --complexity-factor 1.5 $(VERBOSE_FLAG)
 
 .PHONY: generate-embeddings
 generate-embeddings:
 	@echo "🔢 Generating embeddings for episodes..."
-	@docker exec -it luminari-api python src/scripts/generate_embeddings.py $(VERBOSE_FLAG)
+	@docker compose exec -T api python src/scripts/generate_embeddings.py $(VERBOSE_FLAG)
 
 .PHONY: sync-to-graphiti
 sync-to-graphiti:
 	@echo "🕸️  Syncing episodes to Graphiti/Neo4j (uses GRAPHITI_PROVIDER env var)..."
-	@docker exec -it luminari-api python src/scripts/extract_entities.py $(VERBOSE_FLAG)
+	@docker compose exec -T api python src/scripts/sync_episodes_to_graphiti.py $(GRAPHITI_DEBUG_FLAG)
 
 .PHONY: sync-to-graphiti-ollama
 sync-to-graphiti-ollama:
 	@echo "🕸️  Syncing episodes to Graphiti/Neo4j with Ollama..."
-	@docker exec -e GRAPHITI_PROVIDER=ollama -it luminari-api python src/scripts/extract_entities.py $(VERBOSE_FLAG)
+	@docker compose exec -T -e GRAPHITI_PROVIDER=ollama api \
+		python src/scripts/sync_episodes_to_graphiti.py $(GRAPHITI_DEBUG_FLAG)
 
 .PHONY: sync-to-graphiti-openai
 sync-to-graphiti-openai:
 	@echo "🕸️  Syncing episodes to Graphiti/Neo4j with OpenAI..."
-	@docker exec -e GRAPHITI_PROVIDER=openai -it luminari-api python src/scripts/extract_entities.py $(VERBOSE_FLAG)
+	@docker compose exec -T -e GRAPHITI_PROVIDER=openai api \
+		python src/scripts/sync_episodes_to_graphiti.py $(GRAPHITI_DEBUG_FLAG)
 
 # =============================================================================
 # COMPLETE WORKFLOWS
@@ -136,7 +141,7 @@ semantic-pipeline: pipeline-canon
 .PHONY: semantic-reset
 semantic-reset:
 	@echo "🔄 Resetting everything and reprocessing with semantic chunking..."
-	@docker exec -it luminari-api python src/scripts/reset_semantic_chunking.py
+	@docker compose exec -T api python src/scripts/reset_semantic_chunking.py
 	@echo "✅ Semantic reset complete!"
 
 .PHONY: pipeline pipeline-canon
@@ -156,9 +161,9 @@ pipeline-all: load-all create-episodes generate-embeddings sync-to-graphiti
 .PHONY: resume
 resume:
 	@echo "🔄 Resuming interrupted pipeline..."
-	@docker exec -it luminari-api python src/scripts/create_episodes_from_documents.py $(VERBOSE_FLAG)
-	@docker exec -it luminari-api python src/scripts/generate_embeddings.py $(VERBOSE_FLAG)
-	@docker exec -it luminari-api python src/scripts/extract_entities.py $(VERBOSE_FLAG)
+	@docker compose exec -T api python src/scripts/create_episodes_from_documents.py $(VERBOSE_FLAG)
+	@docker compose exec -T api python src/scripts/generate_embeddings.py $(VERBOSE_FLAG)
+	@docker compose exec -T api python src/scripts/sync_episodes_to_graphiti.py $(GRAPHITI_DEBUG_FLAG)
 	@echo "✅ Pipeline resumed!"
 
 .PHONY: rebuild
@@ -172,40 +177,40 @@ rebuild: clear-graph-force reset-all pipeline-canon
 .PHONY: clear-all
 clear-all:
 	@echo "🗑️  Clearing ALL processed data (PostgreSQL episodes + Neo4j)..."
-	@docker exec -it luminari-api python src/scripts/clear_all_data.py
+	@docker compose exec api python src/scripts/clear_all_data.py
 
 .PHONY: clear-graph
 clear-graph:
 	@echo "🗑️  Clearing Neo4j graph (interactive)..."
-	@docker exec -it luminari-api python src/scripts/clear_graph.py
+	@docker compose exec api python src/scripts/clear_graph.py
 
 .PHONY: clear-graph-force
 clear-graph-force:
 	@echo "🗑️  Force clearing Neo4j graph..."
-	@docker exec luminari-api python src/scripts/clear_graph.py --yes
+	@docker compose exec -T api python src/scripts/clear_graph.py --yes
 
 .PHONY: reset-all
 reset-all:
 	@echo "🔄 Resetting all processing flags..."
-	@docker exec luminari-api python src/scripts/reset_processing.py --target all --yes
+	@docker compose exec -T api python src/scripts/reset_processing.py --target all --yes
 
 .PHONY: reset-sync
 reset-sync:
 	@echo "🔄 Resetting Graphiti sync flags..."
-	@docker exec luminari-api python src/scripts/reset_processing.py --target sync --yes
+	@docker compose exec -T api python src/scripts/reset_processing.py --target sync --yes
 
 .PHONY: reset-embeddings clear-embeddings
 reset-embeddings: clear-embeddings
 
 clear-embeddings:
 	@echo "🔄 Clearing all embeddings (use before switching embedding providers)..."
-	@docker exec luminari-postgres psql -U luminari -d luminari_sage -c "UPDATE episodes SET embedding = NULL;"
+	@docker compose exec -T postgres psql -U luminari -d luminari_sage -c "UPDATE episodes SET embedding = NULL;"
 	@echo "✅ All embeddings cleared"
 
 .PHONY: reset-documents
 reset-documents:
 	@echo "🔄 Resetting document processing status..."
-	@docker exec luminari-api python src/scripts/reset_processing.py --target documents --yes
+	@docker compose exec -T api python src/scripts/reset_processing.py --target documents --yes
 
 # =============================================================================
 # STATUS & MONITORING
@@ -217,28 +222,28 @@ status:
 	@echo "==========================================="
 	@echo ""
 	@echo "🐳 Docker Services:"
-	@docker compose -p luminari-sage ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "❌ Docker services not running"
+	@docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "❌ Docker services not running"
 	@echo ""
 	@echo "🔍 API Health:"
 	@curl -s http://localhost:8003/ping | jq . 2>/dev/null || echo "❌ API not responding"
 	@echo ""
 	@echo "📊 Processing Status:"
-	@docker exec luminari-api python src/scripts/reset_processing.py --status 2>/dev/null || echo "❌ Could not get processing status"
+	@docker compose exec -T api python src/scripts/reset_processing.py --status 2>/dev/null || echo "❌ Could not get processing status"
 	@echo ""
 	@echo "🕸️  Neo4j Graph Status:"
-	@docker exec luminari-api python src/scripts/clear_graph.py --yes --debug 2>/dev/null | head -20 || echo "❌ Could not get graph status"
+	@docker compose exec -T api python src/scripts/clear_graph.py --status 2>/dev/null || echo "❌ Could not get graph status"
 
 .PHONY: status-episodes
 status-episodes:
 	@echo "📊 Episode Creation Status:"
-	@docker exec luminari-api python src/scripts/create_episodes_from_documents.py --status
+	@docker compose exec -T api python src/scripts/create_episodes_from_documents.py --status
 
 .PHONY: status-embeddings embedding-status
 status-embeddings: embedding-status
 
 embedding-status:
 	@echo "📊 Embedding Status:"
-	@docker exec luminari-postgres psql -U luminari -d luminari_sage -c \
+	@docker compose exec -T postgres psql -U luminari -d luminari_sage -c \
 		"SELECT \
 			COUNT(*) as total_episodes, \
 			COUNT(embedding) as with_embeddings, \
@@ -249,32 +254,17 @@ embedding-status:
 .PHONY: status-processing
 status-processing:
 	@echo "📊 Processing Status:"
-	@docker exec luminari-api python src/scripts/reset_processing.py --status
+	@docker compose exec -T api python src/scripts/reset_processing.py --status
 
 .PHONY: graphiti-status status-graphiti
 graphiti-status: status-graphiti
 
 status-graphiti:
 	@echo "📊 Graphiti Status:"
-	@test -n "$${NEO4J_PASSWORD:-}" || { echo "NEO4J_PASSWORD is not set" >&2; exit 1; }
+	@docker compose exec -T postgres psql -U luminari -d luminari_sage -c \
+		"SELECT COUNT(*) FILTER (WHERE graphiti_synced) AS processed, COUNT(*) AS total FROM episodes;"
 	@echo ""
-	@echo "Episodes processed:"
-	@docker exec luminari-postgres psql -U luminari -d luminari_sage -c \
-		"SELECT COUNT(*) FILTER (WHERE graphiti_synced) as processed, \
-				COUNT(*) as total \
-		 FROM episodes;"
-	@echo ""
-	@echo "Entities in knowledge graph:"
-	@docker exec -e NEO4J_USERNAME=neo4j -e NEO4J_PASSWORD luminari-neo4j cypher-shell \
-		"MATCH (e:Entity) RETURN count(e) as entities;" --format plain
-	@echo ""
-	@echo "Relationships in knowledge graph:"
-	@docker exec -e NEO4J_USERNAME=neo4j -e NEO4J_PASSWORD luminari-neo4j cypher-shell \
-		"MATCH ()-[r]->() RETURN count(r) as relationships;" --format plain
-	@echo ""
-	@echo "Top 10 relationship types:"
-	@docker exec -e NEO4J_USERNAME=neo4j -e NEO4J_PASSWORD luminari-neo4j cypher-shell \
-		"MATCH ()-[r]->() RETURN DISTINCT type(r) as type, COUNT(r) as count ORDER BY count DESC LIMIT 10;" --format plain
+	@docker compose exec -T api python src/scripts/clear_graph.py --status
 
 .PHONY: benchmark-graphiti
 benchmark-graphiti:
@@ -290,34 +280,55 @@ benchmark-graphiti-openai:
 # SYSTEM OPERATIONS
 # =============================================================================
 
+.PHONY: dev
+dev:
+	@echo "🚀 Starting the complete local development stack..."
+	@docker compose up -d --build
+
+.PHONY: down
+down:
+	@echo "🛑 Stopping the local development stack (data volumes are preserved)..."
+	@docker compose down
+
 .PHONY: logs
 logs:
 	@echo "📋 API Container logs..."
-	@docker compose -p luminari-sage logs -f api
+	@docker compose logs -f api
 
 .PHONY: logs-tail
 logs-tail:
 	@echo "📋 API Container logs (last 50 lines)..."
-	@docker compose -p luminari-sage logs --tail=50 api
+	@docker compose logs --tail=50 api
 
 .PHONY: restart
 restart:
 	@echo "🔄 Restarting all services..."
-	@docker compose -p luminari-sage restart
+	@docker compose restart
 
 .PHONY: shell
 shell:
 	@echo "🐚 Opening shell in API container..."
-	@docker exec -it luminari-api bash
+	@docker compose exec api bash
 
 # =============================================================================
 # TESTING & VALIDATION
 # =============================================================================
 
+.PHONY: test
+test:
+	@echo "🧪 Running fast tests in the development container..."
+	@docker compose exec -T api python -m pytest \
+		-m "not integration and not data_dependent and not e2e and not quality and not performance and not stress and not slow"
+
+.PHONY: test-all
+test-all:
+	@echo "🧪 Running all tests, including live and slow suites..."
+	@docker compose exec -T api python -m pytest
+
 .PHONY: test-chunking
 test-chunking:
 	@echo "🧪 Testing semantic chunking..."
-	@docker exec -it luminari-api python src/scripts/semantic_chunker.py
+	@docker compose exec -T api python src/scripts/semantic_chunker.py
 
 .PHONY: test-api
 test-api:
@@ -331,13 +342,14 @@ test-api:
 
 .PHONY: clean-logs
 clean-logs:
-	@echo "🧹 Cleaning Docker logs..."
-	@docker system prune --volumes -f
+	@echo "🧹 Clearing Sage application log files only (Docker volumes are preserved)..."
+	@docker compose exec -T api sh -c \
+		'find /app/logs -maxdepth 1 -type f -name "*.log" -exec truncate -s 0 {} +'
 
 .PHONY: watch-logs
 watch-logs:
 	@echo "👀 Watching logs (press Ctrl+C to stop)..."
-	@docker compose -p luminari-sage logs -f
+	@docker compose logs -f
 
 # Show all available targets
 .PHONY: targets
