@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate benchmark-graphiti benchmark-graphiti-openai
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate benchmark-graphiti benchmark-graphiti-openai
 
 # Support for verbose mode
 ifdef VERBOSE
@@ -36,6 +36,11 @@ help:
 	@echo "  make graphiti-status           - Show Graphiti/Neo4j statistics"
 	@echo "  make graph-audit              - Reconcile PostgreSQL and Neo4j (read-only)"
 	@echo "  make graph-audit-json         - Emit machine-readable reconciliation JSON"
+	@echo "  make graph-sync-status        - Show durable graph job/run state (read-only)"
+	@echo "  make graph-sync-list          - List failed/active graph jobs (read-only)"
+	@echo "  make graph-sync-recover-expired - Requeue or quarantine expired leases"
+	@echo "  make graph-sync-retry-waiting EPISODE_IDS='...' - Retry waiting jobs"
+	@echo "  make graph-sync-retry-quarantined EPISODE_IDS='...' CONFIRM=1 - Retry quarantined"
 	@echo "  make backup-provider-upgrade BACKUP_REFERENCE=... - Create verified DB backups"
 	@echo "  make verify-provider-upgrade-backup BACKUP_REFERENCE=... - Verify backup gate"
 	@echo "  make db-migrate-status        - Show immutable PostgreSQL migration status"
@@ -280,6 +285,35 @@ graph-audit:
 .PHONY: graph-audit-json
 graph-audit-json:
 	@docker compose exec -T api python src/scripts/graph_audit.py --json
+
+.PHONY: graph-sync-status
+graph-sync-status:
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py status
+
+.PHONY: graph-sync-list
+graph-sync-list:
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
+		list --state leased --state retry_wait --state quarantined
+
+.PHONY: graph-sync-recover-expired
+graph-sync-recover-expired:
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py recover-expired
+
+.PHONY: graph-sync-retry-waiting
+graph-sync-retry-waiting:
+	@test -n "$(EPISODE_IDS)" || \
+		(echo "EPISODE_IDS is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
+		retry-waiting $(EPISODE_IDS)
+
+.PHONY: graph-sync-retry-quarantined
+graph-sync-retry-quarantined:
+	@test "$(CONFIRM)" = "1" || \
+		(echo "CONFIRM=1 is required for quarantined retries" >&2; exit 2)
+	@test -n "$(EPISODE_IDS)" || \
+		(echo "EPISODE_IDS is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
+		retry-quarantined --confirm $(EPISODE_IDS)
 
 .PHONY: backup-provider-upgrade
 backup-provider-upgrade:

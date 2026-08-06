@@ -209,3 +209,16 @@ def test_repository_migration_contains_required_durable_contract():
         "legacy:unversioned",
     ):
         assert required_fragment in sql
+
+    runtime_sql = migrations[1].sql
+    for required_fragment in (
+        "attempt_budget_count",
+        "retry_generation",
+        "provider_call_limit",
+        "retry_delay_seconds",
+        "graph_sync_guard_provider_call_budget",
+        "graph_sync_guard_attempt_result",
+        "graph_sync_provider_calls_budget",
+        "graph_sync_attempt_results_provider_count",
+    ):
+        assert required_fragment in runtime_sql

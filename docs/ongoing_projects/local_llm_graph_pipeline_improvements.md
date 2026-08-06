@@ -51,6 +51,19 @@ After the verified backup checkpoint, applied migration `0001_graph_sync_lifecyc
 
 The post-migration audit is clean and now uses `graph_sync_jobs` as its state source, with 611 job source/profile fingerprints, 305 verified source fingerprints, and 305 distinct Neo4j stable IDs. All services remain healthy. The legacy worker remains stopped and must not be restarted.
 
+### 2026-08-07 - L1 durable runtime checkpoint - staged, not activated
+
+- Added `schemas/migrations/0002_graph_sync_runtime.sql` with per-generation attempt budgets, deterministic retry-policy capture, run heartbeats, a database-enforced provider-call ceiling, terminal-result count validation, and source-edit budget reset without deleting total attempt history.
+- Added typed lifecycle contracts in `src/graphiti/sync_models.py` and transactional run, claim, lease, attempt, completion, recovery, quarantine, and operator transitions in `src/graphiti/sync_state.py`.
+- Claims use `FOR UPDATE SKIP LOCKED`, database-time lease expiry, token fencing, immutable attempt identities, deterministic backoff, and captured job/provider limits. Systemic failure pauses the run and restores the current item's generation budget; queued jobs are not rewritten or charged.
+- Success requires exact stable-ID, current-source, and sync-profile verification. Expired workers cannot choose a terminal outcome, source edits cannot produce stale success, and explicit quarantine retry opens a new budget generation while preserving the total attempt chain.
+- Added the sanitized `src/scripts/graph_sync.py` operator CLI and Make targets for status, listing, expired-lease recovery, eligible retry, and confirmation-gated quarantine retry. Inspection uses read-only PostgreSQL sessions and does not expose episode text.
+- Added isolated migration and repository tests for concurrent distinct claims, lease expiry, immutable-ledger upgrade backfill, hard provider-call limits, terminal ledger guards, stable verification, source changes, systemic pause/readiness, atomic operator batches, redaction, and preserved retry history.
+
+Focused verification passes 27 unit tests and 9 isolated PostgreSQL integration tests; the full fast suite passes 103 tests with 6 skips and 108 intentionally deselected tests. The complete `0002` SQL was also executed against the live 611-job schema in one explicit transaction: all runtime DDL and invariant checks passed, after which an unconditional rollback proved that the runtime columns/functions were absent, the migration ledger still contained only `0001`, and all 611 jobs remained unchanged. The post-rehearsal graph audit remains clean at 611 jobs, 305 synchronized PostgreSQL rows, and 305 distinct Neo4j stable IDs; all services are healthy.
+
+This checkpoint is code-staged only. Migration `0002_graph_sync_runtime` remains pending, the live schema still has no runs or attempts, and the legacy worker remains stopped by operator request. Do not run ingestion until the durable worker loop is integrated and separately authorized.
+
 ### 2026-08-07 - L1 backup and restore gate tooling checkpoint
 
 - Added a combined provider-upgrade backup command that creates a PostgreSQL custom-format dump and offline Neo4j Community dumps for both `neo4j` and `system`.

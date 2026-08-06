@@ -13,9 +13,8 @@ from src.graphiti.audit import source_content_fingerprint
 
 pytestmark = pytest.mark.integration
 
-MIGRATION_PATH = (
-    Path(__file__).resolve().parents[1] / "schemas" / "migrations" / "0001_graph_sync_lifecycle.sql"
-)
+MIGRATION_DIRECTORY = Path(__file__).resolve().parents[1] / "schemas" / "migrations"
+MIGRATION_PATHS = sorted(MIGRATION_DIRECTORY.glob("*.sql"))
 
 
 async def _expect_database_rejection(connection, statement: str, *args) -> None:
@@ -67,7 +66,13 @@ async def test_graph_sync_migration_seed_guards_and_immutable_ledgers():
             ],
         )
 
-        await connection.execute(MIGRATION_PATH.read_text(encoding="ascii"))
+        for migration_path in MIGRATION_PATHS:
+            await connection.execute(migration_path.read_text(encoding="ascii"))
+            # The real runner commits each migration separately. Flush deferred
+            # foreign-key events so this rollback-only test can ALTER the seeded
+            # tables in the next migration.
+            await connection.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        await connection.execute("SET CONSTRAINTS ALL DEFERRED")
 
         counts = await connection.fetchrow("""
             SELECT count(*) AS total,
@@ -107,6 +112,7 @@ async def test_graph_sync_migration_seed_guards_and_immutable_ledgers():
             UPDATE graph_sync_jobs
             SET state = 'leased',
                 job_attempt_count = 1,
+                attempt_budget_count = 1,
                 lease_owner = 'test-worker',
                 lease_token = $2,
                 lease_expires_at = clock_timestamp() + interval '15 minutes',
@@ -129,10 +135,16 @@ async def test_graph_sync_migration_seed_guards_and_immutable_ledgers():
                 lease_owner,
                 captured_source_fingerprint,
                 sync_profile_fingerprint,
-                route_fingerprint
+                route_fingerprint,
+                retry_generation,
+                budget_attempt_number,
+                job_attempt_limit,
+                provider_call_limit,
+                retry_delay_seconds
             )
             SELECT $1, episode_id, $2, 1, $3, 'test-worker',
-                   desired_source_fingerprint, 'sync:test', 'route:test'
+                   desired_source_fingerprint, 'sync:test', 'route:test',
+                   0, 1, 3, 3, 60
             FROM graph_sync_jobs
             WHERE episode_id = $4
             """,
@@ -222,7 +234,9 @@ async def test_graph_sync_migration_seed_guards_and_immutable_ledgers():
             SELECT job.state,
                    job.verified_at,
                    episode.graphiti_synced,
-                   job.desired_source_fingerprint
+                   job.desired_source_fingerprint,
+                   job.attempt_budget_count,
+                   job.retry_generation
             FROM graph_sync_jobs AS job
             JOIN episodes AS episode ON episode.id = job.episode_id
             WHERE job.episode_id = $1
@@ -232,9 +246,154 @@ async def test_graph_sync_migration_seed_guards_and_immutable_ledgers():
         assert requeued["state"] == "pending"
         assert requeued["verified_at"] is None
         assert requeued["graphiti_synced"] is False
+        assert requeued["attempt_budget_count"] == 0
+        assert requeued["retry_generation"] == 1
         assert requeued["desired_source_fingerprint"] == source_content_fingerprint(
             "Pending lore revised"
         )
     finally:
         await outer.rollback()
         await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_runtime_migration_backfills_existing_append_only_attempts():
+    schema_name = f"graph_sync_upgrade_{uuid4().hex}"
+    connection = await asyncpg.connect(
+        host=os.getenv("POSTGRES_HOST", "postgres"),
+        port=int(os.getenv("POSTGRES_PORT", "5432")),
+        user=os.environ["POSTGRES_USER"],
+        password=os.environ["POSTGRES_PASSWORD"],
+        database=os.environ["POSTGRES_DB"],
+    )
+    try:
+        await connection.execute(f'CREATE SCHEMA "{schema_name}"')
+        await connection.execute(f'SET search_path TO "{schema_name}", public')
+        await connection.execute("""
+            CREATE TABLE episodes (
+                id UUID PRIMARY KEY,
+                text TEXT NOT NULL,
+                graphiti_synced BOOLEAN DEFAULT FALSE,
+                graphiti_synced_at TIMESTAMPTZ,
+                created_at TIMESTAMPTZ DEFAULT clock_timestamp(),
+                updated_at TIMESTAMPTZ DEFAULT clock_timestamp()
+            )
+            """)
+        episode_id = uuid4()
+        await connection.execute(
+            "INSERT INTO episodes (id, text) VALUES ($1, 'Existing attempt')",
+            episode_id,
+        )
+        await connection.execute(MIGRATION_PATHS[0].read_text(encoding="ascii"))
+
+        run_id = await connection.fetchval("""
+            INSERT INTO graph_sync_runs (worker_id, sync_profile_fingerprint)
+            VALUES ('upgrade-worker', 'sync:test')
+            RETURNING id
+            """)
+        attempt_id = uuid4()
+        lease_token = uuid4()
+        await connection.execute(
+            """
+            INSERT INTO graph_sync_attempts (
+                id, episode_id, run_id, attempt_number, lease_token, lease_owner,
+                captured_source_fingerprint, sync_profile_fingerprint,
+                route_fingerprint
+            )
+            SELECT $1, episode_id, $2, 1, $3, 'upgrade-worker',
+                   desired_source_fingerprint, 'sync:test', 'route:test'
+            FROM graph_sync_jobs
+            WHERE episode_id = $4
+            """,
+            attempt_id,
+            run_id,
+            lease_token,
+            episode_id,
+        )
+        await connection.execute(
+            """
+            UPDATE graph_sync_jobs
+            SET state = 'leased',
+                job_attempt_count = 1,
+                lease_owner = 'upgrade-worker',
+                lease_token = $2,
+                lease_expires_at = clock_timestamp() + interval '15 minutes',
+                last_attempt_id = $3,
+                sync_profile_fingerprint = 'sync:test'
+            WHERE episode_id = $1
+            """,
+            episode_id,
+            lease_token,
+            attempt_id,
+        )
+        await connection.execute(
+            """
+            INSERT INTO graph_sync_provider_calls (
+                attempt_id, call_number, logical_model_attempt, transport_attempt,
+                provider, model, candidate_fingerprint, prompt_version,
+                schema_version, started_at, completed_at, latency_ms, outcome
+            )
+            VALUES (
+                $1, 1, 1, 1, 'ollama', 'test-model', 'candidate:test',
+                'prompt:v1', 'schema:v1', clock_timestamp(), clock_timestamp(),
+                0, 'success'
+            )
+            """,
+            attempt_id,
+        )
+        await connection.execute(
+            """
+            INSERT INTO graph_sync_attempt_results (
+                attempt_id, outcome, provider_call_count
+            )
+            VALUES ($1, 'primary_success', 1)
+            """,
+            attempt_id,
+        )
+
+        await connection.execute(MIGRATION_PATHS[1].read_text(encoding="ascii"))
+
+        attempt = await connection.fetchrow(
+            """
+            SELECT retry_generation, budget_attempt_number, job_attempt_limit,
+                   provider_call_limit, retry_delay_seconds
+            FROM graph_sync_attempts
+            WHERE id = $1
+            """,
+            attempt_id,
+        )
+        assert dict(attempt) == {
+            "retry_generation": 0,
+            "budget_attempt_number": 1,
+            "job_attempt_limit": 3,
+            "provider_call_limit": 1,
+            "retry_delay_seconds": 60,
+        }
+        with pytest.raises(asyncpg.PostgresError):
+            await connection.execute(
+                "UPDATE graph_sync_attempts SET route_fingerprint = 'changed' WHERE id = $1",
+                attempt_id,
+            )
+        with pytest.raises(asyncpg.PostgresError):
+            await connection.execute(
+                """
+                INSERT INTO graph_sync_provider_calls (
+                    attempt_id, call_number, logical_model_attempt,
+                    transport_attempt, provider, model, candidate_fingerprint,
+                    prompt_version, schema_version, started_at, completed_at,
+                    latency_ms, outcome
+                )
+                VALUES (
+                    $1, 2, 2, 1, 'ollama', 'test-model', 'candidate:test',
+                    'prompt:v1', 'schema:v1', clock_timestamp(),
+                    clock_timestamp(), 0, 'success'
+                )
+                """,
+                attempt_id,
+            )
+    finally:
+        try:
+            await connection.execute("SET search_path TO public")
+            await connection.execute(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE')
+        finally:
+            await connection.close()

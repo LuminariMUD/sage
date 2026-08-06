@@ -3,7 +3,7 @@
 | Field                 | Value                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | Status                | Active phased implementation                                                                           |
-| Implementation        | Phase 1 in progress; audit, verified backup, and durable migration activated                           |
+| Implementation        | Phase 1 in progress; durable runtime staged, migration 0001 active                                     |
 | Last updated          | 2026-08-07                                                                                             |
 | Scope                 | Text generation, embeddings, Graphiti, configuration, storage migrations, deployment, and tests        |
 | Compatibility target  | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
@@ -41,6 +41,20 @@ Migration `0001_graph_sync_lifecycle` was applied on `2026-08-06T22:24:51Z` unde
 The seed created exactly 611 durable jobs: 305 `synced` and 306 `pending`. All 611 desired source fingerprints match current episode text; all 305 synchronized jobs have matching verified source/profile identity and timestamps. There are no runs, attempts, results, provider calls, active leases, retry-wait jobs, or quarantined jobs. The derived Boolean projection has zero mismatches. Required triggers and claim/lease indexes are present.
 
 The post-migration graph audit now reports `graph_sync_jobs` as its authoritative state source, 611 job source/profile fingerprints, 305 verified source fingerprints, 305 distinct Neo4j stable IDs, and zero drift findings. All services remain healthy and the legacy worker remains stopped.
+
+### Durable runtime checkpoint - staged, not activated
+
+The next Phase 1 artifact is implemented and tested without starting ingestion:
+
+- `schemas/migrations/0002_graph_sync_runtime.sql` adds retry-generation budgets, run heartbeats, captured job/provider limits and delays, a serialized database provider-call ceiling, terminal-result ledger guards, and source-revision budget reset while preserving total attempt history.
+- `src/graphiti/sync_models.py` defines validated policies, leases, failure taxonomy/dispositions, provider-call provenance, stable-ID verification, graph counts, bounded deterministic backoff, and mandatory secret redaction at construction boundaries.
+- `src/graphiti/sync_state.py` implements one-active-run coordination, readiness-gated circuit resume, atomic `FOR UPDATE SKIP LOCKED` claims, database-time expiring leases, token fencing, immutable attempt/provider records, verified success, classified retry/quarantine, systemic pause without charging the generation budget, expired-lease recovery, and atomic operator retries.
+- `src/scripts/graph_sync.py` plus Make targets expose read-only status/list/attempt-chain inspection, expired-lease recovery, eligible retry, explicit confirmation-gated quarantine retry, and run drain/resume/stop controls. No command performs ingestion.
+- Isolated PostgreSQL coverage proves distinct concurrent claims, provider/result ledger guards, upgrade backfill across the existing append-only trigger, source-edit fencing, expired-worker fencing, retry history preservation, systemic pause/readiness, redaction, and all-or-nothing operator batches.
+
+Focused verification passes 27 unit tests and 9 isolated PostgreSQL integration tests; the full fast suite passes 103 tests with 6 skips and 108 intentionally deselected tests. A live-schema rehearsal executed the complete `0002` SQL against all 611 current jobs inside one explicit transaction, verified zero invalid jobs and both new ledger guards, and rolled back unconditionally. Post-rollback proof showed no runtime column/function, one unchanged migration-ledger row, and all 611 jobs intact. The graph audit remains clean at 305 synchronized records and 305 distinct Neo4j stable IDs, and every service is healthy.
+
+Migration `0002_graph_sync_runtime` is still pending and must not be described as activated. The live database remains at `0001`, with no runs, attempts, results, provider calls, leases, retries, or quarantines. The legacy Boolean worker remains stopped by operator request; worker integration and fault-injection around Neo4j crash windows remain required before any ingestion is authorized.
 
 ### Backup and activation safety checkpoint - verified
 
