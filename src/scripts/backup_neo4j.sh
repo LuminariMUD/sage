@@ -133,10 +133,10 @@ docker run --rm \
         target=$1
         mkdir -p -- "$target"
         chmod 700 -- "$target"
-        neo4j-admin database dump neo4j \
+        /var/lib/neo4j/bin/neo4j-admin database dump neo4j \
             --to-path="$target" \
             --overwrite-destination=true
-        neo4j-admin database dump system \
+        /var/lib/neo4j/bin/neo4j-admin database dump system \
             --to-path="$target" \
             --overwrite-destination=true
     ' bash "$container_dump_dir"
@@ -145,7 +145,7 @@ docker run --rm \
     --network none \
     --user neo4j \
     --volumes-from "$container_name" \
-    --entrypoint neo4j-admin \
+    --entrypoint /var/lib/neo4j/bin/neo4j-admin \
     "$image" \
     database load --info --from-path="$container_dump_dir" neo4j \
     > "$backup_dir/neo4j-restore-info.txt"
@@ -153,7 +153,7 @@ docker run --rm \
     --network none \
     --user neo4j \
     --volumes-from "$container_name" \
-    --entrypoint neo4j-admin \
+    --entrypoint /var/lib/neo4j/bin/neo4j-admin \
     "$image" \
     database load --info --from-path="$container_dump_dir" system \
     > "$backup_dir/system-restore-info.txt"
@@ -162,7 +162,7 @@ docker run --rm \
     --network none \
     --user neo4j \
     --volumes-from "$container_name" \
-    --entrypoint neo4j-admin \
+    --entrypoint /var/lib/neo4j/bin/neo4j-admin \
     "$image" \
     database check \
     --from-path="$container_dump_dir/neo4j.dump" \
@@ -176,7 +176,7 @@ docker run --rm \
     --network none \
     --user neo4j \
     --volumes-from "$container_name" \
-    --entrypoint neo4j-admin \
+    --entrypoint /var/lib/neo4j/bin/neo4j-admin \
     "$image" \
     database check \
     --from-path="$container_dump_dir/system.dump" \

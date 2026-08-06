@@ -51,6 +51,8 @@ The recoverability tooling required before live migration is implemented and awa
 
 Focused backup-verifier coverage passes 5 tests; Bash syntax, ShellCheck, Compose rendering, Make dry-runs, and path/confirmation refusal checks pass. The live backup and migration remain pending at this checkpoint. The legacy worker remains stopped and no backup command starts it.
 
+The first live backup attempt safely stopped at the Neo4j dump step because the image's login-shell `PATH` does not include `neo4j-admin`. The exit trap removed the exact temporary dump directory, restarted Neo4j to healthy, left no completion marker, and did not start the worker. The tooling now invokes `/var/lib/neo4j/bin/neo4j-admin` explicitly; the incomplete reference is not eligible for migration.
+
 ---
 
 ## 1. Executive Summary

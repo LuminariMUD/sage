@@ -94,10 +94,12 @@ docker run --rm \
   ' bash "$restore_dir"
 
 docker run --rm --network none --user neo4j \
-  --volumes-from "$neo4j_container" --entrypoint neo4j-admin "$neo4j_image" \
+  --volumes-from "$neo4j_container" \
+  --entrypoint /var/lib/neo4j/bin/neo4j-admin "$neo4j_image" \
   database load --from-path="$restore_dir" --overwrite-destination=true neo4j
 docker run --rm --network none --user neo4j \
-  --volumes-from "$neo4j_container" --entrypoint neo4j-admin "$neo4j_image" \
+  --volumes-from "$neo4j_container" \
+  --entrypoint /var/lib/neo4j/bin/neo4j-admin "$neo4j_image" \
   database load --from-path="$restore_dir" --overwrite-destination=true system
 
 docker run --rm \

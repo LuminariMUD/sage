@@ -530,6 +530,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.2] - 2026-08-07
+
+### Fixed
+
+- Neo4j Community backup helpers invoke the image's absolute `neo4j-admin` path, including when its login-shell `PATH` omits that binary.
+- A failed offline-dump attempt now has recorded evidence that exact temporary data is removed, Neo4j returns to healthy, no completion marker is created, and the stopped graph worker remains stopped.
+
 ## [0.7.1] - 2026-08-07
 
 ### Added

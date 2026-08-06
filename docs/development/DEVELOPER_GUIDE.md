@@ -1,7 +1,7 @@
 # Luminari Sage Developer Guide
 
 **Last Updated**: November 12, 2025
-**Version**: 0.7.1
+**Version**: 0.7.2
 **Audience**: Developers, Contributors
 
 ## Overview

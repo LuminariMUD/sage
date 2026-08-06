@@ -60,6 +60,8 @@ Live activation is intentionally pending. The migration command reports `0001_gr
 
 The tooling is committed before the operational checkpoint. A new live backup must still be captured and verified before the pending migration is applied. This tooling does not start the legacy worker; it remains stopped by operator request.
 
+The first operational attempt proved the failure path: Neo4j's login shell omitted `neo4j-admin` from `PATH`, so the dump command exited before producing an archive. Cleanup removed the exact temporary directory, restarted Neo4j to healthy, emitted no completion marker, and left the worker stopped. The script now uses the image's absolute `/var/lib/neo4j/bin/neo4j-admin` path before retrying under a new reference.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.
