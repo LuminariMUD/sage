@@ -1,7 +1,7 @@
 # Luminari Sage Quick Start Guide
 
 **Last Updated**: November 12, 2025
-**Version**: 0.7.2
+**Version**: 0.7.3
 **Status**: Production Ready
 
 ## Prerequisites

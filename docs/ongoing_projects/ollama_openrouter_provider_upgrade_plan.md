@@ -36,11 +36,11 @@ The next Phase 1 artifact is implemented but has not been applied to the live sc
 - The complete SQL seeded and reconciled all 611 current episodes in a live-schema transaction and then rolled back. A separate isolated-schema integration test proved projection guards, ledger immutability, one active run, source-fingerprint parity, durable success, and automatic requeue after a source edit.
 - Migration/security/audit focused verification passed 34 tests, and the PostgreSQL migration integration test passed independently.
 
-Current live status remains unchanged: migration `0001_graph_sync_lifecycle` is pending, `schema_migrations` does not exist, the audit is still clean through the legacy projection, and the legacy worker remains stopped. Activation must wait for current PostgreSQL and Neo4j backup/restore evidence.
+Current live status remains unchanged: migration `0001_graph_sync_lifecycle` is pending, `schema_migrations` does not exist, the audit is still clean through the legacy projection, and the legacy worker remains stopped.
 
-### Backup and activation safety checkpoint - tooling ready
+### Backup and activation safety checkpoint - verified
 
-The recoverability tooling required before live migration is implemented and awaiting one live capture:
+The recoverability tooling and live pre-migration checkpoint are complete:
 
 - `make backup-provider-upgrade` creates a private combined backup set below ignored `backups/` storage.
 - PostgreSQL is dumped in custom format, restored into a generated scratch database, checked for episode/table counts, and removed after verification.
@@ -49,9 +49,20 @@ The recoverability tooling required before live migration is implemented and awa
 - `make db-migrate` now independently repeats that verification before invoking the immutable migration runner.
 - `docs/deployment/PROVIDER_UPGRADE_BACKUP_RESTORE.md` records the tested backup contract and explicit PostgreSQL/Neo4j recovery commands.
 
-Focused backup-verifier coverage passes 5 tests; Bash syntax, ShellCheck, Compose rendering, Make dry-runs, and path/confirmation refusal checks pass. The live backup and migration remain pending at this checkpoint. The legacy worker remains stopped and no backup command starts it.
+Focused backup-verifier coverage passes 5 tests; Bash syntax, ShellCheck, Compose rendering, Make dry-runs, and path/confirmation refusal checks pass. The legacy worker remains stopped and no backup command starts it.
 
 The first live backup attempt safely stopped at the Neo4j dump step because the image's login-shell `PATH` does not include `neo4j-admin`. The exit trap removed the exact temporary dump directory, restarted Neo4j to healthy, left no completion marker, and did not start the worker. The tooling now invokes `/var/lib/neo4j/bin/neo4j-admin` explicitly; the incomplete reference is not eligible for migration.
+
+The replacement backup `backups/provider-upgrade-20260806T222200Z`, created at `2026-08-06T22:22:47Z`, passed every gate:
+
+- PostgreSQL dump: 2,691,434 bytes, SHA-256 `42a1a24acdf706784d725f115d74b72f11e00373ae2c8e5160944f416e6065c3`; the scratch restore contained 611 episodes, 305 synchronized episodes, and 12 public tables.
+- Neo4j graph dump: 12,574,109 bytes, SHA-256 `1b7fd875d72d7cb89320971edfcd23a3b963aa5f8f0182b9565498a1dd30c548`; archive inspection and full consistency check passed.
+- Neo4j system dump: 19,495 bytes, SHA-256 `a44f6dad8d7c6d8a5a31673c2f120bd9260286b698d93b5beccf034dec3c775d`; archive inspection and full consistency check passed.
+- The independent verifier accepted the private `0600` artifacts and `0700` directory; no scratch database or temporary Neo4j dump directory remained.
+- PostgreSQL, Neo4j, Ollama, API, and UI returned healthy. The post-backup graph audit remained clean at 611 total, 305 synchronized, 306 pending, and 305 distinct Neo4j stable IDs.
+- The legacy worker remained stopped throughout.
+
+The additive migration is now backup-cleared but remains pending until this evidence checkpoint is committed and pushed.
 
 ---
 
@@ -653,8 +664,8 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [ ] Record the current live configuration without secrets.
 - [ ] Capture the PostgreSQL and Neo4j schema/index inventory.
 - [ ] Reconcile checked-in schemas with the live 768-dimensional episode state.
-- [ ] Capture a PostgreSQL and Neo4j backup and verify restore instructions.
-- [ ] Run and archive the current manual PostgreSQL/Neo4j ID-set reconciliation as the audit baseline.
+- [x] Capture a PostgreSQL and Neo4j backup and verify restore instructions.
+- [x] Run and archive the current manual PostgreSQL/Neo4j ID-set reconciliation as the audit baseline.
 - [ ] Create a versioned retrieval benchmark with lore questions and expected episodes/entities.
 - [ ] Create a versioned extraction corpus with expected parse/schema outcomes, important entities, and important relationships.
 - [ ] Capture current Nomic retrieval metrics, 3B/7B extraction behavior, Graphiti quality, latency, GPU use, and failure classes.

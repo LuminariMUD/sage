@@ -530,6 +530,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.3] - 2026-08-07
+
+### Operations
+
+- Captured and independently verified the pre-migration PostgreSQL, Neo4j graph, and Neo4j system backup set.
+- Archived restored PostgreSQL counts, Neo4j archive consistency evidence, SHA-256 digests, clean graph reconciliation, cleanup checks, and the stopped-worker invariant in both provider-upgrade plans.
+
 ## [0.7.2] - 2026-08-07
 
 ### Fixed

@@ -58,9 +58,11 @@ Live activation is intentionally pending. The migration command reports `0001_gr
 - Added a recovery runbook with explicit PostgreSQL and Neo4j restore commands and post-restore audit requirements.
 - Verified 5 focused tests plus Bash syntax, ShellCheck, Compose rendering, Make dry-runs, and refusal guards.
 
-The tooling is committed before the operational checkpoint. A new live backup must still be captured and verified before the pending migration is applied. This tooling does not start the legacy worker; it remains stopped by operator request.
+The tooling was committed before the operational checkpoint. It does not start the legacy worker, which remains stopped by operator request.
 
 The first operational attempt proved the failure path: Neo4j's login shell omitted `neo4j-admin` from `PATH`, so the dump command exited before producing an archive. Cleanup removed the exact temporary directory, restarted Neo4j to healthy, emitted no completion marker, and left the worker stopped. The script now uses the image's absolute `/var/lib/neo4j/bin/neo4j-admin` path before retrying under a new reference.
+
+The replacement reference `backups/provider-upgrade-20260806T222200Z` is verified and eligible for migration. Its PostgreSQL scratch restore proved 611 episodes, 305 synchronized episodes, and 12 public tables. Both Neo4j archives passed metadata inspection and full consistency checks. The verifier confirmed all three SHA-256 digests and private permissions; cleanup left no scratch database or dump directory. All services returned healthy, the graph audit remained clean with 305 distinct stable IDs, and the worker remained stopped. Live migration is the next gated operation.
 
 ## Why this project exists
 
@@ -254,6 +256,7 @@ Execute L0 and L1 before changing providers or optimizing throughput. L2 establi
 
 ## Required evidence artifacts
 
+- Verified database-backup reference, checksums, restore evidence, and recovery runbook.
 - Sanitized resolved configuration plus application, model, route, prompt/schema, and embedding fingerprints.
 - Baseline and candidate extraction/graph-quality reports.
 - Graph-job migration and seed reconciliation report.
