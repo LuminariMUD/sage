@@ -36,12 +36,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Durable Graph Sync Runtime (0.7.5-0.7.7)**
+- **Durable Graph Sync Runtime (0.7.5-0.7.9)**
   - Added atomic PostgreSQL job claims, expiring token-fenced leases, deterministic retry generations, bounded attempts, quarantine, run-level systemic pause, and exact stable-ID/source/profile success verification.
   - Added immutable provider-call/result ledger guards, safe upgrade backfill, sanitized operator status/retry/attempt commands, and isolated concurrency, recovery, redaction, and migration tests.
   - Rehearsed migration `0002_graph_sync_runtime` against all 611 live jobs, rolled it back cleanly, then activated it through the verified-backup gate with zero lifecycle or projection drift.
   - Added and activated provider-call intents that reserve hard budget before network I/O, preserve dispatched-call provenance across crashes, and prevent success with incomplete provider calls.
-  - Worker integration remains pending, and the legacy worker remains stopped by operator request.
+  - Replaced the legacy Boolean queue with an explicit-confirmation durable worker using one-at-a-time leases, heartbeats, classified outcomes, systemic pause, graceful shutdown, and profile preflight before run mutation.
+  - Added deterministic secret-free sync/route/candidate/embedding fingerprints and exact Neo4j native-UUID, stable-ID, source-content, source-profile, and embedding-profile verification.
+  - Wrapped the actual chat-completions request boundary with reserve-before-network accounting, disabled opaque transport retries, and kept Graphiti retries inside the database-enforced request ceiling.
+  - Added four crash-window tests, provider tracking and worker lifecycle tests, hardened isolated-schema guards, and explicit Make/CLI confirmation gates. The full fast gate passes 127 tests with 6 skips.
+  - The operator-requested ingestion freeze remains active; no live job was claimed. One accidental empty test run was stopped with zero attempts or calls and retained as durable operational history.
 
 > The 2025 entries below record the project's historical self-assessment. Their
 > grade and compliance language was superseded by the evidence-based 2026 audit

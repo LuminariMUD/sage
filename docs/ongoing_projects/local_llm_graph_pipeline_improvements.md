@@ -80,6 +80,22 @@ Migration `0003_graph_sync_provider_call_intents` was applied at `2026-08-06T23:
 
 Activation produced zero intents, completions, attempts, runs, leases, or projection mismatches. All required intent append-only, request-limit, and completion-matching triggers are present; operator status reports zero reserved and completed calls; the graph audit remains clean at 305 synchronized records and 305 distinct stable IDs; and every service is healthy. No provider request or ingestion was started, and the legacy worker remains stopped.
 
+### 2026-08-07 - L1 durable worker and crash-recovery checkpoint
+
+- Replaced the Boolean-driven worker with an explicitly confirmed durable entrypoint. Without `--run --confirm RUN_DURABLE_GRAPH_SYNC`, it is inert; the old bulk paths are rejected before connecting to either database.
+- Added a deterministic sync profile covering the application/Graphiti implementation, prompt and schema versions, entity/edge contracts, normalization behavior, route candidate, embedding profile, and extraction bounds. Fingerprints contain no endpoints, credentials, or episode content.
+- Moved provider accounting to the actual `chat.completions.create` boundary. Every upstream request is reserved first and completed separately, while underlying OpenAI-compatible transport retries are disabled. Graphiti-level retry attempts therefore remain visible and cannot exceed the database-enforced request budget.
+- Added stable native-UUID Graphiti writes plus independent content, stable-ID, source-description, source-fingerprint, sync-profile, and embedding-profile verification. A compatible legacy node is adopted only when it is unique, its content matches, and no existing identity/profile metadata would be overwritten.
+- Added one-at-a-time worker orchestration with graph/provider readiness, a read-only target-profile preflight before any run mutation, expired-lease recovery, run/lease heartbeats, systemic circuit pause, classified terminal outcomes, graceful cancellation, and resource cleanup.
+- Added fault injection before the graph write, after the write, before verification, and after verification but before PostgreSQL success. Every case converges without a duplicate stable ID or false PostgreSQL success; recovery after a graph write reuses the native UUID without another provider path.
+- Hardened the isolated PostgreSQL fixture so missing migrations, escaped `search_path`, missing isolated tables, or unexpected row counts fail before repository code can execute.
+
+Verification passes 127 fast tests with 6 skips and 109 deselected tests, plus all 8 isolated PostgreSQL lifecycle tests in a fresh container. A read-only live query proved the new candidate inspection against one stopped legacy record; it found one stable-ID/source-description/content match and correctly reported zero legacy source/sync/embedding metadata coverage. Neo4j accepted the write query under `EXPLAIN`, `graph-audit` remains clean at 611 jobs and 305 distinct stable IDs, migrations remain current, and all services are healthy.
+
+The first isolated integration invocation ran in the older API container, whose mount set predates `/app/schemas`. After creating an isolated `episodes` table, that fixture fell through to the public durable tables and opened one empty run. It claimed no jobs and created no attempts, provider requests, or results. The run was immediately stopped and retained as zero-attempt operational history. Mandatory migration/table/schema/count guards now prevent recurrence, and the passing rerun used a fresh one-off container.
+
+The operator's stop request remains authoritative. No live worker or ingestion was started for this checkpoint, and future activation still requires separate explicit authorization plus a deliberate target-profile transition for pending jobs.
+
 ### 2026-08-07 - L1 backup and restore gate tooling checkpoint
 
 - Added a combined provider-upgrade backup command that creates a PostgreSQL custom-format dump and offline Neo4j Community dumps for both `neo4j` and `system`.

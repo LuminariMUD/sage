@@ -3,7 +3,7 @@
 | Field                 | Value                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | Status                | Active phased implementation                                                                           |
-| Implementation        | Phase 1 in progress; durable runtime activated, worker integration pending                             |
+| Implementation        | Phase 1 in progress; durable worker integrated and held stopped, live activation pending               |
 | Last updated          | 2026-08-07                                                                                             |
 | Scope                 | Text generation, embeddings, Graphiti, configuration, storage migrations, deployment, and tests        |
 | Compatibility target  | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
@@ -73,6 +73,22 @@ Focused verification passes 27 unit tests and 10 isolated PostgreSQL integration
 Migration `0003_graph_sync_provider_call_intents` was applied on `2026-08-06T23:11:09Z`. The immutable ledger records checksum `d784d783f49cf16bf1a3ee51f8eeb074bc93e12ffd8310c204438ade41829bc6`, verified backup `backups/provider-upgrade-20260806T222200Z`, application revision `03b39f85eca202a9f314244e00b078e0bbd96a53`, and 6 ms execution time. Status and check modes report current with three applied migrations and no pending SQL.
 
 Activation produced zero intents, completions, attempts, runs, leases, or compatibility-projection mismatches. Required intent append-only, request-limit, and completion-matching triggers are present; operator status reports zero reserved and completed calls; the graph audit remains clean at 305 synchronized records and 305 distinct stable IDs; and all services are healthy. No provider request or ingestion was started, and the legacy worker remains stopped by operator request.
+
+### Durable worker integration checkpoint - implemented, not activated
+
+The legacy Boolean queue has been removed from `src/scripts/sync_episodes_to_graphiti.py`. The replacement is inert unless `--run` and the exact `RUN_DURABLE_GRAPH_SYNC` confirmation are both supplied; legacy bulk flags fail before any database connection. The Make targets enforce the same confirmation and use a fresh one-off container. The operator freeze remains in force, so this checkpoint did not claim or ingest any live job.
+
+- `src/graphiti/sync_profile.py` hashes the Graphiti implementation, prompt/schema versions, entity and edge contracts, normalization version, candidate route, embedding profile, and extraction limits into deterministic secret-free fingerprints. An explicitly configured fingerprint is a drift guard and must match the resolved contract.
+- `src/graphiti/provider_tracking.py` wraps the actual OpenAI-compatible `chat.completions.create` boundary. It commits an intent before network I/O, records sanitized completion/usage afterward, restores the client method on every exit path, and refuses clients with opaque transport retries. Ollama and direct OpenAI Graphiti transports now use `max_retries=0`; Graphiti-level retries remain visible as separately reserved requests under the database ceiling.
+- `src/graphiti/sync_graph.py` uses the PostgreSQL episode UUID as Graphiti's native UUID, detects candidates through native UUID/stable ID/source description, compares source content without logging it, safely adopts one compatible legacy node, stamps source/sync/embedding provenance, and independently requeries every required field before PostgreSQL success.
+- `src/graphiti/sync_worker.py` performs graph/provider and read-only target-profile checks before opening a run, refuses non-synced jobs assigned to another profile, recovers expired leases, claims one job at a time, heartbeats the run and lease, records verified success or classified failure, pauses on systemic failures, and cancels/requeues an active attempt on graceful shutdown.
+- The operator CLI now serializes typed run records correctly. The isolated PostgreSQL fixture refuses to start unless all three migrations and all seven test tables are present in its generated schema, then rechecks its active `search_path` and row counts before yielding.
+
+Fault-injection coverage proves convergence without a second graph write for process death after the Neo4j write, before post-write verification, and after verification but before PostgreSQL success; a fault before the write retries without a false node. Additional tests cover legacy-node adoption, conflicting-content refusal, reserve-before-network ordering, failed-call completion, pre-network budget rejection, retry disabling, profile drift, heartbeat cleanup, systemic pause, and graceful shutdown. The full fast gate passes 127 tests with 6 skips and 109 intentionally deselected tests. Eight isolated PostgreSQL lifecycle tests and the provider tracking suite pass in a fresh container.
+
+Read-only validation against the stopped live data proved the new Neo4j inspection query returns exactly one legacy candidate with matching stable ID, source description, and content; expected legacy fingerprint/profile coverage remains zero. Neo4j accepted the metadata-write query under `EXPLAIN`. `graph-audit` remains clean at 611 jobs, 305 synchronized records, and 305 distinct stable IDs; migration check remains current; every service is healthy; and no worker process exists.
+
+One initial integration command used the older long-running API container, which did not have the later `/app/schemas` mount. The test fixture therefore found the public durable tables after creating its isolated `episodes` table and opened one empty run-circuit row. It claimed zero jobs and created zero attempts, requests, or results. The run was immediately moved to `stopped`; the isolation guards above now make this failure mode impossible, and the suite was rerun successfully in a fresh container. The append-only operational history intentionally retains that one stopped, zero-attempt run.
 
 ### Backup and activation safety checkpoint - verified
 
@@ -573,12 +589,12 @@ Claims must be atomic, using `FOR UPDATE SKIP LOCKED` or an equivalent proven me
 
 The first local route should evaluate `qwen2.5:3b` as the fast primary and `qwen2.5:7b` as the stronger fallback. That recommendation is provisional until the fixed extraction corpus establishes parse success, schema success, graph quality, latency, and resource cost.
 
-- [ ] Version the Graphiti/application implementation, extraction prompt, output schema, entity types, edge types, normalization rules, candidate route, and referenced embedding profile as one sync-profile fingerprint.
+- [x] Version the Graphiti/application implementation, extraction prompt, output schema, entity types, edge types, normalization rules, candidate route, and referenced embedding profile as one sync-profile fingerprint.
 - [ ] Prefer schema-constrained generation where verified; still validate the parsed result independently.
 - [ ] Split entity and relationship extraction when oversized combined responses are the measured cause of truncation.
-- [ ] Coordinate or disable opaque Graphiti-internal retries so the application-level maximum provider-call budget remains authoritative.
+- [x] Coordinate or disable opaque Graphiti-internal retries so the application-level maximum provider-call budget remains authoritative.
 - [ ] Retry the same candidate only for its allowed failure classes; advance to a fallback only for explicitly configured classes.
-- [ ] Stop claims on systemic failures instead of exhausting or quarantining unrelated episode jobs.
+- [x] Stop claims on systemic failures instead of exhausting or quarantining unrelated episode jobs.
 - [ ] Record successful fallback as degraded success, not ordinary primary success.
 - [ ] Send an exhausted route to durable retry or quarantine with the complete sanitized attempt chain.
 - [ ] Require explicit reprocessing when the sync-profile fingerprint changes.
@@ -720,12 +736,12 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Preserve `graphiti_synced` temporarily as a derived compatibility field, not the worker queue.
 - [x] Implement atomic claims, expiring leases, deterministic backoff, bounded job attempts, and quarantine.
 - [x] Add run-level pause/circuit state so systemic failures stop claims without consuming item attempts.
-- [ ] Make stable-ID Neo4j writes and post-write verification idempotent under process crashes and duplicate delivery.
+- [x] Make stable-ID Neo4j writes and post-write verification idempotent under process crashes and duplicate delivery.
 - [x] Bind claims and success to a source-content fingerprint and requeue changes detected during an active lease.
 - [x] Add CLI commands to list state, retry eligible failures, retry quarantined rows explicitly, and inspect sanitized attempt chains.
 - [x] Add the read-only `graph-audit` command with human/JSON output and exit codes `0`, `1`, and `2`.
 - [ ] Add structured run summaries, progress, rolling throughput, approximate ETA, and failure-class counts.
-- [ ] Add fault-injection tests for termination before write, after write, before verification, and after verification.
+- [x] Add fault-injection tests for termination before write, after write, before verification, and after verification.
 - [ ] Run the complete 611-episode audit and recovery tests using the current Ollama/Nomic configuration.
 
 **Exit criteria:** No injected failure produces a false success or duplicate stable ID; expired work recovers automatically; every failure has durable provenance; `graph-audit` is clean and repeatable.

@@ -1,7 +1,7 @@
 # Luminari Sage Deployment Guide
 
 **Last Updated**: November 12, 2025
-**Version**: 0.7.8
+**Version**: 0.7.9
 **Status**: Production Ready
 
 ## Overview

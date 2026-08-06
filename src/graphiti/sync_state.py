@@ -20,6 +20,7 @@ from src.graphiti.sync_models import (
     JobState,
     LeaseLostError,
     ProviderCallIntent,
+    ProviderCallLimitExceeded,
     ProviderCallRecord,
     ProviderCallTicket,
     RunRecord,
@@ -53,6 +54,39 @@ class GraphSyncRepository:
             started_at=row["started_at"],
             heartbeat_at=row["heartbeat_at"],
         )
+
+    async def profile_snapshot(self, sync_profile_fingerprint: str) -> dict[str, int]:
+        """Return profile compatibility counts without claiming or changing jobs."""
+        fingerprint = validate_label(sync_profile_fingerprint, "Sync profile fingerprint")
+        row = await self.postgres.fetchrow(
+            """
+            SELECT count(*) FILTER (
+                       WHERE sync_profile_fingerprint = $1
+                   ) AS matching_jobs,
+                   count(*) FILTER (
+                       WHERE sync_profile_fingerprint = $1
+                         AND (
+                             state = 'pending'
+                             OR (
+                                 state = 'retry_wait'
+                                 AND next_attempt_at <= clock_timestamp()
+                             )
+                         )
+                   ) AS matching_eligible,
+                   count(*) FILTER (
+                       WHERE sync_profile_fingerprint = $1
+                         AND state = 'leased'
+                         AND lease_expires_at <= clock_timestamp()
+                   ) AS matching_expired_leases,
+                   count(*) FILTER (
+                       WHERE sync_profile_fingerprint <> $1
+                         AND state <> 'synced'
+                   ) AS non_synced_other_profile
+            FROM graph_sync_jobs
+            """,
+            fingerprint,
+        )
+        return {key: int(row[key]) for key in row.keys()}
 
     async def start_or_join_run(
         self, *, worker_id: str, sync_profile_fingerprint: str
@@ -470,7 +504,7 @@ class GraphSyncRepository:
                     lease.attempt_id,
                 )
                 if call_number > attempt["provider_call_limit"]:
-                    raise InvalidTransitionError("Provider call limit is exhausted")
+                    raise ProviderCallLimitExceeded("Provider call limit is exhausted")
 
                 await connection.execute(
                     """

@@ -73,6 +73,13 @@ async def state_store() -> (
         "password": os.environ["POSTGRES_PASSWORD"],
         "database": os.environ["POSTGRES_DB"],
     }
+    migration_paths = sorted(MIGRATION_DIRECTORY.glob("*.sql"))
+    if [path.name for path in migration_paths] != [
+        "0001_graph_sync_lifecycle.sql",
+        "0002_graph_sync_runtime.sql",
+        "0003_graph_sync_provider_call_intents.sql",
+    ]:
+        raise RuntimeError("Graph sync integration migrations are unavailable or unexpected")
     schema_name = f"graph_sync_runtime_{uuid4().hex}"
     admin = await asyncpg.connect(**connect_args)
     episode_ids = [uuid4(), uuid4(), uuid4()]
@@ -101,8 +108,31 @@ async def state_store() -> (
                 for index, episode_id in enumerate(episode_ids)
             ],
         )
-        for migration_path in sorted(MIGRATION_DIRECTORY.glob("*.sql")):
+        for migration_path in migration_paths:
             await admin.execute(migration_path.read_text(encoding="ascii"))
+        table_count = await admin.fetchval(
+            """
+            SELECT count(*)
+            FROM information_schema.tables
+            WHERE table_schema = $1
+              AND table_name IN (
+                  'episodes',
+                  'graph_sync_runs',
+                  'graph_sync_jobs',
+                  'graph_sync_attempts',
+                  'graph_sync_attempt_results',
+                  'graph_sync_provider_call_intents',
+                  'graph_sync_provider_calls'
+              )
+            """,
+            schema_name,
+        )
+        if table_count != 7:
+            raise RuntimeError("Graph sync integration schema was not created in isolation")
+    except Exception:
+        await admin.execute("SET search_path TO public")
+        await admin.execute(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE')
+        raise
     finally:
         await admin.close()
 
@@ -114,6 +144,12 @@ async def state_store() -> (
     )
     postgres = SchemaPostgres(pool)
     try:
+        async with pool.acquire() as connection:
+            current_schema = await connection.fetchval("SELECT current_schema()")
+            episode_count = await connection.fetchval("SELECT count(*) FROM episodes")
+            job_count = await connection.fetchval("SELECT count(*) FROM graph_sync_jobs")
+        if current_schema != schema_name or episode_count != 3 or job_count != 3:
+            raise RuntimeError("Graph sync integration pool escaped its isolated schema")
         yield postgres, GraphSyncRepository(postgres), episode_ids
     finally:
         await pool.close()
@@ -133,6 +169,9 @@ def _verification(lease) -> StableIdVerification:
         exact_count=1,
         source_fingerprint=lease.captured_source_fingerprint,
         sync_profile_fingerprint=lease.sync_profile_fingerprint,
+        native_uuid_count=1,
+        source_fingerprint_count=1,
+        sync_profile_fingerprint_count=1,
     )
 
 
@@ -157,6 +196,12 @@ async def test_two_workers_claim_distinct_jobs_and_verified_success_projects(
     state_store,
 ):
     postgres, repository, _ = state_store
+    assert await repository.profile_snapshot(SYNC_PROFILE) == {
+        "matching_jobs": 3,
+        "matching_eligible": 3,
+        "matching_expired_leases": 0,
+        "non_synced_other_profile": 0,
+    }
     run = await repository.start_or_join_run(
         worker_id="worker-a", sync_profile_fingerprint=SYNC_PROFILE
     )

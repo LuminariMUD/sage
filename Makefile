@@ -9,7 +9,11 @@
 # Support for verbose mode
 ifdef VERBOSE
 	VERBOSE_FLAG = --verbose
-	GRAPHITI_DEBUG_FLAG = --debug
+	GRAPHITI_DEBUG_FLAG = --verbose
+endif
+
+ifdef MAX_EPISODES
+	GRAPH_SYNC_MAX_FLAG = --max-episodes $(MAX_EPISODES)
 endif
 
 # Default target
@@ -28,7 +32,7 @@ help:
 	@echo "  make load-all             - Load both canon and draft documents"
 	@echo "  make create-episodes      - Create episodes with semantic chunking (200-500 tokens)"
 	@echo "  make generate-embeddings  - Generate embeddings for episodes"
-	@echo "  make sync-to-graphiti     - Sync episodes to Neo4j via Graphiti (uses GRAPHITI_PROVIDER)"
+	@echo "  make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC - Run durable graph sync"
 	@echo ""
 	@echo "🕸️  GRAPHITI OPERATIONS:"
 	@echo "  make sync-to-graphiti-ollama   - Sync with Ollama (local, free)"
@@ -127,20 +131,29 @@ generate-embeddings:
 
 .PHONY: sync-to-graphiti
 sync-to-graphiti:
-	@echo "🕸️  Syncing episodes to Graphiti/Neo4j (uses GRAPHITI_PROVIDER env var)..."
-	@docker compose exec -T api python src/scripts/sync_episodes_to_graphiti.py $(GRAPHITI_DEBUG_FLAG)
+	@test "$(CONFIRM_GRAPH_SYNC)" = "RUN_DURABLE_GRAPH_SYNC" || \
+		(echo "CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC is required" >&2; exit 2)
+	@echo "[graph-sync] Starting explicitly confirmed durable synchronization..."
+	@docker compose run --rm --no-deps api python src/scripts/sync_episodes_to_graphiti.py \
+		--run --confirm "$(CONFIRM_GRAPH_SYNC)" $(GRAPH_SYNC_MAX_FLAG) $(GRAPHITI_DEBUG_FLAG)
 
 .PHONY: sync-to-graphiti-ollama
 sync-to-graphiti-ollama:
-	@echo "🕸️  Syncing episodes to Graphiti/Neo4j with Ollama..."
-	@docker compose exec -T -e GRAPHITI_PROVIDER=ollama api \
-		python src/scripts/sync_episodes_to_graphiti.py $(GRAPHITI_DEBUG_FLAG)
+	@test "$(CONFIRM_GRAPH_SYNC)" = "RUN_DURABLE_GRAPH_SYNC" || \
+		(echo "CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC is required" >&2; exit 2)
+	@echo "[graph-sync] Starting explicitly confirmed durable sync with Ollama..."
+	@docker compose run --rm --no-deps -e GRAPHITI_PROVIDER=ollama api \
+		python src/scripts/sync_episodes_to_graphiti.py --run \
+		--confirm "$(CONFIRM_GRAPH_SYNC)" $(GRAPH_SYNC_MAX_FLAG) $(GRAPHITI_DEBUG_FLAG)
 
 .PHONY: sync-to-graphiti-openai
 sync-to-graphiti-openai:
-	@echo "🕸️  Syncing episodes to Graphiti/Neo4j with OpenAI..."
-	@docker compose exec -T -e GRAPHITI_PROVIDER=openai api \
-		python src/scripts/sync_episodes_to_graphiti.py $(GRAPHITI_DEBUG_FLAG)
+	@test "$(CONFIRM_GRAPH_SYNC)" = "RUN_DURABLE_GRAPH_SYNC" || \
+		(echo "CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC is required" >&2; exit 2)
+	@echo "[graph-sync] Starting explicitly confirmed durable sync with OpenAI..."
+	@docker compose run --rm --no-deps -e GRAPHITI_PROVIDER=openai api \
+		python src/scripts/sync_episodes_to_graphiti.py --run \
+		--confirm "$(CONFIRM_GRAPH_SYNC)" $(GRAPH_SYNC_MAX_FLAG) $(GRAPHITI_DEBUG_FLAG)
 
 # =============================================================================
 # COMPLETE WORKFLOWS
@@ -175,7 +188,8 @@ resume:
 	@echo "🔄 Resuming interrupted pipeline..."
 	@docker compose exec -T api python src/scripts/create_episodes_from_documents.py $(VERBOSE_FLAG)
 	@docker compose exec -T api python src/scripts/generate_embeddings.py $(VERBOSE_FLAG)
-	@docker compose exec -T api python src/scripts/sync_episodes_to_graphiti.py $(GRAPHITI_DEBUG_FLAG)
+	@$(MAKE) sync-to-graphiti CONFIRM_GRAPH_SYNC="$(CONFIRM_GRAPH_SYNC)" \
+		MAX_EPISODES="$(MAX_EPISODES)" $(if $(VERBOSE),VERBOSE=1,)
 	@echo "✅ Pipeline resumed!"
 
 .PHONY: rebuild

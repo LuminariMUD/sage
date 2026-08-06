@@ -7,12 +7,27 @@ from graphiti_core.embedder.client import EmbedderClient
 from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client.client import LLMClient
 from graphiti_core.llm_client.config import LLMConfig
-from graphiti_core.llm_client.openai_client import OpenAIClient
 from graphiti_core.llm_client.openai_generic_client import (  # For Ollama compatibility
     OpenAIGenericClient,
 )
+from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
+
+
+def _graphiti_openai_transport(*, api_key: str, base_url: str | None = None) -> AsyncOpenAI:
+    """Build a one-request transport so durable call accounting stays authoritative."""
+    timeout = float(os.getenv("GRAPHITI_REQUEST_TIMEOUT", "600"))
+    if timeout <= 0:
+        raise ValueError("GRAPHITI_REQUEST_TIMEOUT must be positive")
+    options = {
+        "api_key": api_key,
+        "max_retries": 0,
+        "timeout": timeout,
+    }
+    if base_url is not None:
+        options["base_url"] = base_url
+    return AsyncOpenAI(**options)
 
 
 def get_graphiti_llm_client(verbose: bool = False) -> LLMClient:
@@ -68,7 +83,8 @@ def get_graphiti_llm_client(verbose: bool = False) -> LLMClient:
             logger.info(f"  Temperature: {temperature}")
             logger.info("  Client: OpenAIGenericClient (chat.completions API)")
 
-        return OpenAIGenericClient(config=llm_config, max_tokens=8192)
+        transport = _graphiti_openai_transport(api_key="ollama", base_url=base_url)
+        return OpenAIGenericClient(config=llm_config, client=transport, max_tokens=8192)
 
     elif provider == "openai":
         # OpenAI configuration
@@ -90,7 +106,8 @@ def get_graphiti_llm_client(verbose: bool = False) -> LLMClient:
         if verbose:
             logger.info(f"  Temperature: {temperature}")
 
-        return OpenAIClient(config=llm_config)
+        transport = _graphiti_openai_transport(api_key=api_key)
+        return OpenAIGenericClient(config=llm_config, client=transport, max_tokens=8192)
 
     else:
         raise ValueError("Unknown Graphiti provider; use 'ollama' or 'openai'")

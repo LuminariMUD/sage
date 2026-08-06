@@ -40,16 +40,16 @@ make status
 
 ## Local architecture
 
-| Role | Local component |
-| --- | --- |
-| REST API | FastAPI + Uvicorn on `127.0.0.1:8003` |
-| MCP server | FastAPI/Uvicorn process on `127.0.0.1:8004` |
-| Developer UI | Static chat UI on `127.0.0.1:8080` |
-| Chat, creative, tools | Ollama `qwen2.5:7b` |
-| Graphiti extraction | Ollama `qwen2.5:3b` |
-| Embeddings | Ollama `nomic-embed-text` (768 dimensions) |
-| Vector/document data | PostgreSQL 18 + pgvector |
-| Knowledge graph | Neo4j 2026.06 Community + Graphiti |
+| Role                  | Local component                             |
+| --------------------- | ------------------------------------------- |
+| REST API              | FastAPI + Uvicorn on `127.0.0.1:8003`       |
+| MCP server            | FastAPI/Uvicorn process on `127.0.0.1:8004` |
+| Developer UI          | Static chat UI on `127.0.0.1:8080`          |
+| Chat, creative, tools | Ollama `qwen2.5:7b`                         |
+| Graphiti extraction   | Ollama `qwen2.5:3b`                         |
+| Embeddings            | Ollama `nomic-embed-text` (768 dimensions)  |
+| Vector/document data  | PostgreSQL 18 + pgvector                    |
+| Knowledge graph       | Neo4j 2026.06 Community + Graphiti          |
 
 The local profile does not require a cloud LLM. The 3B extraction model was
 selected after a live benchmark on the workstation's 8 GB GPU: it produced
@@ -180,14 +180,15 @@ The pipeline is resumable. Normal commands do not clear existing volumes:
 make load-canon
 make create-episodes
 make generate-embeddings
-make sync-to-graphiti
+# Only after an operator explicitly authorizes ingestion:
+make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 ```
 
 Or run/resume the complete sequence:
 
 ```bash
-make semantic-pipeline
-make resume
+make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+make resume CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 ```
 
 Monitor progress without changing data:
@@ -195,21 +196,25 @@ Monitor progress without changing data:
 ```bash
 make embedding-status
 make graphiti-status
-docker compose exec -T api \
-  python src/scripts/sync_episodes_to_graphiti.py --status
+make graph-sync-status
 ```
 
-Graph sync defaults to incremental mode, marks PostgreSQL rows complete only
-after proving exactly one Neo4j episode has both the expected stable UUID and
-source description, and skips a failed episode for the remainder of one
-invocation so a bad row cannot cause an infinite retry loop. A pre-existing
-exact link is resumed without repeating LLM extraction; any missing or ambiguous
-link fails closed. Bulk mode works in bounded batches, but should normally be
-reserved for an empty graph:
+Graph synchronization is inert unless both `--run` and the exact confirmation
+token are supplied. The Make target enforces the same gate. Do not run it while
+an operator freeze is active. The worker claims authoritative durable jobs one
+at a time, records an immutable attempt and every provider request, writes the
+PostgreSQL episode UUID as Graphiti's native UUID, and marks success only after
+independently proving one Neo4j record has the expected stable ID, source
+description, source fingerprint, sync profile, and embedding profile.
+
+Legacy bulk mode is disabled because it bypasses leases, provider-call budgets,
+and post-write durable verification. Use `MAX_EPISODES` for a bounded authorized
+run:
 
 ```bash
-docker compose exec -T api python \
-  src/scripts/sync_episodes_to_graphiti.py --bulk --batch-size 5
+make sync-to-graphiti \
+  CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC \
+  MAX_EPISODES=5
 ```
 
 ## Safety and recovery

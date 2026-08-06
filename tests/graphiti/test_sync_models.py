@@ -13,6 +13,7 @@ from src.graphiti.sync_models import (
     ProviderCallIntent,
     ProviderCallOutcome,
     ProviderCallRecord,
+    StableIdVerification,
     deterministic_retry_delay,
     sanitize_summary,
 )
@@ -141,3 +142,40 @@ def test_provider_call_requires_failure_taxonomy_and_valid_timing():
             latency_ms=0,
             outcome=ProviderCallOutcome.FAILURE,
         )
+
+
+def test_provider_call_rejects_naive_timestamps():
+    naive = datetime.now()
+    with pytest.raises(ValueError, match="timezone-aware"):
+        ProviderCallIntent(
+            logical_model_attempt=1,
+            transport_attempt=1,
+            provider="ollama",
+            model="qwen2.5:3b",
+            candidate_fingerprint="candidate:test",
+            prompt_version="prompt:v1",
+            schema_version="schema:v1",
+            started_at=naive,
+        )
+
+
+def test_stable_verification_requires_independent_source_and_profile_counts():
+    base = {
+        "stable_id": "11111111-1111-1111-1111-111111111111",
+        "candidate_count": 1,
+        "stable_id_count": 1,
+        "source_description_count": 1,
+        "exact_count": 1,
+        "source_fingerprint": "sha256:v1:test",
+        "sync_profile_fingerprint": "sync:test",
+        "source_fingerprint_count": 1,
+        "sync_profile_fingerprint_count": 1,
+    }
+
+    assert StableIdVerification(**base).is_exact
+    assert not StableIdVerification(**{**base, "source_fingerprint_count": 0}).is_exact
+    assert not StableIdVerification(
+        **base,
+        embedding_profile_fingerprint="embedding:test",
+        embedding_profile_fingerprint_count=0,
+    ).is_exact

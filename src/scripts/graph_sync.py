@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import json
 import sys
+from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from enum import Enum
 from typing import Any
@@ -21,12 +22,14 @@ from src.graphiti.sync_state import GraphSyncRepository
 READ_ONLY_COMMANDS = {"status", "list", "attempts"}
 
 
-def json_default(value: object) -> str:
+def json_default(value: object) -> Any:
     """Serialize stable lifecycle value types without arbitrary object reprs."""
     if isinstance(value, (datetime, date)):
         return value.isoformat()
     if isinstance(value, (UUID, Enum)):
         return str(value.value if isinstance(value, Enum) else value)
+    if is_dataclass(value) and not isinstance(value, type):
+        return asdict(value)
     raise TypeError(f"Unsupported JSON value type: {type(value).__name__}")
 
 

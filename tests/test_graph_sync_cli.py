@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
+from src.graphiti.sync_models import RunRecord, RunState
 from src.scripts import graph_sync
 
 
@@ -97,3 +98,21 @@ def test_json_default_rejects_arbitrary_object_representation():
         assert "object" in str(error)
     else:
         raise AssertionError("Arbitrary object repr was serialized")
+
+
+def test_run_record_is_rendered_without_arbitrary_repr():
+    now = datetime(2026, 8, 7, tzinfo=UTC)
+    record = RunRecord(
+        id=UUID("22222222-2222-2222-2222-222222222222"),
+        state=RunState.STOPPED,
+        worker_id="worker-a",
+        sync_profile_fingerprint="sync:test",
+        started_at=now,
+        heartbeat_at=now,
+    )
+    args = graph_sync.build_parser().parse_args(["--json", "run-stop", str(record.id)])
+
+    rendered = graph_sync.render_result(args, record)
+
+    assert '"state": "stopped"' in rendered
+    assert '"worker_id": "worker-a"' in rendered

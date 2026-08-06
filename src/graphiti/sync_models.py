@@ -28,6 +28,14 @@ class InvalidTransitionError(GraphSyncStateError):
     """Raised when a lifecycle transition violates the state machine."""
 
 
+class ProviderCallLimitExceeded(InvalidTransitionError):
+    """Raised before network I/O when an attempt has exhausted its call budget."""
+
+
+class ProfileMismatchError(GraphSyncStateError):
+    """Raised before a run when non-synced jobs target another execution profile."""
+
+
 class JobState(str, Enum):
     PENDING = "pending"
     LEASED = "leased"
@@ -258,6 +266,8 @@ class ProviderCallIntent:
             validate_label(value, label)
         if self.model_revision is not None:
             validate_label(self.model_revision, "Model revision")
+        if self.started_at.tzinfo is None or self.started_at.utcoffset() is None:
+            raise ValueError("Provider call start time must be timezone-aware")
 
     @classmethod
     def from_record(cls, record: ProviderCallRecord) -> ProviderCallIntent:
@@ -313,6 +323,13 @@ class ProviderCallRecord:
             raise ValueError("Provider attempt numbers must be positive")
         if self.completed_at < self.started_at or self.latency_ms < 0:
             raise ValueError("Provider call timing is invalid")
+        if (
+            self.started_at.tzinfo is None
+            or self.started_at.utcoffset() is None
+            or self.completed_at.tzinfo is None
+            or self.completed_at.utcoffset() is None
+        ):
+            raise ValueError("Provider call timestamps must be timezone-aware")
         for value, label in (
             (self.provider, "Provider"),
             (self.model, "Model"),
@@ -343,13 +360,47 @@ class StableIdVerification:
     exact_count: int
     source_fingerprint: str
     sync_profile_fingerprint: str
+    native_uuid_count: int = 0
+    source_fingerprint_count: int = 0
+    sync_profile_fingerprint_count: int = 0
+    embedding_profile_fingerprint: str | None = None
+    embedding_profile_fingerprint_count: int = 0
+
+    def __post_init__(self) -> None:
+        validate_label(self.stable_id, "Stable ID")
+        validate_label(self.source_fingerprint, "Source fingerprint")
+        validate_label(self.sync_profile_fingerprint, "Sync profile fingerprint")
+        if self.embedding_profile_fingerprint is not None:
+            validate_label(
+                self.embedding_profile_fingerprint,
+                "Embedding profile fingerprint",
+            )
+        counts = (
+            self.candidate_count,
+            self.stable_id_count,
+            self.source_description_count,
+            self.exact_count,
+            self.native_uuid_count,
+            self.source_fingerprint_count,
+            self.sync_profile_fingerprint_count,
+            self.embedding_profile_fingerprint_count,
+        )
+        if any(count < 0 for count in counts):
+            raise ValueError("Verification counts cannot be negative")
 
     @property
     def is_exact(self) -> bool:
+        embedding_is_exact = (
+            self.embedding_profile_fingerprint is None
+            or self.embedding_profile_fingerprint_count == 1
+        )
         return (
             self.candidate_count == 1
             and self.stable_id_count == 1
             and self.source_description_count == 1
+            and self.source_fingerprint_count == 1
+            and self.sync_profile_fingerprint_count == 1
+            and embedding_is_exact
             and self.exact_count == 1
         )
 
