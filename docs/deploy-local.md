@@ -13,10 +13,13 @@ Keep the real `.env` mode `0600` and never commit it.
   Ollama, API/MCP, and the static chat UI.
 - PostgreSQL contains 14 lore documents and 611 episodes. All 611 episodes have
   768-dimensional embeddings.
-- Graphiti/Neo4j currently contains 13 linked episodes. The validated,
-  resumable extraction path still has 598 episodes to process. A live
-  post-hardening extraction completed in about 29 seconds with exactly one
-  matching stable ID in each store.
+- The active incremental Graphiti pass was last audited at 51 linked episodes
+  and 560 pending. Neo4j had exactly 51 episode nodes, 51 populated stable IDs,
+  and 51 distinct stable IDs. One 3B extraction
+  (`50480869-ff15-41b2-b1ae-a4f1a81b88c8`) exhausted structured-output retries;
+  it remains unsynced and has no orphan Neo4j episode, ready for a later 7B
+  retry. A live post-hardening extraction completed in about 29 seconds with
+  exactly one matching stable ID in each store.
 - The development image builds successfully. The fast deterministic suite is
   green: 62 passed, 5 service-dependent skips, and 99 live/slow tests excluded.
 - Black and Ruff checks pass across all 130 Python files in `src` and `tests`.
@@ -263,7 +266,8 @@ git status --short --branch
 
 ## Remaining work at this checkpoint
 
-1. Finish syncing the remaining 598 real episodes to Neo4j and verify every
-   PostgreSQL UUID is linked exactly once.
+1. Let the active incremental pass finish, retry any quarantined 3B rows with
+   the 7B tool model, and verify all 611 PostgreSQL UUIDs are linked exactly
+   once.
 2. Perform a clean preserved-volume restart audit, rerun all gates, update this
    runbook with the final counts, and publish the final checkpoint.
