@@ -188,6 +188,7 @@ services:
       # edits without rebuilding the image.
       - ./src:/app/src:ro
       - ./tests:/app/tests:ro
+      - ./ui:/app/ui:ro
       - ./pytest.ini:/app/pytest.ini:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./.env.example:/app/.env.example:ro

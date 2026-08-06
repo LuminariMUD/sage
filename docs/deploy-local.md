@@ -13,11 +13,15 @@ Keep the real `.env` mode `0600` and never commit it.
   Ollama, API/MCP, and the static chat UI.
 - PostgreSQL contains 14 lore documents and 611 episodes. All 611 episodes have
   768-dimensional embeddings.
-- Graphiti/Neo4j currently contains 12 linked episodes. The remaining 599 are
-  deliberately left pending while the local extraction path is finalized.
+- Graphiti/Neo4j currently contains 12 linked episodes. The validated,
+  resumable extraction path still has 599 episodes to process.
 - The development image builds successfully. The fast deterministic suite is
-  green: 57 passed, 5 service-dependent skips, and 99 live/slow tests excluded.
-- Black and Ruff checks pass across all 127 Python files in `src` and `tests`.
+  green: 59 passed, 5 service-dependent skips, and 99 live/slow tests excluded.
+- Black and Ruff checks pass across all 129 Python files in `src` and `tests`.
+- An authenticated desktop/mobile browser check now passes through the real
+  LangChain/Ollama chat path: message creation and the SSE stream both return
+  `200`, an answer renders, and there are no console/page errors, leaked API
+  keys, or horizontal overflow.
 
 Resume work from this checkpoint by running:
 
@@ -123,11 +127,26 @@ key without printing it or putting it directly in shell history:
   'http://127.0.0.1:8003/api/v1/lore/search?query=crystal+dwarves&limit=5'
 ```
 
+To verify chat manually, open the UI, open Settings, keep the local endpoint at
+`http://localhost:8003`, paste `SAGE_API_KEY` from the uncommitted `.env`, and
+select the LangChain engine. The password field is intentionally cleared on
+page exit and the key is never written to browser storage.
+
+The 2026-08-06 browser checkpoint used desktop `1440x900` and mobile `390x844`
+viewports. The Browser plugin and repository-owned JavaScript Playwright
+workflow were unavailable, so the check used installed Python Playwright with
+the cached Chromium binary. That mismatched driver/browser pair labels a
+manually consumed streaming fetch `net::ERR_ABORTED` in its protocol events
+even after the complete body and final SSE event arrive. A control that consumes
+the same response as text reports `requestfinished`; the UI has no error, both
+HTTP responses are `200`, and PostgreSQL records the stream `completed`.
+
 ## Development workflow
 
-Application source and tests are mounted read-only into the API container.
-Both API and MCP Uvicorn processes watch `/app/src`; editing Python source on
-the host triggers an automatic reload.
+Application source, tests, and static UI files are mounted read-only into the
+API development container. Both API and MCP Uvicorn processes watch `/app/src`;
+editing Python source on the host triggers an automatic reload. The UI mount
+also lets the fast suite enforce browser-source streaming contracts.
 
 ```bash
 make logs-tail
@@ -217,6 +236,12 @@ git status --short --branch
   tool-calling/structured Graphiti contracts used here.
 - LangChain service selection now accepts Ollama directly instead of requiring
   an unrelated `OPENAI_API_KEY` to be present before enabling ReAct.
+- Browser chat stream preflights now allow the UI's `Cache-Control` request
+  header; previously message creation returned `200` but CORS blocked the SSE
+  request before an answer could render.
+- Terminal SSE events no longer return early from the UI reader. The response
+  is drained to EOF and its reader lock is explicitly released after server
+  completion.
 - Graphiti no longer drops every Neo4j index and constraint when initialized.
 - Graphiti edge prompts use the shared `Entity` base type, which substantially
   reduces prompt size for local inference.
@@ -229,9 +254,7 @@ git status --short --branch
 
 ## Remaining work at this checkpoint
 
-1. Publish this first verified local-stack checkpoint.
-2. Verify a real authenticated streamed chat in a browser at desktop and mobile
-   widths, including console/network errors.
-3. Finish syncing the remaining 599 real episodes to Neo4j and verify every
+1. Finish syncing the remaining 599 real episodes to Neo4j and verify every
    PostgreSQL UUID is linked exactly once.
-4. Perform a clean documented restart audit, then publish the final checkpoint.
+2. Perform a clean preserved-volume restart audit, rerun all gates, update this
+   runbook with the final counts, and publish the final checkpoint.

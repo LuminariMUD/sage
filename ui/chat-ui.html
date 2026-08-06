@@ -1549,7 +1549,9 @@
                                             contentP.innerHTML = formattedContent;
                                             hideTypingIndicator();
                                             this.scrollToBottom();
-                                            return;
+                                            // Keep reading until EOF so the fetch completes cleanly
+                                            // after the server performs post-final bookkeeping.
+                                            break;
 
                                         case 'content':
                                             if (loadingDiv.parentNode) {
@@ -1595,7 +1597,8 @@
                                             }
 
                                             this.scrollToBottom();
-                                            return; // Exit the streaming loop
+                                            // Keep reading until the server closes the SSE response.
+                                            break;
 
                                         case 'error':
                                             if (loadingDiv.parentNode) {
@@ -1603,7 +1606,8 @@
                                             }
                                             contentP.innerHTML = this.formatContent(`❌ ${data.content}`);
                                             this.showError(data.content);
-                                            return; // Exit the streaming loop
+                                            // Drain the terminal event response instead of aborting fetch.
+                                            break;
 
                                         case 'tool_call':
                                         case 'tool_result':
@@ -1640,6 +1644,7 @@
                             }
                         }
                     }
+                    reader.releaseLock();
 
                 } catch {
                     if (loadingDiv.parentNode) {

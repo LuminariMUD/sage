@@ -139,7 +139,10 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-API-Key"],
+    # The browser chat stream explicitly disables request caching. Because
+    # Cache-Control is not a CORS-safelisted request header, it must be allowed
+    # for the authenticated cross-origin stream preflight to succeed.
+    allow_headers=["Cache-Control", "Content-Type", "X-API-Key"],
 )
 
 # Configure Authentication
