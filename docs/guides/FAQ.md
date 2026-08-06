@@ -1,6 +1,6 @@
 # Frequently Asked Questions (FAQ)
 
-**Version**: 0.7.7
+**Version**: 0.7.8
 **Status**: Production Ready
 **Last Updated**: 2025-11-12
 
@@ -864,5 +864,5 @@ We're continuously improving documentation based on user feedback!
 ---
 
 **Last Updated**: 2025-11-12
-**Version**: 0.7.7
+**Version**: 0.7.8
 **Status**: Production Ready

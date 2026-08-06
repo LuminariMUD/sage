@@ -66,7 +66,7 @@ Migration `0002_graph_sync_runtime` was applied at `2026-08-06T22:57:38Z` with c
 
 Post-activation evidence remains unchanged: 611 jobs consist of 305 `synced` and 306 `pending`; there are zero runs, attempts, results, provider calls, leases, retry-wait rows, quarantines, nonzero runtime counters, or compatibility-projection mismatches. The operator status/list commands report the same state, required ledger guards are present, the graph audit remains clean, and every service is healthy. Applying the runtime migration did not start ingestion. The legacy worker remains stopped by operator request; do not run ingestion until the durable worker loop is integrated and separately authorized.
 
-### 2026-08-07 - L1 provider-call reservation checkpoint - staged
+### 2026-08-07 - L1 provider-call reservation activation checkpoint
 
 - Added migration `0003_graph_sync_provider_call_intents` so every allowed text-provider request is committed as an immutable intent before network I/O and completed through a separate append-only record afterward.
 - Moved the database provider-call ceiling to the intent ledger, matched every completion to its reserved provider/model/candidate/prompt/schema identity, and required successful attempts to have no incomplete calls.
@@ -76,7 +76,9 @@ Post-activation evidence remains unchanged: 611 jobs consist of 305 `synced` and
 
 Focused verification passes 27 unit tests and 10 isolated PostgreSQL integration tests; the full fast suite passes 103 tests with 6 skips and 109 intentionally deselected tests. A live-schema rehearsal created the intent table, its referential constraint, request-limit and completion triggers, and invariant checks inside one explicit transaction, then rolled back unconditionally. Post-rollback proof shows no intent table/function, two unchanged migration-ledger rows, and all 611 jobs intact.
 
-This checkpoint is staged only: migration `0003_graph_sync_provider_call_intents` remains pending on the live database. No run, lease, provider request, or ingestion was started, and the legacy worker remains stopped.
+Migration `0003_graph_sync_provider_call_intents` was applied at `2026-08-06T23:11:09Z` with checksum `d784d783f49cf16bf1a3ee51f8eeb074bc93e12ffd8310c204438ade41829bc6`, verified backup `backups/provider-upgrade-20260806T222200Z`, application revision `03b39f85eca202a9f314244e00b078e0bbd96a53`, and 6 ms execution time. Migration status/check modes are current with three applied migrations and no pending SQL.
+
+Activation produced zero intents, completions, attempts, runs, leases, or projection mismatches. All required intent append-only, request-limit, and completion-matching triggers are present; operator status reports zero reserved and completed calls; the graph audit remains clean at 305 synchronized records and 305 distinct stable IDs; and every service is healthy. No provider request or ingestion was started, and the legacy worker remains stopped.
 
 ### 2026-08-07 - L1 backup and restore gate tooling checkpoint
 

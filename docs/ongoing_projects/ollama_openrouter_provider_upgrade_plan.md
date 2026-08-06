@@ -58,7 +58,7 @@ Migration `0002_graph_sync_runtime` was applied on `2026-08-06T22:57:38Z`. The i
 
 Activation preserved all live state: 611 jobs remain 305 `synced` and 306 `pending`, with zero runs, attempts, results, provider calls, leases, retry-wait rows, quarantines, nonzero runtime counters, and compatibility-projection mismatches. Required provider/result/append-only/source triggers are present; operator status and list commands return the expected empty runtime ledger; the graph audit remains clean; and all services are healthy. Applying the migration did not start ingestion. The legacy Boolean worker remains stopped by operator request; worker integration and fault-injection around Neo4j crash windows remain required before any ingestion is authorized.
 
-### Provider-call reservation checkpoint - staged
+### Provider-call reservation checkpoint - activated
 
 Migration `0003_graph_sync_provider_call_intents` closes the request-dispatch crash window before durable worker integration:
 
@@ -70,7 +70,9 @@ Migration `0003_graph_sync_provider_call_intents` closes the request-dispatch cr
 
 Focused verification passes 27 unit tests and 10 isolated PostgreSQL integration tests; the full fast suite passes 103 tests with 6 skips and 109 intentionally deselected tests. The complete migration also passed a rollback-only rehearsal against the live schema: the intent table and guards existed inside the transaction with zero rows, then rollback restored two migration-ledger rows, no intent artifacts, and all 611 jobs.
 
-Migration `0003_graph_sync_provider_call_intents` remains staged and pending. No run, lease, provider request, or ingestion was started, and the legacy worker remains stopped by operator request.
+Migration `0003_graph_sync_provider_call_intents` was applied on `2026-08-06T23:11:09Z`. The immutable ledger records checksum `d784d783f49cf16bf1a3ee51f8eeb074bc93e12ffd8310c204438ade41829bc6`, verified backup `backups/provider-upgrade-20260806T222200Z`, application revision `03b39f85eca202a9f314244e00b078e0bbd96a53`, and 6 ms execution time. Status and check modes report current with three applied migrations and no pending SQL.
+
+Activation produced zero intents, completions, attempts, runs, leases, or compatibility-projection mismatches. Required intent append-only, request-limit, and completion-matching triggers are present; operator status reports zero reserved and completed calls; the graph audit remains clean at 305 synchronized records and 305 distinct stable IDs; and all services are healthy. No provider request or ingestion was started, and the legacy worker remains stopped by operator request.
 
 ### Backup and activation safety checkpoint - verified
 
