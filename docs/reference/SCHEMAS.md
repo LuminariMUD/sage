@@ -1,6 +1,6 @@
 # Database Schemas Reference
 
-**Version**: 0.7.3
+**Version**: 0.7.4
 **Status**: Production Ready  
 **Last Updated**: 2025-11-12
 

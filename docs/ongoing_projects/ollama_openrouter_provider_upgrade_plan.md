@@ -3,7 +3,7 @@
 | Field                 | Value                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | Status                | Active phased implementation                                                                           |
-| Implementation        | Phase 1 in progress; audit and durable migration artifacts delivered                                   |
+| Implementation        | Phase 1 in progress; audit, verified backup, and durable migration activated                           |
 | Last updated          | 2026-08-07                                                                                             |
 | Scope                 | Text generation, embeddings, Graphiti, configuration, storage migrations, deployment, and tests        |
 | Compatibility target  | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
@@ -26,17 +26,21 @@ Live evidence at this checkpoint: 611 PostgreSQL episodes, 305 synchronized, 306
 
 The operator stopped the legacy graph sync worker at this checkpoint and requested that it not continue. Do not restart the Boolean-based worker without explicit operator direction. Durable migrations, leases, attempts, and worker integration are the next implementation slice; the current command is ready to audit both the legacy projection and the future durable tables.
 
-### Durable migration checkpoint - activation pending
+### Durable migration checkpoint - activated
 
-The next Phase 1 artifact is implemented but has not been applied to the live schema:
+The first Phase 1 durable-state artifact is implemented and applied to the live schema:
 
 - `schemas/migrations/0001_graph_sync_lifecycle.sql` defines run circuits, authoritative jobs, immutable attempt identities/results/provider calls, lifecycle constraints, deterministic source fingerprints, the derived Boolean compatibility projection, and source-edit requeue behavior.
 - `src/scripts/migrate_database.py` discovers ASCII-only numbered migrations, verifies immutable SHA-256 checksums, detects missing or out-of-order history, reports status without mutation, and applies one transaction at a time under an advisory lock.
 - Apply mode requires a sanitized verified-backup reference and immutable application revision; the migration ledger retains both with execution time and checksum.
-- The complete SQL seeded and reconciled all 611 current episodes in a live-schema transaction and then rolled back. A separate isolated-schema integration test proved projection guards, ledger immutability, one active run, source-fingerprint parity, durable success, and automatic requeue after a source edit.
+- Before activation, the complete SQL seeded and reconciled all 611 current episodes in a live-schema transaction and then rolled back. A separate isolated-schema integration test proved projection guards, ledger immutability, one active run, source-fingerprint parity, durable success, and automatic requeue after a source edit.
 - Migration/security/audit focused verification passed 34 tests, and the PostgreSQL migration integration test passed independently.
 
-Current live status remains unchanged: migration `0001_graph_sync_lifecycle` is pending, `schema_migrations` does not exist, the audit is still clean through the legacy projection, and the legacy worker remains stopped.
+Migration `0001_graph_sync_lifecycle` was applied on `2026-08-06T22:24:51Z` under its advisory lock. The immutable ledger records checksum `ffec679f11f6743448be781b342c09e4bcd77308405e520e978e96ad241e9671`, verified backup `backups/provider-upgrade-20260806T222200Z`, application revision `a831a497c3499155bb450d80dc96093740e4fbe4`, and 18 ms execution time. Both status and check modes report current with no pending migration.
+
+The seed created exactly 611 durable jobs: 305 `synced` and 306 `pending`. All 611 desired source fingerprints match current episode text; all 305 synchronized jobs have matching verified source/profile identity and timestamps. There are no runs, attempts, results, provider calls, active leases, retry-wait jobs, or quarantined jobs. The derived Boolean projection has zero mismatches. Required triggers and claim/lease indexes are present.
+
+The post-migration graph audit now reports `graph_sync_jobs` as its authoritative state source, 611 job source/profile fingerprints, 305 verified source fingerprints, 305 distinct Neo4j stable IDs, and zero drift findings. All services remain healthy and the legacy worker remains stopped.
 
 ### Backup and activation safety checkpoint - verified
 
@@ -62,7 +66,7 @@ The replacement backup `backups/provider-upgrade-20260806T222200Z`, created at `
 - PostgreSQL, Neo4j, Ollama, API, and UI returned healthy. The post-backup graph audit remained clean at 611 total, 305 synchronized, 306 pending, and 305 distinct Neo4j stable IDs.
 - The legacy worker remained stopped throughout.
 
-The additive migration is now backup-cleared but remains pending until this evidence checkpoint is committed and pushed.
+The additive migration consumed this backup gate and is verified current. Retain the backup through the rollout and rollback bake period.
 
 ---
 

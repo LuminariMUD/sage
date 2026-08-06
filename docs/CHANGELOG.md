@@ -530,6 +530,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.4] - 2026-08-07
+
+### Changed
+
+- Activated the checksum-tracked durable graph-sync migration against the verified backup checkpoint.
+- Seeded 611 authoritative jobs while preserving the stopped 305/306 graph state and zero-drift PostgreSQL/Neo4j projection.
+- Recorded immutable migration provenance, source/profile coverage, lifecycle counts, trigger/index presence, and post-migration health evidence.
+
 ## [0.7.3] - 2026-08-07
 
 ### Operations

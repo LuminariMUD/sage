@@ -2,7 +2,7 @@
 
 **Last Updated**: January 2025
 **Target Environment**: Ubuntu 20.04+ (Native Linux)
-**Version**: 0.7.3
+**Version**: 0.7.4
 **Status**: Production Ready
 
 ## Overview

@@ -37,7 +37,7 @@ The operator stopped the legacy Boolean-based worker at 305 of 611 episodes and 
 
 The live graph currently has no source, sync-profile, or embedding-profile fingerprint metadata. The audit reports that coverage as zero without treating absent legacy metadata as a false drift result; the durable migration and profile work remain required.
 
-### 2026-08-07 - L1 durable schema and migration tooling checkpoint
+### 2026-08-07 - L1 durable schema and migration activation checkpoint
 
 - Added the immutable, checksum-tracked migration runner `src/scripts/migrate_database.py` with read-only status/check modes, per-migration transactions, a PostgreSQL advisory lock, application revision capture, and a required verified-backup reference for apply mode.
 - Added `schemas/migrations/0001_graph_sync_lifecycle.sql` for run-level circuit state, authoritative jobs, immutable attempt identities, immutable attempt results, and immutable provider-call provenance.
@@ -45,9 +45,11 @@ The live graph currently has no source, sync-profile, or embedding-profile finge
 - Added triggers that derive `episodes.graphiti_synced` from durable state, reject divergent direct writes, deterministically requeue a changed source revision, and prohibit update/delete operations on ledger tables.
 - Added `make db-migrate-status`, `make db-migrate-check`, and backup-gated `make db-migrate` targets.
 - Verified the migration in an isolated PostgreSQL schema, including seed reconciliation, Python/SQL fingerprint parity, direct-projection rejection, one-active-run enforcement, immutable-ledger rejection, durable success projection, and source-edit requeue behavior.
-- Executed the complete migration against the current 611-row schema inside an explicit transaction; all DDL, the 611-row seed, and internal verification passed, then `ROLLBACK` removed every test artifact.
+- Before activation, executed the complete migration against the current 611-row schema inside an explicit transaction; all DDL, the 611-row seed, and internal verification passed, then `ROLLBACK` removed every test artifact.
 
-Live activation is intentionally pending. The migration command reports `0001_graph_sync_lifecycle` pending and no migration ledger. Capture and verify current PostgreSQL and Neo4j backups before applying it. The legacy worker remains stopped and must not be restarted.
+After the verified backup checkpoint, applied migration `0001_graph_sync_lifecycle` at application revision `a831a497c3499155bb450d80dc96093740e4fbe4`. The ledger is current with no pending migrations. The live seed contains 611 jobs: 305 `synced` and 306 `pending`; all desired and verified source/profile identities reconcile, and the Boolean compatibility projection has zero mismatches. No run, attempt, result, provider-call, lease, retry, or quarantine rows were introduced by migration.
+
+The post-migration audit is clean and now uses `graph_sync_jobs` as its state source, with 611 job source/profile fingerprints, 305 verified source fingerprints, and 305 distinct Neo4j stable IDs. All services remain healthy. The legacy worker remains stopped and must not be restarted.
 
 ### 2026-08-07 - L1 backup and restore gate tooling checkpoint
 
@@ -62,7 +64,7 @@ The tooling was committed before the operational checkpoint. It does not start t
 
 The first operational attempt proved the failure path: Neo4j's login shell omitted `neo4j-admin` from `PATH`, so the dump command exited before producing an archive. Cleanup removed the exact temporary directory, restarted Neo4j to healthy, emitted no completion marker, and left the worker stopped. The script now uses the image's absolute `/var/lib/neo4j/bin/neo4j-admin` path before retrying under a new reference.
 
-The replacement reference `backups/provider-upgrade-20260806T222200Z` is verified and eligible for migration. Its PostgreSQL scratch restore proved 611 episodes, 305 synchronized episodes, and 12 public tables. Both Neo4j archives passed metadata inspection and full consistency checks. The verifier confirmed all three SHA-256 digests and private permissions; cleanup left no scratch database or dump directory. All services returned healthy, the graph audit remained clean with 305 distinct stable IDs, and the worker remained stopped. Live migration is the next gated operation.
+The replacement reference `backups/provider-upgrade-20260806T222200Z` is verified and was recorded by the applied migration. Its PostgreSQL scratch restore proved 611 episodes, 305 synchronized episodes, and 12 public tables. Both Neo4j archives passed metadata inspection and full consistency checks. The verifier confirmed all three SHA-256 digests and private permissions; cleanup left no scratch database or dump directory. All services returned healthy, the graph audit remained clean with 305 distinct stable IDs, and the worker remained stopped. Retain this backup through the rollout and rollback bake period.
 
 ## Why this project exists
 
