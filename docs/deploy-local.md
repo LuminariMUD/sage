@@ -13,13 +13,15 @@ Keep the real `.env` mode `0600` and never commit it.
   Ollama, API/MCP, and the static chat UI.
 - PostgreSQL contains 14 lore documents and 611 episodes. All 611 episodes have
   768-dimensional embeddings.
-- The active incremental Graphiti pass was last audited at 102 linked episodes
-  and 509 pending. Neo4j had exactly 102 episode nodes, 102 populated stable
-  IDs, and 102 distinct stable IDs. One 3B extraction
-  (`50480869-ff15-41b2-b1ae-a4f1a81b88c8`) exhausted structured-output retries;
-  it remains unsynced and has no orphan Neo4j episode, ready for a later 7B
-  retry. A live post-hardening extraction completed in about 29 seconds with
-  exactly one matching stable ID in each store.
+- The active incremental Graphiti pass was last audited at 150 linked episodes
+  and 461 pending. Neo4j had exactly 150 episode nodes, 150 populated stable
+  IDs, and 150 distinct stable IDs. Three 3B extractions exhausted
+  structured-output retries: `50480869-ff15-41b2-b1ae-a4f1a81b88c8`,
+  `f2679d10-f47a-49bc-b9bd-4476e8516f69`, and
+  `77f8cd22-8959-4756-bb60-f6aebbac09d5`. They remain unsynced, have no orphan
+  Neo4j episodes, and are ready for a later 7B retry. A live post-hardening
+  extraction completed in about 29 seconds with exactly one matching stable ID
+  in each store.
 - The development image builds successfully. The fast deterministic suite is
   green: 62 passed, 5 service-dependent skips, and 99 live/slow tests excluded.
 - Black and Ruff checks pass across all 130 Python files in `src` and `tests`.
