@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "corpus_id": "luminari-graphiti-extraction:v1",
+  "description": "Synthetic fixed-corpus checks for core lore entity and relationship extraction.",
+  "thresholds": {
+    "entity_recall": 0.8,
+    "relationship_recall": 0.66
+  },
+  "cases": [
+    {
+      "id": "crimson_guard",
+      "episode": "The Order of the Crimson Loom protects the Crimson Spindle.",
+      "expected_entities": [
+        {
+          "id": "crimson_loom",
+          "aliases": ["Order of the Crimson Loom", "Crimson Loom"]
+        },
+        {
+          "id": "crimson_spindle",
+          "aliases": ["Crimson Spindle"]
+        }
+      ],
+      "expected_relationships": [
+        {
+          "source": "crimson_loom",
+          "target": "crimson_spindle",
+          "types": ["Protects"]
+        }
+      ]
+    },
+    {
+      "id": "blade_creation",
+      "episode": "The Emberglass Blade was created by the Phoenix Smiths.",
+      "expected_entities": [
+        {
+          "id": "emberglass_blade",
+          "aliases": ["Emberglass Blade"]
+        },
+        {
+          "id": "phoenix_smiths",
+          "aliases": ["Phoenix Smiths", "Phoenix Smith"]
+        }
+      ],
+      "expected_relationships": [
+        {
+          "source": "emberglass_blade",
+          "target": "phoenix_smiths",
+          "types": ["CreatedBy"]
+        }
+      ]
+    },
+    {
+      "id": "sworn_service",
+      "episode": "Aldra serves under the Sundered Dawn.",
+      "expected_entities": [
+        {
+          "id": "aldra",
+          "aliases": ["Aldra"]
+        },
+        {
+          "id": "sundered_dawn",
+          "aliases": ["Sundered Dawn", "Order of the Sundered Dawn"]
+        }
+      ],
+      "expected_relationships": [
+        {
+          "source": "aldra",
+          "target": "sundered_dawn",
+          "types": ["ServesUnder"]
+        }
+      ]
+    }
+  ]
+}

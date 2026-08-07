@@ -1,7 +1,7 @@
 # Contributing to Luminari Sage
 
 **Last Updated**: November 12, 2025
-**Version**: 0.7.13
+**Version**: 0.7.14
 
 Thank you for considering contributing to Luminari Sage! This document provides guidelines for contributing to the project.
 

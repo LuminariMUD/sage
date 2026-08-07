@@ -95,6 +95,7 @@ RUN echo "Cache bust: $CACHE_BUST"
 # Copy application code
 COPY --chown=sage:sage src/ ./src/
 COPY --chown=sage:sage schemas/ ./schemas/
+COPY --chown=sage:sage benchmarks/ ./benchmarks/
 
 # Make scripts executable
 RUN chmod +x ./src/scripts/entrypoint.sh && \

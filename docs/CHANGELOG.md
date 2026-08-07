@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Non-Persistent Graphiti Extraction Benchmark (0.7.14)**
+  - Replaced the legacy state-mutating benchmark with a three-case, versioned synthetic corpus and Graphiti's in-memory combined extraction boundary.
+  - Added primary/fallback candidate comparison, concurrency capped at two, per-case actual-call ceilings, disabled SDK retries, degraded-retry reporting, and content-free quality summaries.
+  - Required exact confirmation before corpus loading or provider/credential resolution and retired the provider-specific legacy entrypoints.
+  - Packaged the fingerprinted corpus read-only and documented its provider-cost/privacy boundary.
+  - Verified 232 offline fast tests with 6 skips. Only refusal and dry-run paths were executed; no provider call, graph claim, database mutation, or ingestion occurred.
+
 - **Guarded Provider Configuration and Probes (0.7.13)**
   - Added human and JSON configuration checks for complete sanitized application and Graphiti provider profiles.
   - Added primary-only text and embedding probes with fixed inputs, one transport attempt, no fallback, strict vector validation, and no response/vector emission.

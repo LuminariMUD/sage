@@ -158,6 +158,19 @@ The complete offline fast suite passes 221 tests with 6 skips and 109 deselected
 
 The old Graphiti benchmark is still excluded: it is provider-coupled and mutates the legacy synchronization projection. It must be replaced with a fixed-corpus harness that respects the durable lifecycle before the umbrella Make-target item can close. No graph job was claimed, no provider call was made, and the operator's stop instruction remains authoritative.
 
+### 2026-08-07 - Non-persistent Graphiti extraction benchmark checkpoint, no activation
+
+- Replaced the legacy script that could reset `graphiti_synced` and write Neo4j with an inert refusal path.
+- Added a three-case, synthetic, byte-fingerprinted extraction corpus with entity and directed relationship expectations plus explicit recall thresholds.
+- Added a provider-neutral benchmark over Graphiti's combined in-memory extractor. It creates no database, graph, or embedding client and supports the selected primary, declared fallback, or both text candidates.
+- Capped concurrency at two and every candidate/case pair's actual transport calls at or below the configured route budget. SDK retries remain disabled; recovered failures are reported as degraded rather than hidden.
+- Required exact confirmation before corpus loading, provider configuration, credentials, or client construction. Reports contain only counts, recall, latency, usage, safe model/upstream labels, fingerprints, and classified failures.
+- Added eleven offline tests for corpus/scoring integrity, call accounting, hard budget refusal, retry degradation, candidate comparison, trackable clients, guard ordering, and retired-path safety.
+
+The complete offline fast suite passes 232 tests with 6 skips and 109 deselected tests. The Make refusal path, retired shell refusal, and confirmed-command dry-run passed. The benchmark itself was not run; no model request, PostgreSQL/Neo4j mutation, graph claim, or ingestion occurred.
+
+The harness is now safe to operate after a separate cost/privacy/model decision, but no candidate quality result is claimed. The operator's stop instruction remains authoritative for the durable worker and all ingestion.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.

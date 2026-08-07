@@ -16,6 +16,10 @@ ifdef MAX_EPISODES
 	GRAPH_SYNC_MAX_FLAG = --max-episodes $(MAX_EPISODES)
 endif
 
+ifdef GRAPHITI_BENCHMARK_MAX_CALLS
+GRAPHITI_BENCHMARK_MAX_CALLS_FLAG = --max-provider-calls "$(GRAPHITI_BENCHMARK_MAX_CALLS)"
+endif
+
 # Default target
 help:
 	@echo "🧠 Luminari Sage - Hybrid Graph RAG with Semantic Chunking"
@@ -54,8 +58,7 @@ help:
 	@echo "  make provider-config-check-json - Emit sanitized provider profiles as JSON"
 	@echo "  make provider-text-probe CONFIRM_PROVIDER_PROBE=RUN_PROVIDER_PROBE - One bounded text call"
 	@echo "  make provider-embedding-probe CONFIRM_PROVIDER_PROBE=RUN_PROVIDER_PROBE - One bounded embedding call"
-	@echo "  make benchmark-graphiti        - Benchmark entity extraction (Ollama)"
-	@echo "  make benchmark-graphiti-openai - Benchmark entity extraction (OpenAI)"
+	@echo "  make benchmark-graphiti CONFIRM_GRAPHITI_BENCHMARK=RUN_GRAPHITI_BENCHMARK - Fixed-corpus extraction benchmark"
 	@echo ""
 	@echo "📋 COMPLETE WORKFLOWS:"
 	@echo "  make pipeline-canon       - Canon: load → episodes → embeddings → sync"
@@ -396,13 +399,19 @@ provider-embedding-probe:
 
 .PHONY: benchmark-graphiti
 benchmark-graphiti:
-	@echo "🧪 Running Graphiti benchmark..."
-	@bash scripts/benchmark_graphiti.sh ollama
+	@test "$(CONFIRM_GRAPHITI_BENCHMARK)" = "RUN_GRAPHITI_BENCHMARK" || \
+		(echo "CONFIRM_GRAPHITI_BENCHMARK=RUN_GRAPHITI_BENCHMARK is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api \
+		python src/scripts/benchmark_graphiti.py \
+		--candidate "$(or $(GRAPHITI_BENCHMARK_CANDIDATE),primary)" \
+		--concurrency "$(or $(GRAPHITI_BENCHMARK_CONCURRENCY),1)" \
+		$(GRAPHITI_BENCHMARK_MAX_CALLS_FLAG) \
+		--confirm "$(CONFIRM_GRAPHITI_BENCHMARK)"
 
 .PHONY: benchmark-graphiti-openai
 benchmark-graphiti-openai:
-	@echo "🧪 Running Graphiti benchmark with OpenAI..."
-	@bash scripts/benchmark_graphiti.sh openai
+	@echo "benchmark-graphiti-openai is disabled; select GRAPHITI_TEXT_PROVIDER and use benchmark-graphiti" >&2
+	@exit 2
 
 # =============================================================================
 # SYSTEM OPERATIONS

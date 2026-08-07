@@ -173,6 +173,21 @@ The complete offline fast suite passes 221 tests with 6 skips and 109 intentiona
 
 The existing Graphiti benchmark remains provider-coupled and mutates legacy synchronization state, so it is not accepted as the provider-neutral benchmark required by Phase 8. The combined Make-target checklist item remains open until that benchmark is replaced with a versioned, durable-lifecycle-safe harness.
 
+### Non-persistent Graphiti extraction benchmark checkpoint - implemented offline
+
+The unsafe legacy benchmark has been replaced without running a model or touching synchronization state:
+
+- Added a checked-in, byte-fingerprinted `luminari-graphiti-extraction:v1` corpus with three synthetic entity/relationship cases and explicit micro-recall thresholds.
+- Added a provider-neutral harness around Graphiti's combined in-memory entity/edge extractor. It constructs no PostgreSQL, Neo4j, or embedding client and never writes an episode, graph node, edge, or synchronization flag.
+- The harness can benchmark the selected primary, declared fallback, or both route candidates. Concurrency is capped at two and defaults to one; every candidate/case pair has a hard actual transport-call ceiling that cannot exceed the route budget, while SDK retries remain disabled.
+- Actual calls, recovered provider failures, budget rejections, token usage, returned models, and upstream providers are recorded without emitting corpus text, prompts, responses, facts, vectors, credentials, or exception detail. A recovered provider failure marks the case degraded and fails the benchmark gate.
+- Added the independent exact `RUN_GRAPHITI_BENCHMARK` confirmation at the Make boundary and Python boundary before corpus loading, credential resolution, or client construction. The former provider-specific OpenAI target and legacy state-mutating shell path now refuse execution.
+- Added operator documentation and packaged the fixed corpus read-only in development Compose and the application image.
+
+Eleven new offline benchmark tests cover corpus integrity, referential validation, content-free scoring, request accounting, pre-network budget refusal, degraded retries, bounded concurrency, candidate comparison, no-confirmation refusal, trackable client construction, and the inert legacy path. The complete offline fast suite passes 232 tests with 6 skips and 109 intentionally deselected tests. Only refusal and Make dry-run paths were exercised; the confirmed benchmark was not run. No provider request, graph claim, database mutation, or ingestion occurred, and the worker remains stopped by operator request.
+
+This checkpoint provides the versioned harness and summary schema, but it does not supply a selected-model quality result. Phase 6's live structured-extraction verification and benchmark-result record remain open until the operator explicitly authorizes a provider run.
+
 ---
 
 ## 1. Executive Summary
@@ -865,6 +880,8 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [ ] Verify Graphiti structured extraction with the selected OpenRouter text model.
 - [x] Verify vector dimensions and cosine configuration before Graphiti initialization.
 - [ ] Update Graphiti benchmark scripts and summaries.
+  - [x] Replace the legacy mutating script with a versioned, non-persistent, provider-neutral harness and sanitized summary schema.
+  - [ ] Record reviewed results for the selected text candidate after explicit live-run authorization.
 - [ ] Add a graph rebuild command that records the active sync and embedding profiles.
 - [ ] Require graph rebuild jobs to use the durable lifecycle, attempt ledger, and audit contract.
 
@@ -893,9 +910,9 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Add OpenRouter secret transport to development Compose, production Compose, deployment scripts, and CI/CD.
 - [x] Ensure all-Ollama deployments do not mount or require an OpenRouter secret.
 - [x] Make Ollama model initialization and warmup conditional on selected capabilities.
-- [ ] Add provider-neutral Make targets for configuration checks, model probes, embedding probes, and Graphiti benchmarks.
+- [x] Add provider-neutral Make targets for configuration checks, model probes, embedding probes, and Graphiti benchmarks.
   - [x] Add sanitized configuration checks plus exact-confirmation, one-call text and embedding probes.
-  - [ ] Replace the legacy state-mutating Graphiti benchmark with a versioned, durable-lifecycle-safe harness.
+  - [x] Replace the legacy state-mutating Graphiti benchmark with a versioned, non-persistent, durable-lifecycle-safe harness.
 - [ ] Add Make targets for graph-sync status, safe retries, `graph-audit`, and the complete release gate.
 - [ ] Update secret scanners and environment contract tests.
 - [ ] Add sanitized health/readiness, queue/lease state, provider-level metrics, and graph-quality summaries.

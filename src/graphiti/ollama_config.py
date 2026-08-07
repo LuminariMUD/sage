@@ -2,6 +2,7 @@
 
 from src.graphiti.provider_config import (
     ProviderGraphitiEmbedder,
+    create_graphiti_llm_client,
     get_graphiti_config_summary,
     get_graphiti_embedding_client,
     get_graphiti_llm_client,
@@ -9,6 +10,7 @@ from src.graphiti.provider_config import (
 
 __all__ = [
     "ProviderGraphitiEmbedder",
+    "create_graphiti_llm_client",
     "get_graphiti_config_summary",
     "get_graphiti_embedding_client",
     "get_graphiti_llm_client",

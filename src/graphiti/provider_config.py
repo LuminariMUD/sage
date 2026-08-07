@@ -99,10 +99,12 @@ class ProviderGraphitiEmbedder(EmbedderClient):
         return await self.embedder.embed_batch(input_data_list)
 
 
-def get_graphiti_llm_client(verbose: bool = False) -> LLMClient:
-    """Construct Graphiti's primary extraction client from its independent route."""
-    route = get_graphiti_text_route()
-    candidate = route.primary
+def create_graphiti_llm_client(
+    candidate: TextModelCandidate,
+    *,
+    verbose: bool = False,
+) -> LLMClient:
+    """Construct one no-hidden-transport-retry Graphiti extraction client."""
     if "structured_output" not in candidate.capabilities:
         raise ValueError("Graphiti extraction candidate lacks structured-output capability")
     max_tokens = _positive_output_tokens()
@@ -118,16 +120,21 @@ def get_graphiti_llm_client(verbose: bool = False) -> LLMClient:
     )
     if verbose:
         logger.info(
-            "Initializing Graphiti text route provider=%s model=%s route=%s",
+            "Initializing Graphiti text candidate provider=%s model=%s candidate=%s",
             candidate.connection.provider,
             candidate.model,
-            route.fingerprint,
+            candidate.fingerprint,
         )
     return OpenAIGenericClient(
         config=llm_config,
         client=_graphiti_transport(candidate),
         max_tokens=max_tokens,
     )
+
+
+def get_graphiti_llm_client(verbose: bool = False) -> LLMClient:
+    """Construct Graphiti's primary extraction client from its independent route."""
+    return create_graphiti_llm_client(get_graphiti_text_route().primary, verbose=verbose)
 
 
 def get_graphiti_embedding_client(verbose: bool = False) -> EmbedderClient:
