@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import replace
+from decimal import Decimal
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -59,6 +61,7 @@ class OpenRouterEmbedder(BaseEmbedder):
         self.dimension = self.profile.dimensions
         self.batch_size = self.profile.batch_size
         self.last_usage: dict[str, int] = {}
+        self.last_estimated_cost_usd: float | None = None
         self.last_actual_model: str | None = None
         self.last_transport_attempts = 0
 
@@ -70,6 +73,7 @@ class OpenRouterEmbedder(BaseEmbedder):
 
     async def _request_batch(self, texts: list[str]) -> list[list[float]]:
         self.last_usage = {}
+        self.last_estimated_cost_usd = None
         self.last_actual_model = None
         self.last_transport_attempts = 0
         request = {
@@ -105,6 +109,11 @@ class OpenRouterEmbedder(BaseEmbedder):
                 for key, value in dumped.items()
                 if isinstance(value, int) and not isinstance(value, bool) and value >= 0
             }
+            cost = dumped.get("cost")
+            if isinstance(cost, (int, float, Decimal)) and not isinstance(cost, bool):
+                parsed_cost = float(cost)
+                if math.isfinite(parsed_cost) and parsed_cost >= 0:
+                    self.last_estimated_cost_usd = parsed_cost
         self.last_actual_model = actual_model
         return validate_embedding_batch(
             (indexed[index] for index in range(len(texts))),
@@ -137,5 +146,6 @@ class OpenRouterEmbedder(BaseEmbedder):
             "requested_model": self.model,
             "actual_model": self.last_actual_model,
             "usage": dict(self.last_usage),
+            "estimated_cost_usd": self.last_estimated_cost_usd,
             "transport_attempts": self.last_transport_attempts,
         }

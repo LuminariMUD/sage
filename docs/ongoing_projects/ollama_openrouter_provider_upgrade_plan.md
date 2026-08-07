@@ -283,6 +283,36 @@ benchmark was not confirmed or executed, so no Nomic baseline or candidate quali
 result is claimed and acceptance thresholds remain open. No provider/model call,
 graph claim, ingestion, live mutation, or worker restart occurred.
 
+### Isolated shadow embedding evaluation checkpoint - implemented, not activated
+
+- Added migration `0005_embedding_shadow_spaces` and matching clean-database DDL.
+  The chosen storage design is a profile-isolated shadow table with a generic vector
+  column constrained per row to the immutable profile dimension. It supports the
+  recommended 1024-dimensional pilot and separately configured dimensions without
+  altering the active 768-dimensional Nomic column.
+- Added resumable runs, provider requests reserved durably before inference,
+  immutable content-free batch item evidence, immutable batch outcomes, source-revision
+  fencing at persistence, idempotent upserts, and sanitized token/cost aggregates.
+- Added separate exact-confirmation operations for profile registration, bounded
+  no-retry backfill, explicit abandoned-run recovery, and profile-specific HNSW
+  construction. Recovery finalizes unresolved reservations as immutable `abandoned`
+  outcomes before another invocation can resume. Read-only inventory resolves no
+  provider; backfill defaults to one request with a hard 100-request invocation
+  ceiling.
+- Extended the fixed retrieval harness to compare a ready shadow profile against the
+  active index. It will not construct an adapter until corpus reconciliation and the
+  candidate's profile, coverage, snapshot, and physical index all attest cleanly.
+
+Thirty-eight focused offline tests, the complete fast gate (292 passed, 6 skipped,
+114 intentionally deselected), and all 15 relevant rollback-isolated PostgreSQL
+tests pass. The database proof builds and searches a 1024-dimensional candidate,
+rejects stale-source persistence and mutable request outcomes, and confirms the
+active 768-dimensional vector remains unchanged and unverified. Live read-only
+status reports migrations `0004` and `0005` pending, so shadow storage is unavailable
+until an explicitly backed-up migration activation. No migration, registration,
+backfill, recovery, index build, benchmark, provider/model request, graph claim,
+ingestion, live mutation, or worker restart occurred.
+
 ---
 
 ## 1. Executive Summary
@@ -673,7 +703,7 @@ Never reinterpret legacy `LLM_PROVIDER=openai` as OpenRouter: the endpoints, cre
 - [x] Validate response count, dimensions, finite values, and non-zero norm.
 - [x] Use cosine similarity for unnormalized models such as `pplx-embed-v1`.
 - [x] Disable cross-model fallback. If routing between implementations of the same model is allowed, treat a changed implementation as a new embedding fingerprint unless equivalence is proven.
-- [ ] Capture token usage and estimated cost without recording source text.
+- [x] Capture token usage and estimated cost without recording source text.
 
 ### 6.6 Framework adapters
 
@@ -969,7 +999,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Add embedding profile fingerprinting and startup guards.
 - [x] Store or expose provider/model/dimensions in sanitized health and pipeline output.
 - [x] Add deterministic ordering, cardinality, invalid-vector, retry, and no-fallback tests.
-- [ ] Build a shadow embedding evaluation path that does not overwrite active Nomic vectors.
+- [x] Build a shadow embedding evaluation path that does not overwrite active Nomic vectors.
 
 **Exit criteria:** Both embedding providers produce valid vectors through one interface, and a profile mismatch reliably blocks reads and writes.
 
@@ -994,9 +1024,9 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Add embedding-profile/index-state metadata.
 - [ ] Restore or replace the missing episode vector index.
 - [x] Add preflight checks for column dimensions, index dimensions, profile fingerprints, and row counts.
-- [ ] Implement a shadow-column or shadow-table backfill so the active Nomic vectors remain available during evaluation.
+- [x] Implement a shadow-column or shadow-table backfill so the active Nomic vectors remain available during evaluation.
 - [ ] Build the replacement vector index before cutover.
-- [ ] Add resumable batching, progress reporting, cost accounting, and idempotency.
+- [x] Add resumable batching, progress reporting, cost accounting, and idempotency.
 - [ ] Add a controlled graph backup, clear, and rebuild workflow.
 - [x] Resolve `/api/v1/validate` and the legacy 384-dimensional chunk path.
 - [ ] Require clean index-profile preflight and `graph-audit` results before activation.
@@ -1065,6 +1095,8 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 | New Graphiti sync-state module              | Atomic claims, leases, transitions, run-level circuit state, backoff, quarantine, and append-only attempt records                             |
 | `src/api/main.py`                           | Provider-aware startup checks, index guards, health details, and correction of legacy chunk search                                            |
 | `src/scripts/generate_embeddings.py`        | Profile validation, resumable backfill, progress, and provenance                                                                              |
+| `src/retrieval/shadow_embeddings.py`        | Profile-isolated candidate storage, durable batch reservations, source fencing, HNSW attestation, and shadow search                           |
+| `src/scripts/shadow_embeddings.py`          | Read-only inventory plus separately confirmed registration, bounded backfill, and candidate-index construction                                |
 | `src/scripts/sync_episodes_to_graphiti.py`  | Durable worker loop, independent Graphiti routes/profiles, progress, and recovery                                                             |
 | New `src/scripts/graph_audit.py`            | Read-only PostgreSQL/Neo4j reconciliation with human/JSON output and stable exit codes                                                        |
 | `src/scripts/reset_processing.py`           | Profile-aware reset language and safe migration operations                                                                                    |
@@ -1333,7 +1365,7 @@ Old vectors, indexes, and graph backups must not be deleted until the bake perio
 | OpenRouter ZDR                                        | Require if compatible endpoints meet capability and cost needs                                                      | Open — owner/date required in Phase 0             |
 | Embedding provider routing                            | Pin/disable fallbacks for reproducibility                                                                           | Proposed — required before Phase 5 exits          |
 | Migration mechanism                                   | Add versioned SQL migrations and a migration ledger                                                                 | Proposed — required before Phase 1                |
-| Shadow-vector storage                                 | Choose shadow column versus shadow table after migration design review                                              | Open — decide before Phase 7                      |
+| Shadow-vector storage                                 | Use the profile-isolated shadow table from migration `0005`; keep the active episode column unchanged until cutover | Implemented in code; migration activation pending |
 | Release-gate execution environment                    | Run the local gate on the target WSL2/GPU stack; run cloud/provider tests separately with restricted credentials    | Proposed — approve before Phase 8 exits           |
 | Bake period                                           | Define objective duration and traffic/job thresholds before production cutover                                      | Open — decide before Phase 9                      |
 

@@ -11,6 +11,7 @@ from src.llm.provider_config import (
     TextRouteProfile,
     TextTask,
     is_text_profile_ready,
+    resolve_embedding_profile,
     resolve_provider_settings,
 )
 
@@ -46,6 +47,11 @@ def get_text_route(task: str = "chat") -> TextRouteProfile:
 def get_embedding_profile() -> EmbeddingProfile:
     """Return the active application embedding profile."""
     return get_provider_settings().embedding_profile
+
+
+def get_embedding_profile_for_provider(provider: str) -> EmbeddingProfile:
+    """Resolve an evaluation profile without changing the active selector."""
+    return resolve_embedding_profile(provider, os.environ)
 
 
 def get_graphiti_text_route() -> TextRouteProfile:

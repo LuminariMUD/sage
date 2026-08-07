@@ -122,7 +122,13 @@ async def test_openrouter_embedding_response_is_reordered_by_explicit_index():
                 SimpleNamespace(index=1, embedding=[0.2, 1.0]),
                 SimpleNamespace(index=0, embedding=[1.0, 0.1]),
             ],
-            usage=SimpleNamespace(model_dump=lambda: {"prompt_tokens": 4, "total_tokens": 4}),
+            usage=SimpleNamespace(
+                model_dump=lambda: {
+                    "prompt_tokens": 4,
+                    "total_tokens": 4,
+                    "cost": 0.0012,
+                }
+            ),
         )
 
     embedder.client.embeddings.create = fake_create
@@ -144,6 +150,7 @@ async def test_openrouter_embedding_response_is_reordered_by_explicit_index():
         },
     }
     assert embedder.last_usage == {"prompt_tokens": 4, "total_tokens": 4}
+    assert embedder.sanitized_metadata()["estimated_cost_usd"] == 0.0012
 
 
 @pytest.mark.asyncio

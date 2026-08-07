@@ -21,17 +21,23 @@ from src.db.embedding_profiles import (
     require_embedding_space,
 )
 from src.db.postgres import PostgresDB
-from src.llm.config import get_embedding_profile
+from src.llm.config import get_embedding_profile, get_embedding_profile_for_provider
 from src.llm.embeddings.factory import create_embedder
 from src.llm.provider_config import EmbeddingProfile
 from src.retrieval.benchmark import (
+    ACTIVE_EPISODE_SEARCH_QUERY,
     SNAPSHOT_ROWS_QUERY,
     RetrievalBenchmarkError,
     RetrievalCorpus,
-    benchmark_active_episode_space,
+    benchmark_episode_space,
     load_retrieval_corpus,
     planned_provider_requests,
     reconcile_retrieval_corpus,
+)
+from src.retrieval.shadow_embeddings import (
+    ShadowEmbeddingError,
+    ShadowEmbeddingRepository,
+    shadow_search_query,
 )
 
 BENCHMARK_CONFIRMATION = "RUN_RETRIEVAL_BENCHMARK"
@@ -117,8 +123,12 @@ async def run(
     postgres_factory: Callable[..., Any] = PostgresDB,
     corpus_loader: Callable[[Path], RetrievalCorpus] = load_retrieval_corpus,
     profile_resolver: Callable[[], EmbeddingProfile] = get_embedding_profile,
+    shadow_profile_resolver: Callable[[str], EmbeddingProfile] = get_embedding_profile_for_provider,
     embedder_factory: Callable[..., Any] = create_embedder,
-    benchmark_runner: Callable[..., Any] = benchmark_active_episode_space,
+    benchmark_runner: Callable[..., Any] = benchmark_episode_space,
+    shadow_repository_factory: Callable[
+        [Any], ShadowEmbeddingRepository
+    ] = ShadowEmbeddingRepository,
 ) -> int:
     """Keep validation read-only and require exact consent before any inference."""
     if args.command == "run" and args.confirm != BENCHMARK_CONFIRMATION:
@@ -152,14 +162,30 @@ async def run(
             _emit(reconciliation, as_json=args.json, error=True)
             return 1
 
-        profile = profile_resolver()
-        preflight = await preflight_embedding_space(
-            postgres,
-            EPISODE_EMBEDDING_SPACE,
-            configured_profile=profile,
-            require_active=True,
-        )
-        require_embedding_space(preflight)
+        space_kind = getattr(args, "space", "active")
+        if space_kind == "shadow":
+            profile = shadow_profile_resolver(getattr(args, "provider", "openrouter"))
+            shadow_repository = shadow_repository_factory(postgres)
+            await shadow_repository.require_ready(profile)
+            search_query = shadow_search_query(profile)
+            evaluated_space = {
+                "kind": "shadow",
+                "profile_fingerprint": profile.fingerprint,
+            }
+        else:
+            profile = profile_resolver()
+            preflight = await preflight_embedding_space(
+                postgres,
+                EPISODE_EMBEDDING_SPACE,
+                configured_profile=profile,
+                require_active=True,
+            )
+            require_embedding_space(preflight)
+            search_query = ACTIVE_EPISODE_SEARCH_QUERY
+            evaluated_space = {
+                "kind": "active",
+                "physical_space": "episodes.embedding",
+            }
 
         planned_requests = planned_provider_requests(corpus, profile)
         if planned_requests > args.max_provider_requests:
@@ -182,11 +208,13 @@ async def run(
             profile,
             embedder,
             maximum_provider_requests=args.max_provider_requests,
+            search_query=search_query,
+            evaluated_space=evaluated_space,
         )
         report["corpus_validation_status"] = "valid"
         _emit(report, as_json=args.json)
         return 0
-    except (EmbeddingSpaceError, RetrievalBenchmarkError) as error:
+    except (EmbeddingSpaceError, RetrievalBenchmarkError, ShadowEmbeddingError) as error:
         report = {
             "schema_version": 1,
             "operation": "episode_retrieval_benchmark",
@@ -241,6 +269,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run query embeddings and active episode search after exact confirmation",
     )
     execute.add_argument("--max-provider-requests", type=int, default=1)
+    execute.add_argument("--space", choices=("active", "shadow"), default="active")
+    execute.add_argument("--provider", choices=("ollama", "openrouter"), default="openrouter")
     execute.add_argument("--confirm", default="")
     return parser
 

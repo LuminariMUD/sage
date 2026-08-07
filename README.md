@@ -1,6 +1,6 @@
 # Luminari Sage - Intelligent Lore Management System
 
-**Version**: 0.7.18
+**Version**: 0.7.19
 **Status**: Production Deployed
 **Deployment**: luminarimud.com:8003
 **Repository**: https://github.com/LuminariMUD/sage
@@ -399,6 +399,20 @@ identities, vectors, source text, and credentials. A completed run is evidence,
 not automatic approval: acceptance thresholds and manual comparison remain rollout
 decisions.
 
+Candidate embedding profiles use isolated storage and never overwrite the active
+Nomic column. Read-only status requires no provider configuration:
+
+```bash
+make embedding-shadow-status
+```
+
+Registration, bounded backfill, index construction, and side-by-side retrieval
+benchmarking each require a distinct exact confirmation token. See the
+[migration runbook](schemas/migrations/README.md#shadow-embedding-generations).
+Backfill defaults to one provider request with transport retries disabled; every
+request is reserved durably before inference and every stored vector is fenced to
+the source revision it embedded.
+
 ---
 
 ## Testing
@@ -568,5 +582,5 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ---
 
 **Last Updated**: 2026-08-07
-**Version**: 0.7.18
+**Version**: 0.7.19
 **Status**: Production Ready

@@ -54,3 +54,68 @@ make embedding-profile-activate \
 Neither activation command generates embeddings or calls a provider. Do not adopt
 existing vectors based on matching dimensions alone. A provider or dimension
 change must use a shadow space and the separate benchmark/cutover workflow.
+
+## Shadow embedding generations
+
+Migration `0005_embedding_shadow_spaces` adds a profile-isolated shadow table,
+resumable run state, pre-call batch reservations, immutable content-free batch-item evidence,
+and profile-specific HNSW index metadata. The generic vector column is constrained
+per row to the immutable profile dimension. Candidate rows are keyed by profile and
+episode, and each row is fenced to the exact durable source fingerprint.
+
+Applying the migration creates empty tables only. It does not register a profile,
+read source text, generate vectors, build an HNSW index, change
+`episodes.embedding`, or alter the active `embedding_index_states` record.
+
+Inspect without provider configuration:
+
+```bash
+make embedding-shadow-status
+make embedding-shadow-status-json
+```
+
+The remaining commands are separate, exact-confirmation operations. Registration
+writes secret-free profile metadata only. Backfill is the only provider operation;
+it defaults to one no-retry batch and durably reserves the request before inference.
+Index construction is a database write against the shadow table only.
+
+```bash
+make embedding-shadow-register \
+  SHADOW_EMBEDDING_PROVIDER=openrouter \
+  CONFIRM_SHADOW_EMBEDDING=REGISTER_SHADOW_EMBEDDING_SPACE
+
+make embedding-shadow-backfill \
+  SHADOW_EMBEDDING_PROVIDER=openrouter \
+  SHADOW_EMBEDDING_MAX_REQUESTS=1 \
+  CONFIRM_SHADOW_EMBEDDING=RUN_SHADOW_EMBEDDING_BACKFILL
+
+# Only after confirming the process that owned this run is no longer active:
+make embedding-shadow-recover-run \
+  SHADOW_EMBEDDING_RUN_ID=<run-uuid> \
+  CONFIRM_SHADOW_EMBEDDING=RECOVER_SHADOW_EMBEDDING_RUN
+
+make embedding-shadow-build-index \
+  SHADOW_EMBEDDING_PROVIDER=openrouter \
+  CONFIRM_SHADOW_EMBEDDING=BUILD_SHADOW_EMBEDDING_INDEX
+```
+
+Repeat the bounded backfill deliberately until status shows complete current
+coverage, then build the index. A source revision changed after reservation is not
+stored; the provider request remains accounted for and the new revision stays
+pending. A process crash leaves the reserved request visible and never silently
+replays it inside the same run. Explicit recovery finalizes unresolved reservations
+as `abandoned`, stops that run, and permits a new confirmed invocation; do not use
+it while the owning process may still be running.
+
+Once the shadow reports `READY`, compare it with the active space using the same
+versioned retrieval corpus:
+
+```bash
+make benchmark-shadow-retrieval \
+  SHADOW_EMBEDDING_PROVIDER=openrouter \
+  CONFIRM_RETRIEVAL_BENCHMARK=RUN_RETRIEVAL_BENCHMARK
+```
+
+Ready and benchmarked are not activation. Cutover remains a separate future
+operation requiring approved quality thresholds, clean audits, retained old vectors,
+and rollback evidence.

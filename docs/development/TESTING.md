@@ -1,6 +1,6 @@
 # Testing Guide
 
-**Version**: 0.7.18
+**Version**: 0.7.19
 **Status**: Production Ready
 **Last Updated**: 2026-08-07
 
@@ -222,6 +222,63 @@ Exit `0` means the benchmark completed, not that a candidate was approved. Quali
 thresholds remain deliberately unconfigured until the Nomic baseline and candidate
 results are reviewed. Exit `1` means corpus drift; exit `2` means refusal, invalid
 configuration, failed preflight, or incomplete execution.
+
+### Shadow embedding comparison
+
+Migration `0005_embedding_shadow_spaces` provides a dimension-flexible candidate
+table rather than reusing or widening `episodes.embedding`. It preserves immutable
+profile identity, current/stale source coverage, bounded run progress, provider
+request reservations, sanitized token/cost data when available, and one final
+outcome per batch. No episode text is stored in the run/batch ledger.
+
+The status command is read-only and does not resolve a provider:
+
+```bash
+make embedding-shadow-status
+make embedding-shadow-status-json
+```
+
+Mutation and inference steps have different confirmation tokens so one approval
+cannot accidentally authorize the next stage. The backfill defaults to one provider
+request, disables adapter transport retries, and can be repeated deliberately:
+
+```bash
+make embedding-shadow-register \
+  SHADOW_EMBEDDING_PROVIDER=openrouter \
+  CONFIRM_SHADOW_EMBEDDING=REGISTER_SHADOW_EMBEDDING_SPACE
+
+make embedding-shadow-backfill \
+  SHADOW_EMBEDDING_PROVIDER=openrouter \
+  SHADOW_EMBEDDING_MAX_REQUESTS=1 \
+  CONFIRM_SHADOW_EMBEDDING=RUN_SHADOW_EMBEDDING_BACKFILL
+
+# Only after proving the original process is stopped:
+make embedding-shadow-recover-run \
+  SHADOW_EMBEDDING_RUN_ID=<run-uuid> \
+  CONFIRM_SHADOW_EMBEDDING=RECOVER_SHADOW_EMBEDDING_RUN
+
+make embedding-shadow-build-index \
+  SHADOW_EMBEDDING_PROVIDER=openrouter \
+  CONFIRM_SHADOW_EMBEDDING=BUILD_SHADOW_EMBEDDING_INDEX
+```
+
+If source content changes between reservation and persistence, the entire batch is
+recorded as `source_changed`, no candidate vector from that batch is stored, and
+the current revision remains pending. A provider or process failure cannot create an
+unaccounted retry because reservation happens before the call and batch outcomes are
+immutable. Explicit recovery converts unresolved reservations to the immutable
+`abandoned` outcome and stops the run before a new confirmed invocation can resume;
+it must not be used while the original process may still be active.
+
+Only a fully covered, current, profile-matching, valid HNSW shadow becomes `READY`.
+That readiness permits the separately confirmed comparison; it does not activate
+the candidate:
+
+```bash
+make benchmark-shadow-retrieval \
+  SHADOW_EMBEDDING_PROVIDER=openrouter \
+  CONFIRM_RETRIEVAL_BENCHMARK=RUN_RETRIEVAL_BENCHMARK
+```
 
 ## Graphiti Extraction Benchmark
 

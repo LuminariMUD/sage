@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Isolated Shadow Embedding Evaluation (0.7.19)**
+  - Added migration `0005_embedding_shadow_spaces` and matching clean-database schema for dimension-flexible, profile-isolated candidate vectors that never overwrite `episodes.embedding` or change the active index metadata.
+  - Added resumable shadow runs, provider batches reserved before inference, immutable content-free batch-item evidence and batch outcomes, exact source-revision fencing, validated dimensions/non-zero vectors, aggregate token/cost fields, and idempotent profile/episode upserts.
+  - Added read-only shadow inventory plus separately confirmed profile registration, bounded no-retry backfill, explicit abandoned-run recovery, and profile-specific HNSW index construction. Recovery finalizes unresolved reservations as immutable `abandoned` outcomes before another run can resume. Backfill defaults to one provider request and has a hard 100-request invocation ceiling.
+  - Extended the versioned retrieval benchmark to compare a fully attested shadow index with the active episode space while preserving the same corpus, metrics, request ceiling, and content-free output contract.
+  - Added optional OpenRouter embedding cost capture from sanitized usage metadata without retaining inputs.
+  - Verified 38 focused offline tests, the complete fast gate (292 passed, 6 skipped, 114 intentionally deselected), and 15 rollback-isolated PostgreSQL tests. Live read-only status correctly reports migrations `0004` and `0005` pending and shadow storage unavailable. No migration, registration, backfill, recovery, index build, benchmark, provider/model request, graph claim, ingestion, live mutation, or worker restart was performed.
+
 - **Versioned Episode Retrieval Quality Baseline (0.7.18)**
   - Added a byte-fingerprinted 12-case Lumia retrieval corpus with 33 graded portable episode judgments, 39 expected entity aliases, per-judgment source fingerprints, and a canonical fingerprint of the complete 611-episode source snapshot.
   - Added deterministic macro Recall@5, Recall@10, MRR@10, and nDCG@10 scoring plus content-free per-case summaries; acceptance thresholds remain explicitly unconfigured pending baseline/candidate review.

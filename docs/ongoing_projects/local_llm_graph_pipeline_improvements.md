@@ -256,6 +256,34 @@ was not authorized or run; no baseline metric, quality threshold, provider reque
 graph claim, ingestion, or live mutation is claimed. The worker remains stopped by
 operator request.
 
+### 2026-08-07 - Isolated shadow embedding evaluation checkpoint, not activated
+
+- Added migration `0005_embedding_shadow_spaces` plus the equivalent clean-schema
+  contract. Candidate vectors use a profile-keyed generic vector table whose rows
+  enforce the immutable profile dimension and never overwrite `episodes.embedding`
+  or change the active index-state record.
+- Added resumable run state, provider requests durably reserved before inference,
+  immutable content-free batch item evidence, one immutable outcome per request, exact source
+  revision fencing, idempotent profile/episode upserts, and aggregate token/cost
+  accounting when supplied by the provider.
+- Added read-only inventory and separate exact-confirmation operations for metadata
+  registration, bounded no-retry backfill, explicit abandoned-run recovery, and
+  profile-specific HNSW construction. Recovery finalizes unresolved reservations as
+  immutable `abandoned` outcomes before another invocation can resume. The backfill
+  defaults to one request and cannot exceed 100 requests per invocation.
+- Extended the fixed retrieval benchmark to query an attested shadow profile without
+  weakening the corpus reconciliation, request ceiling, metrics, or content-free
+  result contract.
+
+Thirty-eight focused offline tests, the complete fast gate (292 passed, 6 skipped,
+114 intentionally deselected), and all 15 relevant rollback-isolated PostgreSQL
+tests pass. The database test proves a 1024-dimensional candidate can be built,
+source-fenced, indexed, and searched while the 768-dimensional active episode vector
+remains unchanged and unverified. Live read-only status reports migrations `0004`
+and `0005` pending and no shadow tables. No migration, profile registration,
+backfill, recovery, index build, benchmark, provider/model request, graph claim,
+ingestion, or live mutation occurred. The worker remains stopped by operator request.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.

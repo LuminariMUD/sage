@@ -1,7 +1,7 @@
 # Luminari Sage Quick Start Guide
 
 **Last Updated**: August 7, 2026
-**Version**: 0.7.18
+**Version**: 0.7.19
 **Status**: Production Ready
 
 ## Prerequisites
@@ -70,6 +70,9 @@ make embedding-preflight
 
 # Validate the versioned retrieval judgments without calling a model
 make retrieval-corpus-check
+
+# Inspect isolated candidate embedding spaces without resolving a provider
+make embedding-shadow-status
 
 # Run pipeline stages deliberately
 make load-canon

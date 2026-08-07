@@ -540,15 +540,17 @@ def planned_provider_requests(corpus: RetrievalCorpus, profile: EmbeddingProfile
     return math.ceil(len(corpus.cases) / profile.batch_size)
 
 
-async def benchmark_active_episode_space(
+async def benchmark_episode_space(
     postgres: Any,
     corpus: RetrievalCorpus,
     profile: EmbeddingProfile,
     embedder: Any,
     *,
     maximum_provider_requests: int,
+    search_query: str,
+    evaluated_space: Mapping[str, object],
 ) -> dict[str, object]:
-    """Embed fixed queries and score the active episode vector space read-only."""
+    """Embed fixed queries and score one attested episode vector space read-only."""
     if not 1 <= maximum_provider_requests <= 100:
         raise RetrievalBenchmarkError("Maximum provider requests must be between 1 and 100")
     batch_size = profile.batch_size
@@ -596,7 +598,7 @@ async def benchmark_active_episode_space(
     for case, vector in zip(corpus.cases, vectors, strict=True):
         vector_text = "[" + ",".join(map(str, vector)) + "]"
         search_started = perf_counter()
-        rows = await postgres.fetch(ACTIVE_EPISODE_SEARCH_QUERY, vector_text, result_limit)
+        rows = await postgres.fetch(search_query, vector_text, result_limit)
         search_latencies.append((perf_counter() - search_started) * 1_000)
         rankings[case.id] = [
             RankedEpisode(
@@ -620,6 +622,7 @@ async def benchmark_active_episode_space(
     report.update(
         {
             "embedding_profile": embedding_profile_record(profile),
+            "evaluated_space": dict(evaluated_space),
             "provider_requests": {
                 "maximum": maximum_provider_requests,
                 "planned": planned_requests,
@@ -638,3 +641,23 @@ async def benchmark_active_episode_space(
         }
     )
     return report
+
+
+async def benchmark_active_episode_space(
+    postgres: Any,
+    corpus: RetrievalCorpus,
+    profile: EmbeddingProfile,
+    embedder: Any,
+    *,
+    maximum_provider_requests: int,
+) -> dict[str, object]:
+    """Compatibility wrapper for the active episode vector space."""
+    return await benchmark_episode_space(
+        postgres,
+        corpus,
+        profile,
+        embedder,
+        maximum_provider_requests=maximum_provider_requests,
+        search_query=ACTIVE_EPISODE_SEARCH_QUERY,
+        evaluated_space={"kind": "active", "physical_space": "episodes.embedding"},
+    )

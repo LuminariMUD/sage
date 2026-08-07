@@ -284,6 +284,10 @@ async def test_active_benchmark_enforces_batch_budget_and_emits_sanitized_metric
 
     assert report["status"] == "completed"
     assert report["provider_requests"] == {"maximum": 1, "planned": 1, "completed": 1}
+    assert report["evaluated_space"] == {
+        "kind": "active",
+        "physical_space": "episodes.embedding",
+    }
     assert report["usage"] == {"input_tokens": 4, "total_tokens": 4}
     assert report["estimated_cost_usd"] is None
     serialized = json.dumps(report)
@@ -462,3 +466,71 @@ async def test_cli_storage_preflight_blocks_embedder_construction(monkeypatch, c
     embedder_factory.assert_not_called()
     benchmark_runner.assert_not_awaited()
     assert "active_space_missing" in capsys.readouterr().err
+
+
+async def test_cli_shadow_preflight_selects_attested_shadow_query_before_adapter(capsys):
+    profile = _profile()
+    profile_resolver = Mock(side_effect=AssertionError("active profile must not resolve"))
+    shadow_profile_resolver = Mock(return_value=profile)
+    embedder = object()
+    embedder_factory = Mock(return_value=embedder)
+    benchmark_runner = AsyncMock(
+        return_value={
+            "schema_version": 1,
+            "operation": "episode_retrieval_benchmark",
+            "status": "completed",
+        }
+    )
+
+    class FakePostgres:
+        async def connect(self):
+            return None
+
+        async def fetch(self, query, *args):
+            return _rows()
+
+        async def disconnect(self):
+            return None
+
+    class FakeShadowRepository:
+        def __init__(self):
+            self.required = []
+
+        async def require_ready(self, selected_profile):
+            self.required.append(selected_profile)
+            return {"ready": True}
+
+    shadow_repository = FakeShadowRepository()
+    result = await benchmark_retrieval.run(
+        Namespace(
+            command="run",
+            confirm=benchmark_retrieval.BENCHMARK_CONFIRMATION,
+            max_provider_requests=1,
+            corpus=CORPUS_PATH,
+            space="shadow",
+            provider="ollama",
+            json=True,
+        ),
+        postgres_factory=lambda **kwargs: FakePostgres(),
+        corpus_loader=lambda path: _corpus(),
+        profile_resolver=profile_resolver,
+        shadow_profile_resolver=shadow_profile_resolver,
+        embedder_factory=embedder_factory,
+        benchmark_runner=benchmark_runner,
+        shadow_repository_factory=lambda postgres: shadow_repository,
+    )
+
+    assert result == 0
+    profile_resolver.assert_not_called()
+    shadow_profile_resolver.assert_called_once_with("ollama")
+    assert shadow_repository.required == [profile]
+    embedder_factory.assert_called_once_with(profile, transport_max_retries=0)
+    benchmark_runner.assert_awaited_once()
+    arguments = benchmark_runner.await_args
+    assert arguments.args[3] is embedder
+    assert profile.fingerprint in arguments.kwargs["search_query"]
+    assert arguments.kwargs["evaluated_space"] == {
+        "kind": "shadow",
+        "profile_fingerprint": profile.fingerprint,
+    }
+    assert _corpus().cases[0].query not in capsys.readouterr().out

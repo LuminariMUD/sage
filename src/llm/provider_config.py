@@ -1248,6 +1248,20 @@ def resolve_provider_settings(
     return ProviderSettingsResolver(environment).resolve()
 
 
+def resolve_embedding_profile(
+    provider: str,
+    environment: Mapping[str, str] | None = None,
+) -> EmbeddingProfile:
+    """Resolve one explicit evaluation profile without unrelated capabilities."""
+    normalized = provider.lower()
+    if normalized not in SUPPORTED_EMBEDDING_PROVIDERS:
+        raise ValueError("Embedding profile provider is unsupported")
+    return ProviderSettingsResolver(environment)._embedding_profile(
+        cast(EmbeddingProviderName, normalized),
+        graphiti=False,
+    )
+
+
 def is_text_profile_ready(task: TextTask = "chat") -> bool:
     """Return whether the selected text task has a valid local configuration."""
     try:
