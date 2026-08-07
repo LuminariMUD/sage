@@ -1,6 +1,6 @@
 # Testing Guide
 
-**Version**: 0.7.17
+**Version**: 0.7.18
 **Status**: Production Ready
 **Last Updated**: 2026-08-07
 
@@ -13,6 +13,7 @@ Comprehensive guide for testing Luminari Sage, covering unit tests, integration 
 - [Overview](#overview)
 - [Test Structure](#test-structure)
 - [Running Tests](#running-tests)
+- [Episode Retrieval Benchmark](#episode-retrieval-benchmark)
 - [Graphiti Extraction Benchmark](#graphiti-extraction-benchmark)
 - [Test Markers](#test-markers)
 - [Writing Tests](#writing-tests)
@@ -177,6 +178,50 @@ pytest -n 4
 # Run tests in parallel (auto-detect CPUs)
 pytest -n auto
 ```
+
+## Episode Retrieval Benchmark
+
+`benchmarks/episode_retrieval_v1.json` is a byte-fingerprinted quality corpus for
+the active episode vector space. It contains 12 questions, 33 manually graded
+episode judgments, and 39 expected entity aliases. Judgments use document stable
+IDs plus episode indexes rather than deployment-specific UUIDs, and each one is
+bound to the exact durable source fingerprint. The corpus also pins a canonical
+fingerprint of all 611 source episodes, so unrelated source drift is visible.
+
+Validate the corpus against PostgreSQL without resolving provider configuration or
+constructing an embedding adapter:
+
+```bash
+make retrieval-corpus-check
+make retrieval-corpus-check-json
+```
+
+Validation runs through a PostgreSQL session with
+`default_transaction_read_only=on`. It verifies snapshot counts/fingerprint,
+judgment presence and source identity, and that every expected entity has an alias
+grounded in the judged episode text. Reports contain counts, fingerprints, case
+IDs, and finding codes but no episode text.
+
+The actual benchmark is opt-in because it embeds the 12 query strings using the
+selected application embedding provider:
+
+```bash
+make benchmark-retrieval \
+  CONFIRM_RETRIEVAL_BENCHMARK=RUN_RETRIEVAL_BENCHMARK
+```
+
+The command validates exact confirmation before reading the corpus or provider
+configuration. It then requires a clean active-space preflight, disables transport
+retries, enforces `RETRIEVAL_BENCHMARK_MAX_REQUESTS` (default `1`) before adapter
+construction, and performs read-only top-10 episode searches. Output includes
+macro Recall@5, Recall@10, MRR@10, nDCG@10, usage when supplied by the provider,
+and p50/p95 search latency. It excludes queries, ranked episode identities, source
+text, vectors, credentials, and arbitrary exception detail.
+
+Exit `0` means the benchmark completed, not that a candidate was approved. Quality
+thresholds remain deliberately unconfigured until the Nomic baseline and candidate
+results are reviewed. Exit `1` means corpus drift; exit `2` means refusal, invalid
+configuration, failed preflight, or incomplete execution.
 
 ## Graphiti Extraction Benchmark
 

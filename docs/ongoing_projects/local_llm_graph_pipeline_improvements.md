@@ -232,6 +232,30 @@ approval. The ignored `.env` was not inspected or displayed, and its newly added
 request, graph claim, ingestion, or live data mutation occurred. The worker remains
 stopped by operator request.
 
+### 2026-08-07 - Versioned episode retrieval baseline checkpoint, read-only
+
+- Added a 12-question Lumia retrieval corpus with 33 manually graded, portable
+  episode judgments and 39 expected entity aliases. Every judgment is bound to its
+  durable source fingerprint, and the corpus pins a canonical content-free digest
+  of all 611 episodes across 14 documents.
+- Added read-only reconciliation of complete snapshot identity, judgment presence,
+  judgment source identity, and expected-entity grounding. Validation resolves no
+  provider configuration, builds no model adapter, and emits no lore text.
+- Added deterministic Recall@5, Recall@10, MRR@10, and nDCG@10 scoring plus a
+  content-free result contract with per-case metrics, profile identity, available
+  usage, request accounting, and p50/p95 search latency.
+- Added exact-confirmation human/JSON benchmark entrypoints. They require a clean
+  active embedding preflight before adapter construction, disable transport retries,
+  and enforce the provider-request ceiling before inference.
+
+Fourteen focused offline tests, the complete offline fast gate (278 passed, 6
+skipped, 112 intentionally deselected), and all 13 relevant isolated PostgreSQL
+tests pass. Live read-only corpus reconciliation validates all 33 judgments and 39
+entity expectations against the pinned snapshot. The actual retrieval benchmark
+was not authorized or run; no baseline metric, quality threshold, provider request,
+graph claim, ingestion, or live mutation is claimed. The worker remains stopped by
+operator request.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.

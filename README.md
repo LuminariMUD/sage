@@ -1,6 +1,6 @@
 # Luminari Sage - Intelligent Lore Management System
 
-**Version**: 0.7.17
+**Version**: 0.7.18
 **Status**: Production Deployed
 **Deployment**: luminarimud.com:8003
 **Repository**: https://github.com/LuminariMUD/sage
@@ -370,6 +370,37 @@ existing-space procedures.
 
 ---
 
+## Retrieval Quality Baseline
+
+The checked-in retrieval corpus contains 12 lore questions, 33 graded episode
+judgments, and 39 expected entity aliases. Every judgment is tied to a portable
+document stable ID, episode index, and exact source fingerprint; the complete
+611-episode source snapshot is fingerprinted separately.
+
+```bash
+# Strictly read-only; validates source drift and entity grounding without a model
+make retrieval-corpus-check
+make retrieval-corpus-check-json
+```
+
+The active-index benchmark computes macro Recall@5, Recall@10, MRR@10, and
+nDCG@10. It is a real embedding-provider operation and therefore refuses unless
+the active embedding preflight is ready and the exact confirmation token is
+provided:
+
+```bash
+make benchmark-retrieval \
+  CONFIRM_RETRIEVAL_BENCHMARK=RUN_RETRIEVAL_BENCHMARK
+```
+
+Transport retries are disabled for this benchmark and the default provider-call
+ceiling is one batched request. Output excludes query text, ranked episode
+identities, vectors, source text, and credentials. A completed run is evidence,
+not automatic approval: acceptance thresholds and manual comparison remain rollout
+decisions.
+
+---
+
 ## Testing
 
 ```bash
@@ -537,5 +568,5 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ---
 
 **Last Updated**: 2026-08-07
-**Version**: 0.7.17
+**Version**: 0.7.18
 **Status**: Production Ready

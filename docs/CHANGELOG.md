@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Versioned Episode Retrieval Quality Baseline (0.7.18)**
+  - Added a byte-fingerprinted 12-case Lumia retrieval corpus with 33 graded portable episode judgments, 39 expected entity aliases, per-judgment source fingerprints, and a canonical fingerprint of the complete 611-episode source snapshot.
+  - Added deterministic macro Recall@5, Recall@10, MRR@10, and nDCG@10 scoring plus content-free per-case summaries; acceptance thresholds remain explicitly unconfigured pending baseline/candidate review.
+  - Added read-only human/JSON corpus reconciliation for snapshot drift, judgment identity, and entity grounding without provider configuration or adapter construction.
+  - Added an exact-confirmation active-index benchmark with pre-inference embedding-space guards, disabled transport retries, a hard batched provider-request ceiling, sanitized usage/timing output, and no query, ranked identity, source text, vector, credential, or arbitrary exception emission.
+  - Mounted the non-secret Gitleaks policy read-only in the development container so its scanner-contract tests run in the same isolated test harness.
+  - Verified 14 focused tests, 278 offline fast tests with 6 skips and 112 intentional deselections, and all 13 relevant isolated PostgreSQL tests. All 12 cases, 33 judgments, and 39 entity expectations reconcile with the stopped live snapshot without a provider call, graph claim, ingestion, live mutation, or worker restart.
+
 - **Embedding Profile and Physical-Index Guards (0.7.17)**
   - Added migration `0004_embedding_index_profiles` with immutable secret-free profile identities, one-active-space metadata, physical 768/384 dimension assertions, retired legacy spaces, and an episode HNSW cosine index when applied.
   - Retired the destructive pre-migration `add_episode_uuid.sql` helper so it now refuses execution instead of dropping the episode table or recreating an incompatible vector space.

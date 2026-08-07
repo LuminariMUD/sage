@@ -1,7 +1,7 @@
 # Luminari Sage Quick Start Guide
 
-**Last Updated**: November 12, 2025
-**Version**: 0.7.17
+**Last Updated**: August 7, 2026
+**Version**: 0.7.18
 **Status**: Production Ready
 
 ## Prerequisites
@@ -35,10 +35,9 @@ cd sage
 cp .env.example .env
 chmod 600 .env
 
-# Edit .env with your OpenAI API key
+# Edit .env with database/auth secrets and only credentials required by the
+# providers you select. The default all-Ollama profile needs no cloud key.
 nano .env
-# Required: Set OPENAI_API_KEY=sk-your-key-here
-# Optional: Set database passwords (auto-generated if not set)
 ```
 
 ### 2. Start All Services
@@ -68,6 +67,9 @@ make embedding-profile-activate \
 
 # Preflight must report READY before embedding-dependent reads or writes
 make embedding-preflight
+
+# Validate the versioned retrieval judgments without calling a model
+make retrieval-corpus-check
 
 # Run pipeline stages deliberately
 make load-canon

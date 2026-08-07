@@ -259,6 +259,7 @@ services:
       - ./ui:/app/ui:ro
       - ./pytest.ini:/app/pytest.ini:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./.gitleaks.toml:/app/.gitleaks.toml:ro
       - ./.env.example:/app/.env.example:ro
       - ./docker-compose.yml:/app/docker-compose.yml:ro
       - ./docker-compose.prod.yml:/app/docker-compose.prod.yml:ro

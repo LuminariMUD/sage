@@ -1,0 +1,348 @@
+{
+  "schema_version": 1,
+  "corpus_id": "luminari-episode-retrieval:v1",
+  "description": "Graded episode-retrieval judgments for the stopped 611-episode Lumia lore snapshot.",
+  "source_snapshot": {
+    "episode_count": 611,
+    "document_count": 14,
+    "fingerprint": "source-snapshot:sha256:e251b644b5b0cbddf5bd62b019ad84cb865e18f114579ccb8566ef5d9b5b99f7"
+  },
+  "metrics": {
+    "cutoffs": [5, 10]
+  },
+  "cases": [
+    {
+      "id": "crystal_dwarf_transformation",
+      "query": "Why did the dwarves seal Nagburim during the Last War, and how did Arcanite transform them into Crystal Dwarves?",
+      "expected_entities": [
+        {"id": "crystal_dwarves", "aliases": ["Crystal Dwarves", "Glassborn"]},
+        {"id": "nagburim", "aliases": ["Nagburim"]},
+        {"id": "arcanite", "aliases": ["Arcanite"]},
+        {"id": "last_war", "aliases": ["Last War"]}
+      ],
+      "judgments": [
+        {
+          "document_stable_id": "378fa668_01KDSRVJJ69FTNGS2RNXHDSMA2",
+          "episode_index": 1,
+          "source_fingerprint": "sha256:v1:126f69fd449635efc21f34c2e38ce470a8534f6df97ec7227387f20df3424a54",
+          "relevance": 3
+        },
+        {
+          "document_stable_id": "378fa668_01KDSRVJJ69FTNGS2RNXHDSMA2",
+          "episode_index": 2,
+          "source_fingerprint": "sha256:v1:a704934ceef29f061d0a437120a9bfea5fb302b9d00aeaa4b0eaebd829bee062",
+          "relevance": 3
+        },
+        {
+          "document_stable_id": "e32baeb1_01KDSRTZZ2R72RJYKBWRBQMSSQ",
+          "episode_index": 6,
+          "source_fingerprint": "sha256:v1:2660875f9d50b59aafc64e211aa8dab05f812955f785984475980e61013d1d85",
+          "relevance": 2
+        }
+      ]
+    },
+    {
+      "id": "trelux_planetary_mind",
+      "query": "What are the Trelux, and how are they connected to Lumia's awakening and planetary consciousness?",
+      "expected_entities": [
+        {"id": "trelux", "aliases": ["Trelux"]},
+        {"id": "lumia", "aliases": ["Lumia"]},
+        {"id": "planetary_mind", "aliases": ["planetary mind", "planetary consciousness"]}
+      ],
+      "judgments": [
+        {
+          "document_stable_id": "9fa94417_01KDSRVJM23CW4P14J5Y0CVNP7",
+          "episode_index": 0,
+          "source_fingerprint": "sha256:v1:c977a43ab850e237f0a06333a31ee448f7bd8f220c9aea89f6ccfd2609899ab7",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "9fa94417_01KDSRVJM23CW4P14J5Y0CVNP7",
+          "episode_index": 1,
+          "source_fingerprint": "sha256:v1:eb0c27ed975de57b525b770bd9bd08a162d01ba361159472c12a14d9296a812c",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "9fa94417_01KDSRVJM23CW4P14J5Y0CVNP7",
+          "episode_index": 2,
+          "source_fingerprint": "sha256:v1:2e4b6717d90356e804c14974e51e7a5202732854e1b88f62df60b02a5a23e11b",
+          "relevance": 3
+        }
+      ]
+    },
+    {
+      "id": "new_anteria_death_compact",
+      "query": "What is New Anteria's Death Compact, who rules the empire, and how does death affect citizenship?",
+      "expected_entities": [
+        {"id": "new_anteria", "aliases": ["New Anteria"]},
+        {"id": "death_compact", "aliases": ["Death Compact"]},
+        {"id": "malachar", "aliases": ["Lich-King Malachar III", "Malachar III"]},
+        {"id": "iluai", "aliases": ["Iluai"]}
+      ],
+      "judgments": [
+        {
+          "document_stable_id": "4dfdd331_01KDSRVJK65KF8FBPJ4N796TP6",
+          "episode_index": 1,
+          "source_fingerprint": "sha256:v1:c68b80398d124fc7d96c6c99c8cbb3242932b4a8e5625a3caa8aedb8bc807d87",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "4dfdd331_01KDSRVJK65KF8FBPJ4N796TP6",
+          "episode_index": 2,
+          "source_fingerprint": "sha256:v1:93813e895249583e63fd50ab128c0e3430341ce785b290fc21fbd70c1ff8610a",
+          "relevance": 3
+        }
+      ]
+    },
+    {
+      "id": "crimson_loom_patrons",
+      "query": "Which two gods patron the Crimson Loom, and what does their partnership give the order?",
+      "expected_entities": [
+        {"id": "crimson_loom", "aliases": ["Crimson Loom", "Crimson Knights"]},
+        {"id": "kordran", "aliases": ["Kordran the Battleforged", "Kordran"]},
+        {"id": "aethyra", "aliases": ["Aethyra, Lady of the Loom", "Aethyra"]}
+      ],
+      "judgments": [
+        {
+          "document_stable_id": "b76a5b3d_01KDSRVJKRPWN5ETP267D9KJHD",
+          "episode_index": 2,
+          "source_fingerprint": "sha256:v1:8beeecfd46eb3cdabe0cabddd3836ddb5482270928daa2cd92f2b1bb5c228851",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "b76a5b3d_01KDSRVJKRPWN5ETP267D9KJHD",
+          "episode_index": 3,
+          "source_fingerprint": "sha256:v1:57433d8c5fefd50ea18b9c04bc90d68b972cfcf7dea29fe07fd96e1e9aa50fa5",
+          "relevance": 3
+        }
+      ]
+    },
+    {
+      "id": "sundered_dawn_duality",
+      "query": "Which sister-deities patron the Knights of the Sundered Dawn, and what dual ritual defines the order?",
+      "expected_entities": [
+        {"id": "sundered_dawn", "aliases": ["Sundered Dawn"]},
+        {"id": "seraphine", "aliases": ["Seraphine"]},
+        {"id": "nyxara", "aliases": ["Nyxara"]}
+      ],
+      "judgments": [
+        {
+          "document_stable_id": "af1700b4_01KDSRVJKXFVK8Q5NG2E72XT0W",
+          "episode_index": 5,
+          "source_fingerprint": "sha256:v1:a86b0346f5acbbd52bec31449a99de16073467a1fc0ec0ed232239503333759f",
+          "relevance": 1
+        },
+        {
+          "document_stable_id": "af1700b4_01KDSRVJKXFVK8Q5NG2E72XT0W",
+          "episode_index": 6,
+          "source_fingerprint": "sha256:v1:d0e7764660c64e8822ddac392f498bac2205febe552252bd765337adbffdaa13",
+          "relevance": 3
+        }
+      ]
+    },
+    {
+      "id": "swiftpath_navigation",
+      "query": "How does a traveler choose a destination through a Swiftpath, and why do merchants hire Path Guides?",
+      "expected_entities": [
+        {"id": "swiftpaths", "aliases": ["Swiftpath", "Swiftpaths"]},
+        {"id": "path_guides", "aliases": ["Path Guides", "Path Guide"]}
+      ],
+      "judgments": [
+        {
+          "document_stable_id": "b094665f_01KDSRVJK2JE98NKS67KBYRKGA",
+          "episode_index": 14,
+          "source_fingerprint": "sha256:v1:98bb5c3d38859490a2b02af0b8719db2ad7c1f8d7db517a89f70838409c9711e",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "b094665f_01KDSRVJK2JE98NKS67KBYRKGA",
+          "episode_index": 15,
+          "source_fingerprint": "sha256:v1:608477827b28ef893fc075c1b5c8fda0d4b0fd0ae4f80648d744f3dc36b6304d",
+          "relevance": 3
+        },
+        {
+          "document_stable_id": "b094665f_01KDSRVJK2JE98NKS67KBYRKGA",
+          "episode_index": 16,
+          "source_fingerprint": "sha256:v1:5fc9466495c5ace6afa872cdad9c18f558db3414f224ed5197135ba78f0f1c4d",
+          "relevance": 2
+        }
+      ]
+    },
+    {
+      "id": "luminari_original_sin",
+      "query": "Why were the Luminari never meant to exist, and what role did the Aeon of Manifestation play in their origin?",
+      "expected_entities": [
+        {"id": "luminari", "aliases": ["Luminari"]},
+        {"id": "infinite_eternal", "aliases": ["Infinite Eternal"]},
+        {"id": "aeon_manifestation", "aliases": ["Aeon of Manifestation"]}
+      ],
+      "judgments": [
+        {
+          "document_stable_id": "f429b1c3_01KDSRTZZCVETEGQKXZDW4CTFB",
+          "episode_index": 0,
+          "source_fingerprint": "sha256:v1:871b0a4589862c0656031f2ad544680b9b0fdef540b3d34aefe6702670ecc820",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "f429b1c3_01KDSRTZZCVETEGQKXZDW4CTFB",
+          "episode_index": 1,
+          "source_fingerprint": "sha256:v1:bdbbceadb805bb78aced359e4a1ca78267b676d1562ac81bec0d3ac35206e2d3",
+          "relevance": 3
+        }
+      ]
+    },
+    {
+      "id": "half_orc_divine_forging",
+      "query": "According to the Races of Lumia chronicle, how were Half-Orcs created during the First Darkling War, and what purpose do their tusks serve?",
+      "expected_entities": [
+        {"id": "half_orcs", "aliases": ["Half-Orcs", "Grohl'mar"]},
+        {"id": "cassis", "aliases": ["Cassis"]},
+        {"id": "keridur", "aliases": ["Keridur"]},
+        {"id": "darklings", "aliases": ["Darkling", "Darklings"]}
+      ],
+      "judgments": [
+        {
+          "document_stable_id": "b5eb7e14_01KDSRVJM6HYP2RC7HZDCCNG64",
+          "episode_index": 20,
+          "source_fingerprint": "sha256:v1:234c83520eebf10f90392c74d6993aef59c44b25ee4a204a09cb9bcecdbf9fb7",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "b5eb7e14_01KDSRVJM6HYP2RC7HZDCCNG64",
+          "episode_index": 21,
+          "source_fingerprint": "sha256:v1:6ff12e90f9845d3349c66720adc910d16fa171edd7e871efcf1296503cb288d6",
+          "relevance": 3
+        },
+        {
+          "document_stable_id": "b5eb7e14_01KDSRVJM6HYP2RC7HZDCCNG64",
+          "episode_index": 22,
+          "source_fingerprint": "sha256:v1:edaab8543e06b3c8c237bf0122f19aee5c47221c56a36d102b0f6cc5c1065092",
+          "relevance": 3
+        },
+        {
+          "document_stable_id": "b5eb7e14_01KDSRVJM6HYP2RC7HZDCCNG64",
+          "episode_index": 23,
+          "source_fingerprint": "sha256:v1:1259707ba4268667b42c7c6f3381ac933418fa9fa55cd9779c73f02e67b76dd6",
+          "relevance": 2
+        }
+      ]
+    },
+    {
+      "id": "forgotten_tide_hierarchy",
+      "query": "How is the Forgotten Tide organized under the Black Bitch, from Tide Captains to Wake Riders?",
+      "expected_entities": [
+        {"id": "forgotten_tide", "aliases": ["Forgotten Tide"]},
+        {"id": "black_bitch", "aliases": ["Black Bitch"]},
+        {"id": "tide_captains", "aliases": ["Tide Captains"]},
+        {"id": "wake_riders", "aliases": ["Wake Riders"]}
+      ],
+      "judgments": [
+        {
+          "document_stable_id": "2ce831ec_01KDSRVJKH52JRDR4FG99VSKEJ",
+          "episode_index": 18,
+          "source_fingerprint": "sha256:v1:dd079be250b33d445608fd6ce705443ed0a6c325657c89f6ff30b0788c560596",
+          "relevance": 3
+        },
+        {
+          "document_stable_id": "2ce831ec_01KDSRVJKH52JRDR4FG99VSKEJ",
+          "episode_index": 19,
+          "source_fingerprint": "sha256:v1:751665e92b29476c052166ee69d7545071bbfd294c6034864b9dd3b292627879",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "2ce831ec_01KDSRVJKH52JRDR4FG99VSKEJ",
+          "episode_index": 20,
+          "source_fingerprint": "sha256:v1:981a5e2dabd76bfa6fbb4244907cf8417023dfb2c70a5c389614cf6fd73a87f6",
+          "relevance": 1
+        }
+      ]
+    },
+    {
+      "id": "villain_three_tiers",
+      "query": "What are the three tiers of Lumia's villain hierarchy, and how do mortal, supernatural, and cosmic threats differ?",
+      "expected_entities": [
+        {"id": "arcanite_syndicate", "aliases": ["Arcanite Syndicate"]},
+        {"id": "void_crown_remnants", "aliases": ["Void Crown Remnants"]},
+        {"id": "twenty_first_titan", "aliases": ["Twenty-First Titan"]}
+      ],
+      "judgments": [
+        {
+          "document_stable_id": "69f33889_01KDSRVJKDPD9WY091EJMF3MWH",
+          "episode_index": 0,
+          "source_fingerprint": "sha256:v1:e4ce2a7aff488908d7de84a48b74ab7e1848dd3a85f1f634fc54a411df60d9ce",
+          "relevance": 3
+        },
+        {
+          "document_stable_id": "69f33889_01KDSRVJKDPD9WY091EJMF3MWH",
+          "episode_index": 1,
+          "source_fingerprint": "sha256:v1:a465b32b529c7e8dfe60e821802235df21bd17da6806524fdd9038575e9e096c",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "69f33889_01KDSRVJKDPD9WY091EJMF3MWH",
+          "episode_index": 22,
+          "source_fingerprint": "sha256:v1:7ed83fcd220c7be8cc7bdb26e4e63971689c06635fec17dffa165f5dd566a7e8",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "69f33889_01KDSRVJKDPD9WY091EJMF3MWH",
+          "episode_index": 42,
+          "source_fingerprint": "sha256:v1:2ec55cdac7528a538f365f48e4cb44ac9802c8413641edb07806dd2994e96a70",
+          "relevance": 2
+        }
+      ]
+    },
+    {
+      "id": "age_of_revelation",
+      "query": "What defines Lumia's current Age of Revelation, how long has it lasted, and what signs suggest it is ending?",
+      "expected_entities": [
+        {"id": "age_revelation", "aliases": ["Age of Revelation"]},
+        {"id": "shadowmoon", "aliases": ["Shadowmoon"]},
+        {"id": "serane", "aliases": ["Serane"]}
+      ],
+      "judgments": [
+        {
+          "document_stable_id": "454cc103_01KDSRTZZGANYK5TYMXVAVZ6QE",
+          "episode_index": 8,
+          "source_fingerprint": "sha256:v1:c4c9f0ed5aca2ce088f28c2e90e2f985286b19d01ed7bbe2c83f56c813fa17eb",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "454cc103_01KDSRTZZGANYK5TYMXVAVZ6QE",
+          "episode_index": 9,
+          "source_fingerprint": "sha256:v1:f2ab8aecf2cdd7d4841710f15d1e2ff71cc2421d1d11b34db5909940fb3c0290",
+          "relevance": 3
+        }
+      ]
+    },
+    {
+      "id": "void_wake_names",
+      "query": "What names do the Salandrian Navy, merchant guilds, drow of House Vel'Sharen, and her crew use for the Black Bitch of Void's Wake?",
+      "expected_entities": [
+        {"id": "black_bitch", "aliases": ["Black Bitch of Void's Wake", "Black Bitch"]},
+        {"id": "salandrian_navy", "aliases": ["Salandrian Navy"]},
+        {"id": "velsharen", "aliases": ["House Vel'Sharen", "Vel'Sharen"]}
+      ],
+      "judgments": [
+        {
+          "document_stable_id": "ce18fb8a_01KDSRVJMC57P2E6YKKVYNDY8F",
+          "episode_index": 0,
+          "source_fingerprint": "sha256:v1:749fce8b569cf50da636217afd0a02d2224b3e90e715111b8710d8cc38d2aa88",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "ce18fb8a_01KDSRVJMC57P2E6YKKVYNDY8F",
+          "episode_index": 1,
+          "source_fingerprint": "sha256:v1:e43107b6dbe588c36573af722c98cd737d71ac85920a43f00e70a289f232674d",
+          "relevance": 2
+        },
+        {
+          "document_stable_id": "ce18fb8a_01KDSRVJMC57P2E6YKKVYNDY8F",
+          "episode_index": 2,
+          "source_fingerprint": "sha256:v1:49af774f32df475fbdb8793ea5f6cb52cbbed8bb73d876246f8d1d14ed3c6424",
+          "relevance": 3
+        }
+      ]
+    }
+  ]
+}

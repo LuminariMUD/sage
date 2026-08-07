@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
 
 # Support for verbose mode
 ifdef VERBOSE
@@ -59,6 +59,9 @@ help:
 	@echo "  make embedding-preflight      - Check vector dimensions, profiles, indexes, and counts"
 	@echo "  make embedding-preflight-json - Emit the read-only embedding preflight as JSON"
 	@echo "  make embedding-profile-activate CONFIRM_EMBEDDING_PROFILE=... - Activate metadata only"
+	@echo "  make retrieval-corpus-check   - Reconcile retrieval judgments read-only"
+	@echo "  make retrieval-corpus-check-json - Emit corpus reconciliation as JSON"
+	@echo "  make benchmark-retrieval CONFIRM_RETRIEVAL_BENCHMARK=RUN_RETRIEVAL_BENCHMARK - Active-index quality benchmark"
 	@echo "  make provider-config-check    - Validate and show sanitized provider profiles"
 	@echo "  make provider-config-check-json - Emit sanitized provider profiles as JSON"
 	@echo "  make provider-text-probe CONFIRM_PROVIDER_PROBE=RUN_PROVIDER_PROBE - One bounded text call"
@@ -404,6 +407,34 @@ embedding-profile-activate:
 		python src/scripts/embedding_preflight.py activate \
 		$(if $(filter 1 true yes,$(ADOPT_EXISTING)),--adopt-existing,) \
 		--confirm "$(CONFIRM_EMBEDDING_PROFILE)"
+
+.PHONY: retrieval-corpus-check
+retrieval-corpus-check:
+	@docker compose run --rm --no-deps api \
+		python src/scripts/benchmark_retrieval.py validate
+
+.PHONY: retrieval-corpus-check-json
+retrieval-corpus-check-json:
+	@docker compose run --rm --no-deps api \
+		python src/scripts/benchmark_retrieval.py --json validate
+
+.PHONY: benchmark-retrieval
+benchmark-retrieval:
+	@test "$(CONFIRM_RETRIEVAL_BENCHMARK)" = "RUN_RETRIEVAL_BENCHMARK" || \
+		(echo "CONFIRM_RETRIEVAL_BENCHMARK=RUN_RETRIEVAL_BENCHMARK is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api \
+		python src/scripts/benchmark_retrieval.py run \
+		--max-provider-requests "$(or $(RETRIEVAL_BENCHMARK_MAX_REQUESTS),1)" \
+		--confirm "$(CONFIRM_RETRIEVAL_BENCHMARK)"
+
+.PHONY: benchmark-retrieval-json
+benchmark-retrieval-json:
+	@test "$(CONFIRM_RETRIEVAL_BENCHMARK)" = "RUN_RETRIEVAL_BENCHMARK" || \
+		(echo "CONFIRM_RETRIEVAL_BENCHMARK=RUN_RETRIEVAL_BENCHMARK is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api \
+		python src/scripts/benchmark_retrieval.py --json run \
+		--max-provider-requests "$(or $(RETRIEVAL_BENCHMARK_MAX_REQUESTS),1)" \
+		--confirm "$(CONFIRM_RETRIEVAL_BENCHMARK)"
 
 .PHONY: provider-config-check
 provider-config-check:

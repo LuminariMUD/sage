@@ -255,6 +255,34 @@ created. The ignored `.env` was not inspected or displayed; the new local
 call, graph claim, ingestion, or live data mutation occurred, and the worker remains
 stopped by operator request.
 
+### Versioned episode retrieval baseline checkpoint - implemented, not executed
+
+- Added `benchmarks/episode_retrieval_v1.json` with 12 reviewed lore questions,
+  33 graded episode judgments, and 39 expected entity aliases. Episode selectors
+  use portable document stable IDs plus indexes, and each judgment pins the exact
+  durable source fingerprint.
+- Bound the corpus to a canonical content-free fingerprint of the complete stopped
+  source snapshot: 611 episodes across 14 documents. Read-only reconciliation
+  validates snapshot drift, every judgment, and entity grounding without resolving
+  provider configuration or constructing an adapter.
+- Added deterministic macro Recall@5, Recall@10, MRR@10, and nDCG@10 scoring. The
+  report retains content-free per-case metrics, profile identity, provider request
+  counts, available usage, and p50/p95 search latency while omitting query text,
+  ranked episode identities, source text, and vectors.
+- Added human/JSON Make targets for read-only corpus validation and an opt-in active
+  index benchmark. The execution path requires the exact
+  `RUN_RETRIEVAL_BENCHMARK` token before corpus/configuration access, requires clean
+  active-space preflight before adapter construction, disables transport retries,
+  and enforces a precomputed provider-request ceiling.
+
+Fourteen focused offline tests, the complete offline fast gate (278 passed, 6
+skipped, 112 intentionally deselected), and all 13 relevant isolated PostgreSQL
+tests pass. The real read-only reconciliation validates all 12 cases, 33 judgments,
+and 39 entity expectations against the pinned live snapshot. The actual embedding
+benchmark was not confirmed or executed, so no Nomic baseline or candidate quality
+result is claimed and acceptance thresholds remain open. No provider/model call,
+graph claim, ingestion, live mutation, or worker restart occurred.
+
 ---
 
 ## 1. Executive Summary
@@ -862,7 +890,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [ ] Reconcile checked-in schemas with the live 768-dimensional episode state.
 - [x] Capture a PostgreSQL and Neo4j backup and verify restore instructions.
 - [x] Run and archive the current manual PostgreSQL/Neo4j ID-set reconciliation as the audit baseline.
-- [ ] Create a versioned retrieval benchmark with lore questions and expected episodes/entities.
+- [x] Create a versioned retrieval benchmark with lore questions and expected episodes/entities.
 - [ ] Create a versioned extraction corpus with expected parse/schema outcomes, important entities, and important relationships.
 - [ ] Capture current Nomic retrieval metrics, 3B/7B extraction behavior, Graphiti quality, latency, GPU use, and failure classes.
 - [ ] Approve the error taxonomy, sync-profile fingerprint fields, attempt limits, lease policy, and hard release invariants.
@@ -1124,7 +1152,7 @@ For Graphiti, each row must exercise primary success, eligible fallback success,
 
 ### 11.5 Quality and performance gates
 
-- [ ] Establish Recall@5/Recall@10, MRR or nDCG, and manual relevance judgments for the lore benchmark.
+- [x] Establish Recall@5/Recall@10, MRR or nDCG, and manual relevance judgments for the lore benchmark.
 - [ ] Require the candidate embedding profile to meet the Phase 0 agreed threshold before cutover.
 - [ ] Compare entity/relationship extraction precision and omission rates.
 - [ ] Record primary parse/schema success, fallback rate/success, quarantine rate, and accepted/rejected graph elements by reason.
