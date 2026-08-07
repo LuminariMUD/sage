@@ -108,7 +108,7 @@ class GraphSyncRepository:
                 await connection.execute("SELECT pg_advisory_xact_lock($1)", RUN_START_LOCK_ID)
                 active = await connection.fetchrow("""
                     SELECT id, state, worker_id, sync_profile_fingerprint,
-                           started_at, heartbeat_at
+                           rebuild_operation_id, started_at, heartbeat_at
                     FROM graph_sync_runs
                     WHERE state <> 'stopped'
                     ORDER BY started_at
@@ -132,18 +132,78 @@ class GraphSyncRepository:
                     )
                     return self._run_record(refreshed)
 
+                rebuild = await connection.fetchrow("""
+                    SELECT id, state, target_sync_profile_fingerprint
+                    FROM graph_rebuild_operations
+                    WHERE state <> 'completed'
+                    ORDER BY created_at
+                    LIMIT 1
+                    FOR UPDATE
+                    """)
+                rebuild_operation_id = None
+                if rebuild is not None:
+                    if rebuild["target_sync_profile_fingerprint"] != sync_profile_fingerprint:
+                        raise RunUnavailableError("Active rebuild uses a different sync profile")
+                    if rebuild["state"] == "jobs_requeued":
+                        raise RunUnavailableError("Active rebuild has not completed graph clearing")
+                    if rebuild["state"] == "running":
+                        raise RunUnavailableError("Active rebuild run state is inconsistent")
+                    if rebuild["state"] == "awaiting_audit":
+                        remaining = await connection.fetchval(
+                            """
+                            SELECT count(*)
+                            FROM graph_sync_jobs
+                            WHERE state <> 'synced'
+                               OR sync_profile_fingerprint <> $1
+                            """,
+                            sync_profile_fingerprint,
+                        )
+                        if not remaining:
+                            raise RunUnavailableError("Active rebuild is awaiting its final audit")
+                    await connection.execute(
+                        """
+                        UPDATE graph_rebuild_operations
+                        SET state = 'running', run_count = run_count + 1
+                        WHERE id = $1
+                        """,
+                        rebuild["id"],
+                    )
+                    rebuild_operation_id = rebuild["id"]
+
                 created = await connection.fetchrow(
                     """
                     INSERT INTO graph_sync_runs (
-                        worker_id, sync_profile_fingerprint, heartbeat_at
+                        worker_id, sync_profile_fingerprint,
+                        rebuild_operation_id, heartbeat_at
                     )
-                    VALUES ($1, $2, clock_timestamp())
+                    VALUES ($1, $2, $3, clock_timestamp())
                     RETURNING id, state, worker_id, sync_profile_fingerprint,
                               started_at, heartbeat_at
                     """,
                     worker_id,
                     sync_profile_fingerprint,
+                    rebuild_operation_id,
                 )
+                if rebuild_operation_id is not None:
+                    next_sequence = await connection.fetchval(
+                        """
+                        SELECT COALESCE(max(sequence), 0) + 1
+                        FROM graph_rebuild_events
+                        WHERE rebuild_operation_id = $1
+                        """,
+                        rebuild_operation_id,
+                    )
+                    await connection.execute(
+                        """
+                        INSERT INTO graph_rebuild_events (
+                            rebuild_operation_id, sequence, event_type, run_id
+                        )
+                        VALUES ($1, $2, 'run_started', $3)
+                        """,
+                        rebuild_operation_id,
+                        next_sequence,
+                        created["id"],
+                    )
                 return self._run_record(created)
 
     async def heartbeat_run(self, run_id: UUID) -> datetime:
@@ -203,9 +263,10 @@ class GraphSyncRepository:
         """Stop a run only when no job from that run still has an active lease."""
         async with self.postgres.acquire() as connection:
             async with connection.transaction():
+                await connection.execute("SELECT pg_advisory_xact_lock($1)", RUN_START_LOCK_ID)
                 row = await connection.fetchrow(
                     """
-                    SELECT id, state
+                    SELECT id, state, rebuild_operation_id
                     FROM graph_sync_runs
                     WHERE id = $1
                     FOR UPDATE
@@ -238,6 +299,59 @@ class GraphSyncRepository:
                     """,
                     run_id,
                 )
+                rebuild_operation_id = row["rebuild_operation_id"]
+                if rebuild_operation_id is not None:
+                    rebuild = await connection.fetchrow(
+                        """
+                        SELECT id, state, target_sync_profile_fingerprint
+                        FROM graph_rebuild_operations
+                        WHERE id = $1
+                        FOR UPDATE
+                        """,
+                        rebuild_operation_id,
+                    )
+                    if rebuild is None or rebuild["state"] != "running":
+                        raise InvalidTransitionError("Associated graph rebuild is not running")
+                    remaining = await connection.fetchval(
+                        """
+                        SELECT count(*)
+                        FROM graph_sync_jobs
+                        WHERE state <> 'synced'
+                           OR sync_profile_fingerprint <> $1
+                        """,
+                        rebuild["target_sync_profile_fingerprint"],
+                    )
+                    next_state = "ready" if remaining else "awaiting_audit"
+                    await connection.execute(
+                        """
+                        UPDATE graph_rebuild_operations
+                        SET state = $2
+                        WHERE id = $1
+                        """,
+                        rebuild_operation_id,
+                        next_state,
+                    )
+                    next_sequence = await connection.fetchval(
+                        """
+                        SELECT COALESCE(max(sequence), 0) + 1
+                        FROM graph_rebuild_events
+                        WHERE rebuild_operation_id = $1
+                        """,
+                        rebuild_operation_id,
+                    )
+                    await connection.execute(
+                        """
+                        INSERT INTO graph_rebuild_events (
+                            rebuild_operation_id, sequence, event_type,
+                            run_id, job_count
+                        )
+                        VALUES ($1, $2, 'run_stopped', $3, $4)
+                        """,
+                        rebuild_operation_id,
+                        next_sequence,
+                        run_id,
+                        int(remaining),
+                    )
                 return self._run_record(stopped)
 
     async def claim_jobs(
@@ -796,6 +910,7 @@ class GraphSyncRepository:
                     # Claims lock the run before jobs. Preserve that lock order
                     # here so a source-edit requeue cannot create a run/job
                     # deadlock with a systemic failure completion.
+                    await connection.execute("SELECT pg_advisory_xact_lock($1)", RUN_START_LOCK_ID)
                     run_exists = await connection.fetchval(
                         "SELECT id FROM graph_sync_runs WHERE id = $1 FOR UPDATE",
                         lease.run_id,

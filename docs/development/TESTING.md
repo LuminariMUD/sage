@@ -1,6 +1,6 @@
 # Testing Guide
 
-**Version**: 0.7.22
+**Version**: 0.7.23
 **Status**: Production Ready
 **Last Updated**: 2026-08-07
 
@@ -14,6 +14,7 @@ Comprehensive guide for testing Luminari Sage, covering unit tests, integration 
 - [Test Structure](#test-structure)
 - [Running Tests](#running-tests)
 - [Episode Retrieval Benchmark](#episode-retrieval-benchmark)
+- [Controlled Graph Rebuild](#controlled-graph-rebuild)
 - [Graphiti Extraction Benchmark](#graphiti-extraction-benchmark)
 - [Test Markers](#test-markers)
 - [Writing Tests](#writing-tests)
@@ -307,6 +308,33 @@ The route ceiling counts actual internal LLM requests, not episodes. Its default
 three is intentionally fail closed and can be insufficient for ordinary Graphiti
 processing. Do not turn an offline test pass into authorization to raise that budget
 or run ingestion; use the separately confirmed non-persistent benchmark first.
+
+## Controlled Graph Rebuild
+
+The rebuild unit suite is offline. It proves confirmation ordering, recent verified
+backup and restored-episode matching, clean pre/post audit gates, durable state
+before graph deletion, resumable clearing, exact-profile finalization, sanitized
+status, and inert legacy clear/reset paths:
+
+```bash
+python -m pytest -q tests/test_graph_rebuild.py tests/test_database_migrations.py
+```
+
+The isolated PostgreSQL suite applies graph migrations `0001` through `0003` plus
+`0006` in a temporary schema. Its rebuild case proves total attempt and immutable
+ledger preservation, retry-generation reset, direct-run fencing before clear,
+run-to-rebuild association, sequence-validated append-only transition events,
+fail-closed source-row profile inheritance during and after rebuild, and
+completed-profile activation:
+
+```bash
+python -m pytest -q tests/test_graph_sync_state_integration.py
+```
+
+Neither suite connects to Neo4j, reads a real backup, clears a graph, resolves live
+provider credentials, constructs a model client, or makes a provider request. The
+real `graph-rebuild-prepare` command is destructive and remains outside normal test
+runs; it requires a fresh verified backup and its exact confirmation token.
 
 ## Graphiti Extraction Benchmark
 

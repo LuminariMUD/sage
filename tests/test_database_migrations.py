@@ -249,6 +249,26 @@ def test_repository_migration_contains_required_durable_contract():
     ):
         assert required_fragment in embedding_profile_sql
 
+    graph_rebuild_sql = migrations[5].sql
+    for required_fragment in (
+        "CREATE TABLE graph_rebuild_operations",
+        "CREATE TABLE graph_sync_profile_state",
+        "CREATE TABLE graph_rebuild_events",
+        "graph_rebuild_operations_one_active",
+        "graph_rebuild_operations_validate",
+        "graph_sync_profile_state_validate",
+        "graph_rebuild_events_validate",
+        "graph_rebuild_events_append_only",
+        "graph_sync_runs_rebuild_lock",
+        "FOR EACH STATEMENT EXECUTE FUNCTION graph_rebuild_lock_sync_run_statement",
+        "graph_sync_runs_rebuild_guard",
+        "target_embedding_profile_fingerprint",
+        "rebuild_operation_id",
+        "backup_created_at >= created_at - interval '24 hours'",
+        "managed_profile BOOLEAN := FALSE",
+    ):
+        assert required_fragment in graph_rebuild_sql
+
     retired_helper = (
         migrate_database.DEFAULT_MIGRATION_DIRECTORY.parent / "add_episode_uuid.sql"
     ).read_text(encoding="ascii")

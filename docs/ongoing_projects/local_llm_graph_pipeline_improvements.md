@@ -401,6 +401,46 @@ current runtime until a separately authorized restart. No model was pulled or
 warmed, no provider request was made, no graph job was claimed, and no ingestion,
 migration, vector write, or graph mutation occurred.
 
+### 2026-08-07 - Controlled durable graph rebuild checkpoint, not activated
+
+- Added pending migration `0006_graph_rebuild_operations` for one active rebuild,
+  sequence-validated append-only state events, lock-ordered durable-run association,
+  and the last cleanly audited Graphiti sync/embedding profile pair.
+- Added database-level fencing so jobs are atomically requeued to the target sync
+  profile before graph deletion, no worker can start before the empty-graph proof,
+  and every later worker run is linked to the rebuild and constrained to that exact
+  sync profile. Total attempt counts, last-attempt links, immutable attempts/results,
+  and provider-call evidence are preserved while a new retry generation opens.
+- Added content-free plan/status commands and separate exact confirmations for
+  preparation and finalization. Initial preparation verifies a backup from the
+  prior 24 hours, matches its scratch-restored episode count to a clean live
+  pre-audit, rejects runs/leases, commits PostgreSQL intent, clears Neo4j, and
+  requires a clean target-profile empty-graph audit. A crash after the commit
+  remains explicitly resumable at `jobs_requeued` with the same re-verified backup
+  and profile even after the initial freshness window. A crash-released session
+  lock serializes that cross-store phase so concurrent prepare commands cannot race.
+- Made new or revised source rows enter `pending` under the in-progress or last
+  completed sync profile, even when a caller supplies the legacy Boolean as true.
+  After the durable worker reaches full verified coverage, finalization
+  requires another exact-profile audit before recording both profiles as active.
+- Replaced the unsafe legacy rebuild chain and retired direct Neo4j clear and
+  derived-Boolean reset entrypoints.
+
+Fifteen focused offline tests pass. The complete fresh-container fast gate reports
+339 passed, 8 skipped, and 115 intentional deselections; all 16 relevant isolated
+PostgreSQL migration/lifecycle tests pass. The rebuild integration test preserves a
+real failed-attempt chain, proves pre-clear run fencing and post-clear association,
+records the complete append-only event sequence, and validates profile inheritance
+during and after the operation.
+
+Read-only live checks report migrations `0004`, `0005`, and `0006` pending and a
+clean graph audit at zero episodes, zero jobs, and zero Neo4j episodic records. No
+backup, migration, graph clear, provider/model call, graph claim, ingestion, service
+restart, or profile activation occurred. The retained historical backup describes
+the deleted corpus and cannot satisfy the new rebuild snapshot gate; create a fresh
+verified backup only after separate operator authorization. The worker remains
+stopped.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.

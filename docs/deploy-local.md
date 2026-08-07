@@ -21,7 +21,7 @@ Keep the real `.env` mode `0600` and never commit it.
   services. Ingestion remains frozen.
 - The development image builds successfully. The current deterministic-suite
   result is recorded in `docs/CHANGELOG.md` and the two active project plans.
-- The fresh-container offline fast gate passes 324 tests with 8 skips and 114
+- The fresh-container offline fast gate passes 339 tests with 8 skips and 115
   intentional deselections. Host-only Compose renders pass for cloud-only and
   all-local service sets.
 - An authenticated desktop/mobile browser check now passes through the real
@@ -259,13 +259,66 @@ make sync-to-graphiti \
   MAX_EPISODES=5
 ```
 
+## Controlled graph rebuild
+
+Migration `0006_graph_rebuild_operations` must be applied through the normal
+verified-backup migration gate before these commands are available. The read-only
+plan reports the configured target profiles, current cross-store audit, graph
+counts, leases, active runs, and any blocker:
+
+```bash
+make graph-rebuild-plan
+make graph-rebuild-status
+```
+
+Create a new combined backup immediately before preparation. Creating the rebuild
+operation accepts only a backup from the prior 24 hours whose scratch-restored
+episode count matches the clean pre-clear audit. An interrupted operation can later
+resume with that same re-verified backup even after the initial freshness window:
+
+```bash
+make backup-provider-upgrade \
+  BACKUP_REFERENCE=backups/provider-upgrade-<timestamp>
+
+make graph-rebuild-prepare \
+  BACKUP_REFERENCE=backups/provider-upgrade-<timestamp> \
+  CONFIRM_GRAPH_REBUILD=PREPARE_DURABLE_GRAPH_REBUILD
+```
+
+Preparation starts a new retry generation for every job while preserving total
+attempt counts, attempt/result/provider ledgers, and source fingerprints. It records
+the target sync and embedding fingerprints before clearing all Neo4j data. A crash
+after that PostgreSQL commit leaves `jobs_requeued`; rerun the same command with the
+same backup and profile to finish the idempotent clear. No provider client is
+constructed and no graph job is claimed during preparation. A session-scoped lock
+serializes the complete cross-store phase; a concurrent prepare fails before it can
+clear anything, and a crashed command releases the lock with its database session.
+
+Run only the durable worker, then finalize separately:
+
+```bash
+make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+
+make graph-rebuild-finalize \
+  CONFIRM_GRAPH_REBUILD_FINALIZE=FINALIZE_DURABLE_GRAPH_REBUILD
+```
+
+Every worker run opened during the rebuild is linked to its operation and uses the
+normal lease, immutable attempt, provider-request, verification, and retry/quarantine
+contracts. Finalization refuses unless all target-profile jobs are synchronized and
+the exact sync/embedding-profile audit is clean. Only then is the profile pair
+recorded as active. `make rebuild` composes all three steps but checks all three
+confirmation tokens before preparation begins.
+
 ## Safety and recovery
 
 - `make down` preserves data.
 - `make clean-logs` truncates only Sage application log files; it never prunes
   Docker volumes.
-- `make clear-graph`, `make clear-all`, and reset targets intentionally mutate
-  stored data. Read their prompts/output before confirming them.
+- Direct `make clear-graph`, `make clear-graph-force`, `make reset-sync`, and
+  `make reset-all` paths are retired and refuse execution. Use the controlled
+  rebuild workflow for graph state and capability-specific tools for vectors or
+  documents. `make clear-all` remains a separate explicit corpus-deletion tool.
 - Re-running `make dev`, model setup, document loading, embedding generation,
   or graph sync is designed to resume/idempotently reuse completed work.
 
@@ -315,8 +368,11 @@ git status --short --branch
 
 ## Remaining work at this checkpoint
 
-1. Let the active incremental pass finish, retry any quarantined 3B rows with
-   the 7B tool model, and verify all 611 PostgreSQL UUIDs are linked exactly
-   once.
-2. Perform a clean preserved-volume restart audit, rerun all gates, update this
-   runbook with the final counts, and publish the final checkpoint.
+1. Keep ingestion and provider activation frozen until the operator separately
+   authorizes the pending migrations, source reprocessing, vector evaluation, and
+   graph rebuild.
+2. Create a fresh verified backup before applying migrations `0004` through
+   `0006`; do not reuse the backup of the deleted 611-episode corpus.
+3. After authorization, rebuild the episode corpus, evaluate the shadow vector
+   space, run the controlled graph rebuild, and require clean pre/post audits and a
+   preserved-volume restart before cutover.

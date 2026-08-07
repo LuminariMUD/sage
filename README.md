@@ -1,6 +1,6 @@
 # Luminari Sage - Intelligent Lore Management System
 
-**Version**: 0.7.22
+**Version**: 0.7.23
 **Status**: Production Deployed
 **Deployment**: luminarimud.com:8003
 **Repository**: https://github.com/LuminariMUD/sage
@@ -198,12 +198,11 @@ See [docs/guides/QUICKSTART.md](docs/guides/QUICKSTART.md) for detailed instruct
 
 ### Data Scale
 
-- **16 Approved Canon Documents**: Markdown lore in `lore_docs/canon/`
-- **93 Draft Documents**: Markdown source material in `lore_docs/drafts/`
-- **611 Loaded Episodes**: Semantic chunks in the current local corpus
-- **1,000+ Entities**: Characters, locations, factions, items, events
-- **5,000+ Relationships**: Graph connections with semantic properties
-- **768-dimension Episode Vectors**: Active Nomic application space; legacy 384-dimensional chunk search is retired
+- **16 Canon Source Files**: Markdown lore in `lore_docs/canon/`
+- **99 Draft Source Files**: Markdown source material in `lore_docs/drafts/`
+- **14 Preserved Local Documents**: The current database retains source documents but has zero episodes after the rejected corpus was deleted
+- **Empty Current Graph**: The current local Neo4j store has zero nodes and relationships
+- **No Active Episode Vectors**: The pending target is 1024 dimensions; legacy 384-dimensional chunk search is retired
 
 ### System Capabilities
 
@@ -416,6 +415,38 @@ the source revision it embedded.
 
 ---
 
+## Controlled Graph Rebuild
+
+Whole-graph rebuilds preserve the durable attempt ledger and require a fresh,
+verified PostgreSQL/Neo4j backup. Inspect readiness without changing either store:
+
+```bash
+make graph-rebuild-plan
+make graph-rebuild-status
+```
+
+The workflow uses separate exact confirmations for the destructive preparation,
+provider-backed durable sync, and final profile activation:
+
+```bash
+make graph-rebuild-prepare \
+  BACKUP_REFERENCE=backups/provider-upgrade-<timestamp> \
+  CONFIRM_GRAPH_REBUILD=PREPARE_DURABLE_GRAPH_REBUILD
+
+make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+
+make graph-rebuild-finalize \
+  CONFIRM_GRAPH_REBUILD_FINALIZE=FINALIZE_DURABLE_GRAPH_REBUILD
+```
+
+Preparation records both target profiles, requeues jobs through the authoritative
+lifecycle, and commits that state before clearing Neo4j. Repeating the same command
+resumes an interrupted clear. Finalization records the active profiles only after
+all jobs are verified and the exact-profile cross-store audit is clean. The legacy
+direct graph clear and Boolean sync-reset paths intentionally refuse execution.
+
+---
+
 ## Testing
 
 ```bash
@@ -583,5 +614,5 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ---
 
 **Last Updated**: 2026-08-07
-**Version**: 0.7.22
+**Version**: 0.7.23
 **Status**: Production Ready

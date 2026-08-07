@@ -435,6 +435,46 @@ This checkpoint did not restart the already-running services, activate OpenRoute
 run a provider/model call, claim a graph job, perform ingestion, apply a migration,
 or mutate vector/graph data. The worker freeze remains authoritative.
 
+### Controlled durable graph rebuild checkpoint - implemented offline, not activated
+
+- Added migration `0006_graph_rebuild_operations` with one-active-operation state,
+  sequence-validated append-only transition events, lock-ordered durable-run
+  association, and the last cleanly audited Graphiti sync/embedding profile pair.
+- Added database guards that block every sync run between job requeue and verified
+  graph clear, require rebuild runs to use the recorded sync profile, inherit the
+  rebuild/current profile for new source jobs, validate activated profile state
+  against a completed rebuild, and preserve all attempt/result/request history.
+- Added read-only plan/status plus separately confirmed prepare/finalize commands.
+  Creating an operation requires a verified backup from the prior 24 hours, matching
+  restored and current episode counts, a clean pre-audit, no active run or lease,
+  and a clean empty-graph post-audit. PostgreSQL requeue commits before Neo4j
+  deletion, so the same re-verified backup/profile safely resumes a crash at
+  `jobs_requeued` even after the initial freshness window. A session advisory lock
+  prevents concurrent prepare commands from overlapping the cross-store clear.
+- Associated every subsequent worker run with the rebuild while retaining the
+  ordinary lease, immutable attempt, bounded provider-call, retry/quarantine, and
+  independent verification contract. Only a complete exact-profile final audit
+  records the profile pair as active.
+- Made new source rows fail closed to `pending` under the managed profile even if a
+  caller supplies the legacy synchronization Boolean as true.
+- Replaced the legacy `make rebuild` chain with three up-front exact confirmations
+  and retired direct graph-clear and Boolean sync-reset entrypoints that bypassed
+  backup, lifecycle, and audit evidence.
+
+Fifteen focused offline tests, the complete fresh-container fast gate (339 passed,
+8 skipped, 115 intentionally deselected), and all 16 relevant rollback-isolated
+PostgreSQL tests pass. The integration case preserves a real prior attempt chain,
+opens a new retry generation, fences pre-clear runs, associates two durable runs,
+records immutable events, and activates profiles only after finalization.
+
+Live verification was read-only: migrations `0004`, `0005`, and `0006` are pending,
+and the authoritative audit remains clean at zero PostgreSQL episodes/jobs and zero
+Neo4j episodic records. No backup was created, no migration was applied, no graph
+was cleared, no provider/model request was made, no job was claimed, and no service
+was restarted. The old backup represents the deleted corpus; a fresh verified
+backup is mandatory before any separately authorized activation. The worker freeze
+remains authoritative.
+
 ---
 
 ## 1. Executive Summary
@@ -1135,8 +1175,8 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [ ] Update Graphiti benchmark scripts and summaries.
   - [x] Replace the legacy mutating script with a versioned, non-persistent, provider-neutral harness and sanitized summary schema.
   - [ ] Record reviewed results for the selected text candidate after explicit live-run authorization.
-- [ ] Add a graph rebuild command that records the active sync and embedding profiles.
-- [ ] Require graph rebuild jobs to use the durable lifecycle, attempt ledger, and audit contract.
+- [x] Add a graph rebuild command that records the active sync and embedding profiles.
+- [x] Require graph rebuild jobs to use the durable lifecycle, attempt ledger, and audit contract.
 
 **Exit criteria:** Graphiti can initialize, ingest, recover, reconcile, search, and report its routes/profiles correctly in every supported configuration.
 
@@ -1150,7 +1190,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Implement a shadow-column or shadow-table backfill so the active Nomic vectors remain available during evaluation.
 - [ ] Build the replacement vector index before cutover.
 - [x] Add resumable batching, progress reporting, cost accounting, and idempotency.
-- [ ] Add a controlled graph backup, clear, and rebuild workflow.
+- [x] Add a controlled graph backup, clear, and rebuild workflow.
 - [x] Resolve `/api/v1/validate` and the legacy 384-dimensional chunk path.
 - [ ] Require clean index-profile preflight and `graph-audit` results before activation.
 

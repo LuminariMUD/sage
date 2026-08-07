@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Controlled Durable Graph Rebuild (0.7.23)**
+  - Added migration `0006_graph_rebuild_operations` with crash-recoverable rebuild state, sequence-validated append-only events, lock-ordered durable-run association, fail-closed source-job profile inheritance, and the last cleanly audited Graphiti sync/embedding profile pair.
+  - Added read-only plan/status and separately confirmed prepare/finalize commands. Preparation verifies the recent matching backup before connecting, holds a crash-released cross-store clear lock, requires clean pre/post audits and no active run or lease, and commits durable job intent before the idempotent Neo4j clear.
+  - Preserved total attempt history and every immutable attempt/result/provider record while opening a new retry generation under the target profile. Subsequent worker runs retain the ordinary lease, request-budget, retry/quarantine, and independent-verification contracts.
+  - Replaced the legacy destructive `make rebuild` chain with three exact gates and retired direct Neo4j clear and derived-Boolean reset paths.
+  - Verified 15 focused offline tests, the complete fresh-container fast gate (339 passed, 8 skipped, 115 intentionally deselected), and all 16 relevant rollback-isolated PostgreSQL tests. Live checks were read-only: migrations `0004` through `0006` remain pending and the empty PostgreSQL/Neo4j corpus remains clean; no provider call, migration, graph write, or service restart occurred.
+
 - **Capability-Selected Local Provider Services (0.7.22)**
   - Added a host-side Compose launcher that reuses the existing capability/model resolver and applies a cloud-only override when no application or Graphiti capability needs Ollama.
   - Made local start and selected-service restart omit `ollama` and `ollama-init` for all-cloud profiles while preserving the unchanged base topology for mixed and all-Ollama profiles; stop and inspection commands do not require provider resolution.

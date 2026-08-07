@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 import asyncpg
 import pytest
 
+from src.graphiti.rebuild import GraphRebuildRepository
 from src.graphiti.sync_models import (
     CompletionStatus,
     FailureClass,
@@ -74,11 +75,17 @@ async def state_store() -> (
         "password": os.environ["POSTGRES_PASSWORD"],
         "database": os.environ["POSTGRES_DB"],
     }
-    migration_paths = sorted(MIGRATION_DIRECTORY.glob("000[1-3]_*.sql"))
+    migration_paths = [
+        MIGRATION_DIRECTORY / "0001_graph_sync_lifecycle.sql",
+        MIGRATION_DIRECTORY / "0002_graph_sync_runtime.sql",
+        MIGRATION_DIRECTORY / "0003_graph_sync_provider_call_intents.sql",
+        MIGRATION_DIRECTORY / "0006_graph_rebuild_operations.sql",
+    ]
     if [path.name for path in migration_paths] != [
         "0001_graph_sync_lifecycle.sql",
         "0002_graph_sync_runtime.sql",
         "0003_graph_sync_provider_call_intents.sql",
+        "0006_graph_rebuild_operations.sql",
     ]:
         raise RuntimeError("Graph sync integration migrations are unavailable or unexpected")
     schema_name = f"graph_sync_runtime_{uuid4().hex}"
@@ -123,12 +130,15 @@ async def state_store() -> (
                   'graph_sync_attempts',
                   'graph_sync_attempt_results',
                   'graph_sync_provider_call_intents',
-                  'graph_sync_provider_calls'
+                  'graph_sync_provider_calls',
+                  'graph_rebuild_operations',
+                  'graph_sync_profile_state',
+                  'graph_rebuild_events'
               )
             """,
             schema_name,
         )
-        if table_count != 7:
+        if table_count != 10:
             raise RuntimeError("Graph sync integration schema was not created in isolation")
     except Exception:
         await admin.execute("SET search_path TO public")
@@ -698,3 +708,249 @@ async def test_run_summary_reconstructs_progress_throughput_and_failures_from_le
 
     status = await repository.status_snapshot()
     assert status["latest_run_summary"]["run"]["id"] == run.id
+
+
+async def test_rebuild_preserves_attempts_fences_runs_and_activates_profiles(state_store):
+    postgres, sync_repository, _ = state_store
+    run = await sync_repository.start_or_join_run(
+        worker_id="history-worker", sync_profile_fingerprint=SYNC_PROFILE
+    )
+    lease = (
+        await sync_repository.claim_jobs(
+            run_id=run.id,
+            worker_id="history-worker",
+            route_fingerprint="route:test",
+            policy=GraphSyncPolicy(max_job_attempts=2),
+        )
+    )[0]
+    failure = FailureRecord.build(
+        failure_class=FailureClass.MALFORMED_JSON,
+        code="malformed_json",
+        summary="preserved attempt",
+        disposition=FailureDisposition.RETRY,
+    )
+    assert await sync_repository.complete_failure(lease, failure) is CompletionStatus.RETRY_WAIT
+    await sync_repository.drain_run(run.id)
+    await sync_repository.stop_run(run.id)
+    before = await postgres.fetchrow(
+        """
+        SELECT job_attempt_count, attempt_budget_count, retry_generation,
+               last_attempt_id
+        FROM graph_sync_jobs
+        WHERE episode_id = $1
+        """,
+        lease.episode_id,
+    )
+    attempt_count = await postgres.fetchval("SELECT count(*) FROM graph_sync_attempts")
+
+    rebuild_repository = GraphRebuildRepository(postgres)
+    prepared = await rebuild_repository.prepare(
+        target_sync_profile_fingerprint="sync:rebuilt",
+        target_embedding_profile_fingerprint="embedding:rebuilt",
+        backup_reference="backups/integration",
+        backup_created_at=datetime.now(UTC),
+        pre_audit_fingerprint="graph-audit:sha256:" + "a" * 64,
+        pre_postgres_episode_count=3,
+        pre_neo4j_node_count=12,
+        pre_neo4j_relationship_count=18,
+    )
+
+    assert prepared["state"] == "jobs_requeued"
+    after = await postgres.fetchrow(
+        """
+        SELECT job_attempt_count, attempt_budget_count, retry_generation,
+               last_attempt_id, state, sync_profile_fingerprint
+        FROM graph_sync_jobs
+        WHERE episode_id = $1
+        """,
+        lease.episode_id,
+    )
+    assert after["job_attempt_count"] == before["job_attempt_count"] == 1
+    assert after["attempt_budget_count"] == 0
+    assert after["retry_generation"] == before["retry_generation"] + 1
+    assert after["last_attempt_id"] == before["last_attempt_id"]
+    assert after["state"] == "pending"
+    assert after["sync_profile_fingerprint"] == "sync:rebuilt"
+    assert await postgres.fetchval("SELECT count(*) FROM graph_sync_attempts") == attempt_count
+
+    with pytest.raises(asyncpg.PostgresError):
+        await postgres.execute("""
+            INSERT INTO graph_sync_runs (worker_id, sync_profile_fingerprint)
+            VALUES ('bypass-worker', 'sync:rebuilt')
+            """)
+    with pytest.raises(RunUnavailableError, match="clearing"):
+        await sync_repository.start_or_join_run(
+            worker_id="blocked-worker",
+            sync_profile_fingerprint="sync:rebuilt",
+        )
+
+    ready = await rebuild_repository.mark_graph_cleared(
+        prepared["id"],
+        cleared_node_count=12,
+        cleared_relationship_count=18,
+        post_clear_audit_fingerprint="graph-audit:sha256:" + "b" * 64,
+    )
+    assert ready["state"] == "ready"
+    with pytest.raises(asyncpg.PostgresError):
+        await postgres.execute(
+            """
+            UPDATE graph_rebuild_operations
+            SET run_count = run_count + 1
+            WHERE id = $1
+            """,
+            prepared["id"],
+        )
+
+    new_episode_id = uuid4()
+    await postgres.execute(
+        """
+        INSERT INTO episodes (
+            id, text, document_id, episode_index,
+            graphiti_synced, graphiti_synced_at
+        )
+        VALUES ($1, 'New during rebuild', $2, 99, TRUE, clock_timestamp())
+        """,
+        new_episode_id,
+        uuid4(),
+    )
+    during_rebuild = await postgres.fetchrow(
+        """
+        SELECT job.sync_profile_fingerprint, job.state, episode.graphiti_synced
+        FROM graph_sync_jobs AS job
+        JOIN episodes AS episode ON episode.id = job.episode_id
+        WHERE job.episode_id = $1
+        """,
+        new_episode_id,
+    )
+    assert dict(during_rebuild) == {
+        "sync_profile_fingerprint": "sync:rebuilt",
+        "state": "pending",
+        "graphiti_synced": False,
+    }
+
+    rebuild_run = await sync_repository.start_or_join_run(
+        worker_id="rebuild-worker",
+        sync_profile_fingerprint="sync:rebuilt",
+    )
+    associated = await postgres.fetchval(
+        "SELECT rebuild_operation_id FROM graph_sync_runs WHERE id = $1",
+        rebuild_run.id,
+    )
+    assert associated == prepared["id"]
+    await sync_repository.drain_run(rebuild_run.id)
+    await sync_repository.stop_run(rebuild_run.id)
+    assert (await rebuild_repository.active_operation())["state"] == "ready"
+
+    await postgres.execute("""
+        UPDATE graph_sync_jobs
+        SET state = 'synced',
+            verified_source_fingerprint = desired_source_fingerprint,
+            verified_sync_profile_fingerprint = sync_profile_fingerprint,
+            verified_at = clock_timestamp()
+        """)
+    final_run = await sync_repository.start_or_join_run(
+        worker_id="final-worker",
+        sync_profile_fingerprint="sync:rebuilt",
+    )
+    await sync_repository.drain_run(final_run.id)
+    await sync_repository.stop_run(final_run.id)
+    assert (await rebuild_repository.active_operation())["state"] == "awaiting_audit"
+
+    completed = await rebuild_repository.finalize(
+        prepared["id"],
+        final_audit_fingerprint="graph-audit:sha256:" + "c" * 64,
+        audited_episode_count=4,
+    )
+    assert completed["state"] == "completed"
+    active_profile = await postgres.fetchrow("""
+        SELECT sync_profile_fingerprint, embedding_profile_fingerprint,
+               rebuild_operation_id
+        FROM graph_sync_profile_state
+        WHERE scope = 'graphiti'
+        """)
+    assert dict(active_profile) == {
+        "sync_profile_fingerprint": "sync:rebuilt",
+        "embedding_profile_fingerprint": "embedding:rebuilt",
+        "rebuild_operation_id": prepared["id"],
+    }
+    with pytest.raises(asyncpg.PostgresError):
+        await postgres.execute("""
+            UPDATE graph_sync_profile_state
+            SET sync_profile_fingerprint = 'sync:forged'
+            WHERE scope = 'graphiti'
+            """)
+    with pytest.raises(asyncpg.PostgresError):
+        await postgres.execute(
+            "DELETE FROM graph_rebuild_operations WHERE id = $1",
+            prepared["id"],
+        )
+    event_types = await postgres.fetch(
+        """
+        SELECT event_type
+        FROM graph_rebuild_events
+        WHERE rebuild_operation_id = $1
+        ORDER BY sequence
+        """,
+        prepared["id"],
+    )
+    assert [row["event_type"] for row in event_types] == [
+        "jobs_requeued",
+        "graph_cleared",
+        "run_started",
+        "run_stopped",
+        "run_started",
+        "run_stopped",
+        "final_audit_passed",
+    ]
+    snapshot = await rebuild_repository.status_snapshot(prepared["id"])
+    assert snapshot["event_count"] == 7
+    assert snapshot["events_truncated"] is False
+    assert snapshot["active_profile"]["rebuild_operation_id"] == prepared["id"]
+    with pytest.raises(asyncpg.PostgresError):
+        await postgres.execute(
+            """
+            UPDATE graph_rebuild_events
+            SET event_type = 'run_stopped'
+            WHERE rebuild_operation_id = $1 AND sequence = 1
+            """,
+            prepared["id"],
+        )
+    with pytest.raises(asyncpg.PostgresError):
+        await postgres.execute(
+            """
+            INSERT INTO graph_rebuild_events (
+                rebuild_operation_id, sequence, event_type,
+                audit_fingerprint, job_count
+            )
+            VALUES ($1, 99, 'final_audit_passed', $2, 4)
+            """,
+            prepared["id"],
+            "graph-audit:sha256:" + "d" * 64,
+        )
+
+    post_rebuild_episode = uuid4()
+    await postgres.execute(
+        """
+        INSERT INTO episodes (
+            id, text, document_id, episode_index,
+            graphiti_synced, graphiti_synced_at
+        )
+        VALUES ($1, 'New after rebuild', $2, 100, TRUE, clock_timestamp())
+        """,
+        post_rebuild_episode,
+        uuid4(),
+    )
+    after_rebuild = await postgres.fetchrow(
+        """
+        SELECT job.sync_profile_fingerprint, job.state, episode.graphiti_synced
+        FROM graph_sync_jobs AS job
+        JOIN episodes AS episode ON episode.id = job.episode_id
+        WHERE job.episode_id = $1
+        """,
+        post_rebuild_episode,
+    )
+    assert dict(after_rebuild) == {
+        "sync_profile_fingerprint": "sync:rebuilt",
+        "state": "pending",
+        "graphiti_synced": False,
+    }

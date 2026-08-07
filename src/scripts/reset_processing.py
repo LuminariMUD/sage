@@ -9,10 +9,10 @@ Environment variables used (from Docker container):
 - POSTGRES_HOST, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
 
 Available reset targets:
-- sync: Reset Graphiti sync flags (allows re-sync to Neo4j)
+- sync: Retired; use the durable graph rebuild workflow
 - embeddings: Clear episode embeddings (allows re-generation)
 - documents: Reset document processing status (allows re-processing)
-- all: Reset everything above
+- all: Retired because it includes the retired sync reset
 """
 
 import argparse
@@ -93,42 +93,14 @@ def format_processing_stats(stats: dict):
 
 
 async def reset_sync_flags(debug: bool = False) -> bool:
-    """Reset Graphiti sync flags"""
-    try:
-        postgres = await get_postgres_db()
-
-        # Count episodes that will be reset
-        count_result = await postgres.fetchrow("""
-            SELECT COUNT(*) as count
-            FROM episodes
-            WHERE graphiti_synced = TRUE
-        """)
-
-        episodes_to_reset = count_result["count"] if count_result else 0
-
-        if episodes_to_reset == 0:
-            print("  ℹ️  No synced episodes to reset")
-            await postgres.disconnect()
-            return True
-
-        print(f"  🔄 Resetting {episodes_to_reset} episode sync flags...")
-
-        # Reset sync flags
-        await postgres.execute("""
-            UPDATE episodes
-            SET graphiti_synced = FALSE,
-                graphiti_synced_at = NULL
-            WHERE graphiti_synced = TRUE
-        """)
-
-        await postgres.disconnect()
-
-        print(f"  ✅ Reset sync flags for {episodes_to_reset} episodes")
-        return True
-
-    except Exception as e:
-        print(f"  ❌ Failed to reset sync flags ({type(e).__name__})")
-        return False
+    """Reject writes to the derived legacy synchronization projection."""
+    del debug
+    print(
+        "Direct sync-flag reset is retired. Use the backup-gated durable graph "
+        "rebuild workflow.",
+        file=sys.stderr,
+    )
+    return False
 
 
 async def clear_embeddings(target: str = "episodes", debug: bool = False) -> bool:
@@ -243,6 +215,9 @@ async def reset_document_processing(debug: bool = False) -> bool:
 async def reset_processing(targets: list[str], debug: bool = False, confirm: bool = False) -> bool:
     """Reset processing flags based on targets"""
 
+    if "sync" in targets or "all" in targets:
+        return await reset_sync_flags(debug)
+
     print("🔄 Processing Reset Utility")
     print("=" * 30)
 
@@ -269,11 +244,6 @@ async def reset_processing(targets: list[str], debug: bool = False, confirm: boo
     success = True
 
     # Process each target
-    if "sync" in targets or "all" in targets:
-        print("\n📤 Resetting Graphiti sync flags...")
-        if not await reset_sync_flags(debug):
-            success = False
-
     if "embeddings" in targets or "all" in targets:
         print("\n🧮 Clearing embeddings...")
         if not await clear_embeddings("episodes", debug):
@@ -321,18 +291,18 @@ async def main():
         epilog="""
 Examples:
   python reset_processing.py --status                    # Check current status
-  python reset_processing.py --target sync              # Reset only sync flags
+  python reset_processing.py --target sync              # Refused; use graph rebuild
   python reset_processing.py --target embeddings        # Clear only embeddings
   python reset_processing.py --target documents         # Reset only document processing
-  python reset_processing.py --target all               # Reset everything
+  python reset_processing.py --target all               # Refused; includes sync reset
   python reset_processing.py --target sync,embeddings   # Reset multiple targets
   python reset_processing.py --target all --yes         # Skip confirmation
 
 Available targets:
-  sync        - Reset Graphiti sync flags (allows re-sync to Neo4j)
+  sync        - Retired; use the backup-gated durable graph rebuild workflow
   embeddings  - Clear episode and chunk embeddings (allows re-generation)
   documents   - Reset document processing status (allows re-processing)
-  all         - Reset everything above
+  all         - Retired because it includes the sync reset
         """,
     )
 

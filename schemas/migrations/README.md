@@ -18,6 +18,45 @@ The graph-sync ledger is intentionally evidence-preserving. There is no automate
 down migration that drops attempt history. Rollback uses the verified pre-migration
 database backup and the documented application rollback procedure.
 
+## Controlled graph rebuilds
+
+Migration `0006_graph_rebuild_operations` adds a crash-recoverable whole-graph
+rebuild state machine, sequence-validated append-only transition events,
+lock-ordered durable-run association, and the last cleanly audited Graphiti
+sync/embedding profile. Preparing a rebuild preserves every attempt, result, and
+provider-call row. It starts a new retry
+generation for each current job and changes the derived compatibility projection
+through `graph_sync_jobs`; it never writes `episodes.graphiti_synced` directly.
+
+Create a fresh verified backup first, then inspect the read-only plan:
+
+```bash
+make backup-provider-upgrade BACKUP_REFERENCE=backups/provider-upgrade-<timestamp>
+make graph-rebuild-plan
+```
+
+Creating an operation requires a verified backup created within 24 hours whose
+restored episode count matches the clean pre-clear audit. The command commits the
+durable job/profile transition before deleting Neo4j, so interruption leaves a
+visible `jobs_requeued` operation. A retry re-verifies that exact recorded backup
+and can resume safely even after the initial freshness window. A session-scoped
+advisory lock prevents concurrent prepare commands from overlapping this phase:
+
+```bash
+make graph-rebuild-prepare \
+  BACKUP_REFERENCE=backups/provider-upgrade-<timestamp> \
+  CONFIRM_GRAPH_REBUILD=PREPARE_DURABLE_GRAPH_REBUILD
+
+make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+
+make graph-rebuild-finalize \
+  CONFIRM_GRAPH_REBUILD_FINALIZE=FINALIZE_DURABLE_GRAPH_REBUILD
+```
+
+Finalization activates the recorded sync and embedding profiles only when every
+job is synchronized and the exact-profile cross-store audit is clean. Direct graph
+clears and direct writes to the legacy synchronization Boolean are retired.
+
 ## Embedding profile activation
 
 Migration `0004_embedding_index_profiles` is deliberately two-stage. Applying it

@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate embedding-shadow-status embedding-shadow-status-json embedding-shadow-register embedding-shadow-backfill embedding-shadow-recover-run embedding-shadow-build-index retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-shadow-retrieval benchmark-shadow-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined graph-rebuild-status graph-rebuild-plan graph-rebuild-prepare graph-rebuild-finalize backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate embedding-shadow-status embedding-shadow-status-json embedding-shadow-register embedding-shadow-backfill embedding-shadow-recover-run embedding-shadow-build-index retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-shadow-retrieval benchmark-shadow-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
 
 # Capability-aware host launcher. It reuses the model-profile resolver and
 # applies the no-Ollama override only when every selected capability is cloud.
@@ -55,6 +55,10 @@ help:
 	@echo "  make graph-sync-recover-expired - Requeue or quarantine expired leases"
 	@echo "  make graph-sync-retry-waiting EPISODE_IDS='...' - Retry waiting jobs"
 	@echo "  make graph-sync-retry-quarantined EPISODE_IDS='...' CONFIRM=1 - Retry quarantined"
+	@echo "  make graph-rebuild-status     - Inspect durable rebuild state and event history"
+	@echo "  make graph-rebuild-plan       - Check rebuild readiness without mutation"
+	@echo "  make graph-rebuild-prepare BACKUP_REFERENCE=... CONFIRM_GRAPH_REBUILD=... - Requeue and clear safely"
+	@echo "  make graph-rebuild-finalize CONFIRM_GRAPH_REBUILD_FINALIZE=... - Accept a clean rebuilt graph"
 	@echo "  make backup-provider-upgrade BACKUP_REFERENCE=... - Create verified DB backups"
 	@echo "  make verify-provider-upgrade-backup BACKUP_REFERENCE=... - Verify backup gate"
 	@echo "  make db-migrate-status        - Show immutable PostgreSQL migration status"
@@ -84,14 +88,14 @@ help:
 	@echo "  make pipeline-draft       - Draft: load → episodes → embeddings → sync"
 	@echo "  make pipeline-all         - All: load → episodes → embeddings → sync"
 	@echo "  make resume               - Resume interrupted pipeline (pending only)"
-	@echo "  make rebuild              - Full rebuild: clear → reset → pipeline-canon"
+	@echo "  make rebuild              - Backup-gated durable graph rebuild (three exact confirmations)"
 	@echo ""
 	@echo "🗑️  RESET & CLEANUP:"
 	@echo "  make clear-all            - Clear ALL processed data (episodes + Neo4j)"
-	@echo "  make clear-graph          - Clear Neo4j graph only (interactive)"
-	@echo "  make clear-graph-force    - Clear Neo4j graph only (no confirmation)"
-	@echo "  make reset-all            - Reset all PostgreSQL processing flags"
-	@echo "  make reset-sync           - Reset Graphiti sync flags only"
+	@echo "  make clear-graph          - Retired; use graph-rebuild-prepare"
+	@echo "  make clear-graph-force    - Retired; use graph-rebuild-prepare"
+	@echo "  make reset-all            - Retired; use capability-specific safe workflows"
+	@echo "  make reset-sync           - Retired; use graph-rebuild-prepare"
 	@echo "  make clear-embeddings     - Clear all embeddings (use before switching providers)"
 	@echo "  make reset-documents      - Reset document processing status"
 	@echo ""
@@ -219,8 +223,22 @@ resume:
 	@echo "✅ Pipeline resumed!"
 
 .PHONY: rebuild
-rebuild: clear-graph-force reset-all pipeline-canon
-	@echo "✅ Full rebuild complete!"
+rebuild:
+	@test "$(CONFIRM_GRAPH_REBUILD)" = "PREPARE_DURABLE_GRAPH_REBUILD" || \
+		(echo "CONFIRM_GRAPH_REBUILD=PREPARE_DURABLE_GRAPH_REBUILD is required" >&2; exit 2)
+	@test "$(CONFIRM_GRAPH_SYNC)" = "RUN_DURABLE_GRAPH_SYNC" || \
+		(echo "CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC is required" >&2; exit 2)
+	@test "$(CONFIRM_GRAPH_REBUILD_FINALIZE)" = "FINALIZE_DURABLE_GRAPH_REBUILD" || \
+		(echo "CONFIRM_GRAPH_REBUILD_FINALIZE=FINALIZE_DURABLE_GRAPH_REBUILD is required" >&2; exit 2)
+	@$(MAKE) graph-rebuild-prepare \
+		BACKUP_REFERENCE="$(BACKUP_REFERENCE)" \
+		CONFIRM_GRAPH_REBUILD="$(CONFIRM_GRAPH_REBUILD)"
+	@$(MAKE) sync-to-graphiti \
+		CONFIRM_GRAPH_SYNC="$(CONFIRM_GRAPH_SYNC)" \
+		MAX_EPISODES="$(MAX_EPISODES)" $(if $(VERBOSE),VERBOSE=1,)
+	@$(MAKE) graph-rebuild-finalize \
+		CONFIRM_GRAPH_REBUILD_FINALIZE="$(CONFIRM_GRAPH_REBUILD_FINALIZE)"
+	@echo "Durable graph rebuild complete."
 
 # =============================================================================
 # RESET & CLEANUP OPERATIONS
@@ -233,23 +251,23 @@ clear-all:
 
 .PHONY: clear-graph
 clear-graph:
-	@echo "🗑️  Clearing Neo4j graph (interactive)..."
-	@docker compose exec api python src/scripts/clear_graph.py
+	@echo "Direct graph clearing is retired; use graph-rebuild-prepare." >&2
+	@exit 2
 
 .PHONY: clear-graph-force
 clear-graph-force:
-	@echo "🗑️  Force clearing Neo4j graph..."
-	@docker compose exec -T api python src/scripts/clear_graph.py --yes
+	@echo "Untracked graph clearing is retired; use graph-rebuild-prepare." >&2
+	@exit 2
 
 .PHONY: reset-all
 reset-all:
-	@echo "🔄 Resetting all processing flags..."
-	@docker compose exec -T api python src/scripts/reset_processing.py --target all --yes
+	@echo "The legacy combined reset is retired; use capability-specific safe workflows." >&2
+	@exit 2
 
 .PHONY: reset-sync
 reset-sync:
-	@echo "🔄 Resetting Graphiti sync flags..."
-	@docker compose exec -T api python src/scripts/reset_processing.py --target sync --yes
+	@echo "Direct sync-flag reset is retired; use graph-rebuild-prepare." >&2
+	@exit 2
 
 .PHONY: reset-embeddings clear-embeddings
 reset-embeddings: clear-embeddings
@@ -366,6 +384,36 @@ graph-sync-retry-quarantined:
 		(echo "EPISODE_IDS is required" >&2; exit 2)
 	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
 		retry-quarantined --confirm $(EPISODE_IDS)
+
+.PHONY: graph-rebuild-status
+graph-rebuild-status:
+	@docker compose run --rm --no-deps api \
+		python src/scripts/graph_rebuild.py status
+
+.PHONY: graph-rebuild-plan
+graph-rebuild-plan:
+	@docker compose run --rm --no-deps api \
+		python src/scripts/graph_rebuild.py plan
+
+.PHONY: graph-rebuild-prepare
+graph-rebuild-prepare:
+	@test -n "$(BACKUP_REFERENCE)" || \
+		(echo "BACKUP_REFERENCE below backups/ is required" >&2; exit 2)
+	@test "$(CONFIRM_GRAPH_REBUILD)" = "PREPARE_DURABLE_GRAPH_REBUILD" || \
+		(echo "CONFIRM_GRAPH_REBUILD=PREPARE_DURABLE_GRAPH_REBUILD is required" >&2; exit 2)
+	@docker compose run --rm --no-deps --user 0:0 \
+		-v "$(CURDIR)/backups:/app/backups:ro" api \
+		python src/scripts/graph_rebuild.py prepare \
+		--backup-reference "$(BACKUP_REFERENCE)" \
+		--confirm "$(CONFIRM_GRAPH_REBUILD)"
+
+.PHONY: graph-rebuild-finalize
+graph-rebuild-finalize:
+	@test "$(CONFIRM_GRAPH_REBUILD_FINALIZE)" = "FINALIZE_DURABLE_GRAPH_REBUILD" || \
+		(echo "CONFIRM_GRAPH_REBUILD_FINALIZE=FINALIZE_DURABLE_GRAPH_REBUILD is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api \
+		python src/scripts/graph_rebuild.py finalize \
+		--confirm "$(CONFIRM_GRAPH_REBUILD_FINALIZE)"
 
 .PHONY: backup-provider-upgrade
 backup-provider-upgrade:
