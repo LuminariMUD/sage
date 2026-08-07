@@ -129,7 +129,7 @@ The first non-activating slices from Phases 2, 4, 5, and 6 are implemented. They
 
 The complete offline fast suite passes 185 tests with 6 skips and 109 intentionally deselected tests. Ruff formatting/linting, Python compilation, ShellCheck, Compose validation, environment/secret contract tests, and `git diff --check` pass. No OpenRouter or Ollama inference request was made, and the graph worker remains stopped.
 
-Still open before activation: explicit OpenRouter model selection and capability verification, the privacy/ZDR decision, integration of the executable route into Graphiti and framework call sites, live structured-output and streaming tests, embedding shadow/index migration, conditional Ollama warmup, and any graph profile transition or ingest authorization.
+Still open before activation: explicit OpenRouter model selection and capability verification, the privacy/ZDR decision, integration of the executable route into Graphiti and framework call sites, live structured-output and streaming tests, embedding shadow/index migration, conditional Ollama service dependencies, and any graph profile transition or ingest authorization.
 
 ### Bounded retry, route, and deployment checkpoint - implemented offline
 
@@ -144,6 +144,20 @@ The next non-activating slices from Phases 2, 4, 5, and 8 are implemented withou
 The full offline fast gate passes 203 tests with 6 skips and 109 intentionally deselected tests. A separate production Compose matrix renders all-Ollama, direct-OpenAI, OpenRouter, and mixed OpenRouter/OpenAI profiles. Bash syntax, ShellCheck, Actionlint, Black, isort, Ruff, secret-file permissions, child-environment isolation, and diff checks pass. No provider request, graph claim, or ingestion occurred.
 
 The route executor is currently available to direct application call sites but is not yet wired into Graphiti, LangChain, or PydanticAI execution. Those framework SDK clients retain `max_retries=0`; Graphiti retains its existing durable request reservation and explicit internal-attempt accounting. Therefore Phase 3 extraction fallback remains unchecked and no live fallback behavior is claimed. The local `OPENROUTER_KEY` alias was recognized without printing or committing its value, and the worker remains stopped by operator request.
+
+### Capability-derived Ollama model lifecycle checkpoint - implemented offline
+
+The next non-activating Phase 8 slice makes local model preparation follow the resolved capability profile instead of a hard-coded all-Ollama model list:
+
+- Added one POSIX-shell resolver for application text tasks, application embeddings, independent Graphiti text and embeddings, and the optional Graphiti extraction fallback. It validates provider/model labels, applies legacy selector precedence, and deduplicates the resulting text and embedding models.
+- Updated `ollama-init` and the setup script to pull only models used by an Ollama capability. An all-cloud profile exits before requiring the Ollama CLI or starting the setup dependency; a mixed profile includes only its selected local models.
+- Updated warmup to use the same model list, send text warmups through `ollama run`, and send embedding warmups through Ollama's `/api/embed` endpoint.
+- Kept cloud keys and passwords out of the init service. Compose now forwards empty raw capability selectors so the shared application resolver, rather than Compose interpolation, remains authoritative for legacy precedence.
+- Added ten offline lifecycle tests covering all-Ollama, all-OpenRouter, mixed, task override, deduplication, invalid configuration, fake pull dispatch, and Compose/script contracts.
+
+The complete offline fast suite passes 213 tests with 6 skips and 109 intentionally deselected tests. Bash syntax, ShellCheck, Compose validation, formatting/linting, and a read-only Compose `list` invocation pass. That invocation resolved `qwen2.5:7b`, `qwen2.5:3b`, and `nomic-embed-text` for the current local profile; it did not pull or warm a model. No provider request, graph claim, or ingestion occurred, and the operator-requested worker freeze remains active.
+
+This checkpoint makes model pulls and warmups conditional, but it does not yet make the base API/Ollama service dependency graph conditional. Phase 8's exit criterion that each deployment start only required services therefore remains open.
 
 ---
 
@@ -864,7 +878,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Add `OPENROUTER_API_KEY_FILE` support to the container entrypoint.
 - [x] Add OpenRouter secret transport to development Compose, production Compose, deployment scripts, and CI/CD.
 - [x] Ensure all-Ollama deployments do not mount or require an OpenRouter secret.
-- [ ] Make Ollama model initialization and warmup conditional on selected capabilities.
+- [x] Make Ollama model initialization and warmup conditional on selected capabilities.
 - [ ] Add provider-neutral Make targets for configuration checks, model probes, embedding probes, and Graphiti benchmarks.
 - [ ] Add Make targets for graph-sync status, safe retries, `graph-audit`, and the complete release gate.
 - [ ] Update secret scanners and environment contract tests.

@@ -1,32 +1,26 @@
-#!/bin/bash
-# Setup script for Ollama models
+#!/usr/bin/env bash
+# Pull only the Ollama models selected by the active capability profile.
 
-echo "🚀 Setting up Ollama models for Luminari Sage..."
+set -Eeuo pipefail
 
-# Check if Ollama container is running
-if ! docker ps | grep -q luminari-ollama; then
-    echo "❌ Ollama container not running. Start with: docker compose up -d ollama"
-    exit 1
+echo "Resolving active Ollama model requirements..."
+model_records=$(
+    docker compose run --rm --no-deps --entrypoint /bin/sh ollama-init \
+        /usr/local/bin/ollama_model_profile.sh list
+)
+
+if [[ -z "$model_records" ]]; then
+    echo "No Ollama capability is selected; no local model is required."
+    exit 0
 fi
 
-# Pull essential models
-echo "📥 Pulling nomic-embed-text (embeddings)..."
-docker exec luminari-ollama ollama pull nomic-embed-text
+echo "Selected local models:"
+while IFS= read -r record; do
+    [[ -n "$record" ]] && printf '  - %s\n' "$record"
+done <<< "$model_records"
 
-echo "📥 Pulling qwen2.5:7b (chat/creative)..."
-docker exec luminari-ollama ollama pull qwen2.5:7b
+docker compose run --rm ollama-init
 
-echo "📥 Pulling qwen2.5:3b (Graphiti extraction)..."
-docker exec luminari-ollama ollama pull qwen2.5:3b
-
-# Verify models
-echo ""
-echo "✅ Installed models:"
-docker exec luminari-ollama ollama list
-
-echo ""
-echo "🧪 Testing qwen2.5:7b performance..."
-time docker exec luminari-ollama ollama run qwen2.5:7b "Write one sentence about crystal dwarves."
-
-echo ""
-echo "✅ Setup complete! All models ready."
+echo "Installed Ollama models:"
+docker compose exec -T ollama ollama list
+echo "Ollama model setup is complete."

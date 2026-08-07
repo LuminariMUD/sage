@@ -108,23 +108,34 @@ services:
   ollama-init:
     image: ollama/ollama:latest
     container_name: luminari-ollama-init
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -eu
-        ollama pull "$${OLLAMA_EMBEDDING_MODEL}"
-        ollama pull "$${OLLAMA_REASONING_MODEL}"
-        ollama pull "$${OLLAMA_CHAT_MODEL}"
+    entrypoint: ["/bin/sh", "/usr/local/bin/ollama_model_profile.sh", "pull"]
+    command: []
     environment:
       OLLAMA_HOST: http://ollama:11434
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      TEXT_PROVIDER: ${TEXT_PROVIDER:-}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-}
+      USE_LOCAL_EMBEDDINGS: ${USE_LOCAL_EMBEDDINGS:-true}
+      GRAPHITI_PROVIDER: ${GRAPHITI_PROVIDER:-}
+      GRAPHITI_TEXT_PROVIDER: ${GRAPHITI_TEXT_PROVIDER:-}
+      GRAPHITI_EMBEDDING_PROVIDER: ${GRAPHITI_EMBEDDING_PROVIDER:-}
+      GRAPHITI_TEXT_MODEL: ${GRAPHITI_TEXT_MODEL:-}
+      GRAPHITI_EMBEDDING_MODEL: ${GRAPHITI_EMBEDDING_MODEL:-}
+      GRAPHITI_EXTRACTION_FALLBACK_PROVIDER: ${GRAPHITI_EXTRACTION_FALLBACK_PROVIDER:-}
+      GRAPHITI_EXTRACTION_FALLBACK_MODEL: ${GRAPHITI_EXTRACTION_FALLBACK_MODEL:-}
       OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      OLLAMA_CREATIVE_MODEL: ${OLLAMA_CREATIVE_MODEL:-${OLLAMA_CHAT_MODEL:-qwen2.5:7b}}
       OLLAMA_REASONING_MODEL: ${OLLAMA_REASONING_MODEL:-qwen2.5:3b}
       OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen2.5:7b}
+      OLLAMA_EXTRACTION_MODEL: ${OLLAMA_EXTRACTION_MODEL:-${OLLAMA_REASONING_MODEL:-qwen2.5:3b}}
+      OLLAMA_TOOLS_MODEL: ${OLLAMA_TOOLS_MODEL:-${OLLAMA_CHAT_MODEL:-qwen2.5:7b}}
     depends_on:
       ollama:
         condition: service_healthy
     networks:
       - luminari-network
+    volumes:
+      - ./scripts/ollama_model_profile.sh:/usr/local/bin/ollama_model_profile.sh:ro
     restart: "no"
 
   # FastAPI application
@@ -151,8 +162,8 @@ services:
       LORE_SOURCE: ${LORE_SOURCE:-canon}
       # LLM Provider Configuration
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      TEXT_PROVIDER: ${TEXT_PROVIDER:-${LLM_PROVIDER:-ollama}}
-      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-${LLM_PROVIDER:-ollama}}
+      TEXT_PROVIDER: ${TEXT_PROVIDER:-}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-}
       OLLAMA_BASE_URL: "http://ollama:11434"
       OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen2.5:7b}
       OLLAMA_CREATIVE_MODEL: ${OLLAMA_CREATIVE_MODEL:-qwen2.5:7b}
@@ -164,7 +175,7 @@ services:
       OLLAMA_EMBEDDING_DIMENSIONS: ${OLLAMA_EMBEDDING_DIMENSIONS:-768}
       OLLAMA_EMBEDDING_BATCH_SIZE: ${OLLAMA_EMBEDDING_BATCH_SIZE:-32}
       OLLAMA_MAX_CONTEXT_TOKENS: ${OLLAMA_MAX_CONTEXT_TOKENS:-12288}
-      GRAPHITI_PROVIDER: ${GRAPHITI_PROVIDER:-${LLM_PROVIDER:-ollama}}
+      GRAPHITI_PROVIDER: ${GRAPHITI_PROVIDER:-}
       GRAPHITI_TEXT_PROVIDER: ${GRAPHITI_TEXT_PROVIDER:-}
       GRAPHITI_EMBEDDING_PROVIDER: ${GRAPHITI_EMBEDDING_PROVIDER:-}
       GRAPHITI_TEXT_MODEL: ${GRAPHITI_TEXT_MODEL:-}

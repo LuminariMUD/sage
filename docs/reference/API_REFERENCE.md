@@ -1,6 +1,6 @@
 # API Reference
 
-**Version**: 0.7.11
+**Version**: 0.7.12
 **Last Updated**: 2025-11-12
 
 This document provides complete API reference for Luminari Sage, including all endpoints, request/response formats, authentication, and examples.
@@ -1888,5 +1888,5 @@ curl -X GET http://localhost:8003/api/v1/stats \
 ---
 
 **Last Updated**: 2025-11-12
-**Version**: 0.7.11
+**Version**: 0.7.12
 **Status**: Production Ready

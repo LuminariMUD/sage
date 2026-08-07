@@ -1,42 +1,52 @@
-#!/bin/bash
-# Preload and warm up Ollama models
+#!/usr/bin/env bash
+# Warm only active Ollama capabilities, using the embedding endpoint for vectors.
 
-set -e
+set -Eeuo pipefail
 
-echo "🔥 Warming up Ollama models..."
+model_records=$(
+    docker compose run --rm --no-deps --entrypoint /bin/sh ollama-init \
+        /usr/local/bin/ollama_model_profile.sh list
+)
 
-# Check if Ollama container is running
-if ! docker ps | grep -q luminari-ollama; then
-    echo "❌ Error: Ollama container is not running"
-    echo "   Run: docker compose up -d ollama"
+if [[ -z "$model_records" ]]; then
+    echo "No Ollama capability is selected; warmup is not required."
+    exit 0
+fi
+
+if [[ $(docker inspect --format '{{.State.Running}}' luminari-ollama 2>/dev/null || true) != true ]]; then
+    echo "Ollama is not running. Start it with: docker compose up -d ollama" >&2
     exit 1
 fi
 
-# Get model names from environment or use defaults
-CHAT_MODEL="${OLLAMA_CHAT_MODEL:-qwen2.5:7b}"
-REASONING_MODEL="${OLLAMA_REASONING_MODEL:-deepseek-r1:8b}"
-EMBEDDING_MODEL="${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}"
-
-echo "📦 Chat model: $CHAT_MODEL"
-echo "🧠 Reasoning model: $REASONING_MODEL"
-echo "🔢 Embedding model: $EMBEDDING_MODEL"
-
-# Preload chat model
-echo "⏳ Warming up chat model ($CHAT_MODEL)..."
-docker exec luminari-ollama ollama run "$CHAT_MODEL" "test" > /dev/null 2>&1 || echo "   ⚠️ Chat model not available"
-
-# Preload reasoning model (if different from chat)
-if [ "$REASONING_MODEL" != "$CHAT_MODEL" ]; then
-    echo "⏳ Warming up reasoning model ($REASONING_MODEL)..."
-    docker exec luminari-ollama ollama run "$REASONING_MODEL" "test" > /dev/null 2>&1 || echo "   ⚠️ Reasoning model not available"
+ollama_endpoint=$(docker compose port ollama 11434 | head -n 1)
+if [[ -z "$ollama_endpoint" ]]; then
+    echo "Could not resolve the published Ollama endpoint." >&2
+    exit 1
 fi
 
-# Preload embedding model
-echo "⏳ Warming up embedding model ($EMBEDDING_MODEL)..."
-docker exec luminari-ollama ollama run "$EMBEDDING_MODEL" "test" > /dev/null 2>&1 || echo "   ⚠️ Embedding model not available"
+while IFS= read -r record; do
+    [[ -n "$record" ]] || continue
+    role=${record%%:*}
+    model=${record#*:}
+    case "$role" in
+        text)
+            echo "Warming text model: $model"
+            docker exec luminari-ollama ollama run "$model" "Reply with ready." >/dev/null
+            ;;
+        embedding)
+            echo "Warming embedding model through /api/embed: $model"
+            payload=$(printf '{"model":"%s","input":"readiness probe","truncate":false}' "$model")
+            curl --fail --silent --show-error --max-time 120 \
+                -H 'Content-Type: application/json' \
+                --data-binary "$payload" \
+                "http://${ollama_endpoint}/api/embed" >/dev/null
+            ;;
+        *)
+            echo "Unexpected Ollama model role: $role" >&2
+            exit 2
+            ;;
+    esac
+done <<< "$model_records"
 
-echo ""
-echo "✅ Models warmed up and ready"
-echo ""
-echo "📊 Loaded models:"
-docker exec luminari-ollama ollama list
+echo "Active Ollama models are warm:"
+docker exec luminari-ollama ollama ps

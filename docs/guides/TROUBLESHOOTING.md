@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-**Version**: 0.7.11
+**Version**: 0.7.12
 **Status**: Production Ready
 **Last Updated**: 2025-11-12
 

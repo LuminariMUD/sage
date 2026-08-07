@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Capability-Derived Ollama Model Lifecycle (0.7.12)**
+  - Added one validated model-profile resolver for application text tasks, application embeddings, independent Graphiti capabilities, and the optional extraction fallback.
+  - Made setup and warmup skip all-cloud profiles and operate only on deduplicated models selected by mixed or all-Ollama profiles.
+  - Switched embedding warmup to Ollama's `/api/embed` endpoint while preserving text warmup through `ollama run`.
+  - Kept cloud credentials out of the init service and preserved provider-selector precedence by passing raw capability overrides through Compose.
+  - Verified 213 offline fast tests with 6 skips. No model pull, warmup, provider call, graph claim, or ingestion was executed, and the operator-requested worker freeze remains active.
+
 - **Bounded Provider Routes and Selected-Secret Deployment (0.7.11)**
   - Added classified OpenRouter transport retries with finite backoff, bounded `Retry-After` handling, SDK retries disabled at observable boundaries, and no replay after an in-band streaming failure.
   - Added a provider-neutral text-route executor with separate transport/model/fallback attempts, a hard actual-call ceiling, sanitized provenance, failure-class routing, and explicit degraded fallback success.

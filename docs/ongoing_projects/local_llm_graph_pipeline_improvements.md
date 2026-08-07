@@ -134,6 +134,18 @@ The complete offline fast suite passes 203 tests with 6 skips and 109 deselected
 
 This checkpoint does not wire the new route executor into Graphiti extraction. The existing durable Graphiti wrapper still owns provider reservations and disables opaque client retries; the proposed 3B-to-7B fallback remains declarative and unexecuted. No graph job was claimed, no provider call was made, and the operator's stop instruction remains authoritative.
 
+### 2026-08-07 - Capability-derived Ollama model lifecycle checkpoint, no activation
+
+- Added a shared POSIX-shell resolver that derives the exact local text and embedding models required by the application, Graphiti, and optional extraction fallback capability selectors.
+- Replaced the fixed `ollama-init` pull list with validated, deduplicated profile resolution. All-cloud profiles skip model setup without requiring the Ollama CLI, while mixed profiles include only their selected Ollama capabilities.
+- Updated the setup and warmup scripts to consume the same resolver output. Text warmup uses `ollama run`; embedding warmup uses `/api/embed` rather than a text-generation request.
+- Kept provider keys and passwords out of the init service and passed raw empty capability overrides through Compose so application-level legacy precedence remains authoritative.
+- Added ten offline tests for all-local, all-cloud, mixed, task-specific, invalid, deduplicated, fake-pull, and static lifecycle contracts.
+
+The complete offline fast suite passes 213 tests with 6 skips and 109 deselected tests. Syntax, ShellCheck, Compose, formatting/linting, and a read-only Compose model-list check pass. The list check resolved the current local profile's three model names only; no model was pulled, warmed, or invoked.
+
+This slice does not make the base API service's Ollama dependency conditional, so cloud-only startup still has follow-up work. No graph job was claimed, no provider call was made, and the operator's stop instruction remains authoritative.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.
