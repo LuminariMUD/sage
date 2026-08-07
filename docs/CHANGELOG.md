@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Guarded Provider Configuration and Probes (0.7.13)**
+  - Added human and JSON configuration checks for complete sanitized application and Graphiti provider profiles.
+  - Added primary-only text and embedding probes with fixed inputs, one transport attempt, no fallback, strict vector validation, and no response/vector emission.
+  - Required exact probe confirmation at both Make and Python boundaries before configuration resolution or client construction.
+  - Added offline coverage for legacy OpenRouter-key handling, guard ordering, cloud retry disabling, dimension validation, and secret/prompt/response redaction.
+  - Verified 221 offline fast tests with 6 skips. Only the non-network configuration and refusal paths were executed; no provider call, graph claim, or ingestion occurred.
+
 - **Capability-Derived Ollama Model Lifecycle (0.7.12)**
   - Added one validated model-profile resolver for application text tasks, application embeddings, independent Graphiti capabilities, and the optional extraction fallback.
   - Made setup and warmup skip all-cloud profiles and operate only on deduplicated models selected by mixed or all-Ollama profiles.

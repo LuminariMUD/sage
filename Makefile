@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate benchmark-graphiti benchmark-graphiti-openai
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
 
 # Support for verbose mode
 ifdef VERBOSE
@@ -50,6 +50,10 @@ help:
 	@echo "  make db-migrate-status        - Show immutable PostgreSQL migration status"
 	@echo "  make db-migrate-check         - Fail when PostgreSQL migrations are pending"
 	@echo "  make db-migrate BACKUP_REFERENCE=... - Apply after verified backups"
+	@echo "  make provider-config-check    - Validate and show sanitized provider profiles"
+	@echo "  make provider-config-check-json - Emit sanitized provider profiles as JSON"
+	@echo "  make provider-text-probe CONFIRM_PROVIDER_PROBE=RUN_PROVIDER_PROBE - One bounded text call"
+	@echo "  make provider-embedding-probe CONFIRM_PROVIDER_PROBE=RUN_PROVIDER_PROBE - One bounded embedding call"
 	@echo "  make benchmark-graphiti        - Benchmark entity extraction (Ollama)"
 	@echo "  make benchmark-graphiti-openai - Benchmark entity extraction (OpenAI)"
 	@echo ""
@@ -361,6 +365,34 @@ db-migrate:
 		--apply \
 		--backup-reference "$(BACKUP_REFERENCE)" \
 		--application-revision "$(shell git rev-parse --verify HEAD)"
+
+.PHONY: provider-config-check
+provider-config-check:
+	@docker compose run --rm --no-deps api \
+		python src/scripts/provider_ops.py check
+
+.PHONY: provider-config-check-json
+provider-config-check-json:
+	@docker compose run --rm --no-deps api \
+		python src/scripts/provider_ops.py --json check
+
+.PHONY: provider-text-probe
+provider-text-probe:
+	@test "$(CONFIRM_PROVIDER_PROBE)" = "RUN_PROVIDER_PROBE" || \
+		(echo "CONFIRM_PROVIDER_PROBE=RUN_PROVIDER_PROBE is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api \
+		python src/scripts/provider_ops.py text-probe \
+		--task "$(or $(PROVIDER_TASK),chat)" \
+		--confirm "$(CONFIRM_PROVIDER_PROBE)"
+
+.PHONY: provider-embedding-probe
+provider-embedding-probe:
+	@test "$(CONFIRM_PROVIDER_PROBE)" = "RUN_PROVIDER_PROBE" || \
+		(echo "CONFIRM_PROVIDER_PROBE=RUN_PROVIDER_PROBE is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api \
+		python src/scripts/provider_ops.py embedding-probe \
+		--scope "$(or $(PROVIDER_EMBEDDING_SCOPE),application)" \
+		--confirm "$(CONFIRM_PROVIDER_PROBE)"
 
 .PHONY: benchmark-graphiti
 benchmark-graphiti:

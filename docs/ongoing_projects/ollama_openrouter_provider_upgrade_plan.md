@@ -159,6 +159,20 @@ The complete offline fast suite passes 213 tests with 6 skips and 109 intentiona
 
 This checkpoint makes model pulls and warmups conditional, but it does not yet make the base API/Ollama service dependency graph conditional. Phase 8's exit criterion that each deployment start only required services therefore remains open.
 
+### Guarded provider operations checkpoint - implemented offline
+
+The provider-neutral operations slice now exposes safe configuration inspection and bounded opt-in probes without activating any provider during implementation:
+
+- Added a provider configuration command with human and stable JSON output. It resolves the complete application and Graphiti profiles, reports only sanitized models/fingerprints/policies and Boolean selected-credential status, and makes no provider request.
+- Added application text-task and application/Graphiti embedding probes. Each uses a fixed non-user input, the selected primary model/profile, exactly one transport attempt, no candidate fallback, and shared embedding dimension/finite/non-zero validation.
+- Added independent exact `RUN_PROVIDER_PROBE` confirmation checks in both the Make targets and Python command. Probe confirmation is checked before provider configuration is resolved or a client is constructed.
+- Probe output omits prompts, generated text, vector values, credentials, and exception detail; failures expose only the classified failure class and stable code.
+- Added eight offline tests for the deprecated OpenRouter-key alias's Boolean credential status, pre-resolution refusal, one-call text behavior, zero-retry cloud embeddings, vector validation, failure redaction, and non-probing configuration checks.
+
+The complete offline fast suite passes 221 tests with 6 skips and 109 intentionally deselected tests. The real configuration-check target validated the current all-Ollama application and Graphiti profile. Both Make probe targets were invoked without confirmation and refused before their Docker/provider command; no confirmed probe was run. No provider request, graph claim, or ingestion occurred, and the operator-requested worker freeze remains active.
+
+The existing Graphiti benchmark remains provider-coupled and mutates legacy synchronization state, so it is not accepted as the provider-neutral benchmark required by Phase 8. The combined Make-target checklist item remains open until that benchmark is replaced with a versioned, durable-lifecycle-safe harness.
+
 ---
 
 ## 1. Executive Summary
@@ -880,6 +894,8 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Ensure all-Ollama deployments do not mount or require an OpenRouter secret.
 - [x] Make Ollama model initialization and warmup conditional on selected capabilities.
 - [ ] Add provider-neutral Make targets for configuration checks, model probes, embedding probes, and Graphiti benchmarks.
+  - [x] Add sanitized configuration checks plus exact-confirmation, one-call text and embedding probes.
+  - [ ] Replace the legacy state-mutating Graphiti benchmark with a versioned, durable-lifecycle-safe harness.
 - [ ] Add Make targets for graph-sync status, safe retries, `graph-audit`, and the complete release gate.
 - [ ] Update secret scanners and environment contract tests.
 - [ ] Add sanitized health/readiness, queue/lease state, provider-level metrics, and graph-quality summaries.

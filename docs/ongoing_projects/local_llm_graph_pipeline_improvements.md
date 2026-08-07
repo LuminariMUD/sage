@@ -146,6 +146,18 @@ The complete offline fast suite passes 213 tests with 6 skips and 109 deselected
 
 This slice does not make the base API service's Ollama dependency conditional, so cloud-only startup still has follow-up work. No graph job was claimed, no provider call was made, and the operator's stop instruction remains authoritative.
 
+### 2026-08-07 - Guarded provider operations checkpoint, no activation
+
+- Added human and JSON configuration checks that resolve the selected application and Graphiti profiles without constructing a request or exposing credentials.
+- Added fixed-input, one-call text and embedding probes for the selected application task or application/Graphiti embedding scope. Text probes use only the primary candidate with retries and fallback disabled; cloud embedding probes disable SDK retries and validate the returned vector without printing it.
+- Required the exact `RUN_PROVIDER_PROBE` token at both the Make and Python boundaries before configuration resolution or client construction.
+- Limited probe output to provider, requested/actual model, sanitized upstream, fingerprint, dimension, latency, usage counts, and classified failure identity. Prompt, response, vector, credential, and exception content are omitted.
+- Added eight offline tests covering the OpenRouter alias, guard ordering, one-call limits, zero cloud retries, vector dimensions, redaction, and non-probing configuration behavior.
+
+The complete offline fast suite passes 221 tests with 6 skips and 109 deselected tests. The current all-Ollama profile passed the real configuration-check target. Both Make probe targets refused without the confirmation token, and no confirmed probe was run.
+
+The old Graphiti benchmark is still excluded: it is provider-coupled and mutates the legacy synchronization projection. It must be replaced with a fixed-corpus harness that respects the durable lifecycle before the umbrella Make-target item can close. No graph job was claimed, no provider call was made, and the operator's stop instruction remains authoritative.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.

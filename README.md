@@ -1,6 +1,6 @@
 # Luminari Sage - Intelligent Lore Management System
 
-**Version**: 0.7.12
+**Version**: 0.7.13
 **Status**: Production Deployed
 **Deployment**: luminarimud.com:8003
 **Repository**: https://github.com/LuminariMUD/sage
@@ -495,5 +495,5 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ---
 
 **Last Updated**: 2026-07-30
-**Version**: 0.7.12
+**Version**: 0.7.13
 **Status**: Production Ready

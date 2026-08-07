@@ -1,7 +1,7 @@
 # Luminari Sage - Ubuntu Installation Checklist
 
 **Target Environment**: Ubuntu 20.04+ (Native Linux)
-**Version**: 0.7.12
+**Version**: 0.7.13
 **Based on**: [DEPLOYMENT_WSL2-UBUNTU.md](../deployment/DEPLOYMENT_WSL2-UBUNTU.md)
 
 ---
