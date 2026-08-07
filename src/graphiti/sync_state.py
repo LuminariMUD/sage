@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from src.db.postgres import PostgresDB
+from src.graphiti.relationship_policy import RelationshipQualityReport
 from src.graphiti.sync_models import (
     AttemptOutcome,
     CompletionStatus,
@@ -42,6 +43,13 @@ MAX_OPERATOR_BATCH = 500
 DEFAULT_PROGRESS_WINDOW_SECONDS = 300
 MIN_PROGRESS_WINDOW_SECONDS = 60
 MAX_PROGRESS_WINDOW_SECONDS = 86_400
+
+
+def _percentage(numerator: int, denominator: int) -> float | None:
+    """Return a stable percentage while preserving an unavailable denominator."""
+    if denominator == 0:
+        return None
+    return round((numerator / denominator) * 100, 3)
 
 
 class GraphSyncRepository:
@@ -813,6 +821,7 @@ class GraphSyncRepository:
         *,
         degraded: bool = False,
         graph_counts: GraphCounts | None = None,
+        relationship_quality: RelationshipQualityReport | None = None,
     ) -> CompletionStatus:
         """Commit success only after exact cross-store and source/profile proof."""
         if not verification.is_exact:
@@ -824,6 +833,32 @@ class GraphSyncRepository:
         if verification.sync_profile_fingerprint != lease.sync_profile_fingerprint:
             raise InvalidTransitionError("Verified sync profile does not match the lease")
         graph_counts = graph_counts or GraphCounts()
+        if relationship_quality is not None:
+            if any(
+                value is None
+                for value in (
+                    relationship_quality.resolved_edges,
+                    relationship_quality.new_edges,
+                    relationship_quality.invalidated_edges,
+                )
+            ):
+                raise InvalidTransitionError(
+                    "Relationship quality requires complete graph-maintenance counts"
+                )
+            expected_counts = (
+                relationship_quality.proposed_edges,
+                relationship_quality.accepted_edges,
+                relationship_quality.rejected_edges,
+            )
+            observed_counts = (
+                graph_counts.proposed_edges,
+                graph_counts.accepted_edges,
+                graph_counts.rejected_edges,
+            )
+            if observed_counts != expected_counts:
+                raise InvalidTransitionError(
+                    "Relationship quality does not match the attempt graph counts"
+                )
 
         async with self.postgres.acquire() as connection:
             async with connection.transaction():
@@ -871,6 +906,47 @@ class GraphSyncRepository:
                     graph_counts.accepted_edges,
                     graph_counts.rejected_edges,
                 )
+                if relationship_quality is not None:
+                    await connection.execute(
+                        """
+                        INSERT INTO graph_sync_relationship_quality (
+                            attempt_id,
+                            vocabulary_fingerprint,
+                            proposed_edge_count,
+                            normalized_edge_count,
+                            accepted_edge_count,
+                            rejected_edge_count,
+                            resolved_edge_count,
+                            new_edge_count,
+                            invalidated_edge_count,
+                            rejected_unknown_type_count,
+                            rejected_missing_endpoint_count,
+                            rejected_ambiguous_endpoint_count,
+                            rejected_self_edge_count,
+                            rejected_empty_fact_count,
+                            rejected_duplicate_count
+                        )
+                        VALUES (
+                            $1, $2, $3, $4, $5, $6, $7, $8,
+                            $9, $10, $11, $12, $13, $14, $15
+                        )
+                        """,
+                        lease.attempt_id,
+                        relationship_quality.vocabulary_fingerprint,
+                        relationship_quality.proposed_edges,
+                        relationship_quality.normalized_edges,
+                        relationship_quality.accepted_edges,
+                        relationship_quality.rejected_edges,
+                        relationship_quality.resolved_edges,
+                        relationship_quality.new_edges,
+                        relationship_quality.invalidated_edges,
+                        relationship_quality.rejected_unknown_type,
+                        relationship_quality.rejected_missing_endpoint,
+                        relationship_quality.rejected_ambiguous_endpoint,
+                        relationship_quality.rejected_self_edge,
+                        relationship_quality.rejected_empty_fact,
+                        relationship_quality.rejected_duplicate,
+                    )
                 updated = await connection.execute(
                     """
                     UPDATE graph_sync_jobs
@@ -1496,6 +1572,147 @@ class GraphSyncRepository:
                         "total_tokens",
                     )
                 },
+            },
+        }
+
+    async def relationship_quality_report(
+        self,
+        run_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Aggregate content-free relationship evidence separately from sync progress."""
+        if run_id is not None and not isinstance(run_id, UUID):
+            raise ValueError("Run ID must be a UUID")
+        async with self.postgres.acquire() as connection:
+            async with connection.transaction(isolation="repeatable_read", readonly=True):
+                run = await connection.fetchrow(
+                    """
+                    SELECT id,
+                           state,
+                           sync_profile_fingerprint,
+                           started_at,
+                           stopped_at,
+                           clock_timestamp() AS generated_at
+                    FROM graph_sync_runs
+                    WHERE $1::uuid IS NULL OR id = $1
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """,
+                    run_id,
+                )
+                if run is None:
+                    if run_id is not None:
+                        raise InvalidTransitionError("Graph sync run does not exist")
+                    return {
+                        "schema_version": 1,
+                        "status": "no_runs",
+                        "run": None,
+                    }
+
+                metrics = await connection.fetchrow(
+                    """
+                    SELECT count(*) AS successful_attempts,
+                           count(quality.attempt_id) AS reported_attempts,
+                           COALESCE(sum(quality.proposed_edge_count), 0) AS proposed_edges,
+                           COALESCE(sum(quality.normalized_edge_count), 0) AS normalized_edges,
+                           COALESCE(sum(quality.accepted_edge_count), 0) AS accepted_edges,
+                           COALESCE(sum(quality.rejected_edge_count), 0) AS rejected_edges,
+                           COALESCE(sum(quality.resolved_edge_count), 0) AS resolved_edges,
+                           COALESCE(sum(quality.new_edge_count), 0) AS new_edges,
+                           COALESCE(sum(quality.invalidated_edge_count), 0)
+                               AS invalidated_edges,
+                           COALESCE(sum(quality.rejected_unknown_type_count), 0)
+                               AS rejected_unknown_type,
+                           COALESCE(sum(quality.rejected_missing_endpoint_count), 0)
+                               AS rejected_missing_endpoint,
+                           COALESCE(sum(quality.rejected_ambiguous_endpoint_count), 0)
+                               AS rejected_ambiguous_endpoint,
+                           COALESCE(sum(quality.rejected_self_edge_count), 0)
+                               AS rejected_self_edge,
+                           COALESCE(sum(quality.rejected_empty_fact_count), 0)
+                               AS rejected_empty_fact,
+                           COALESCE(sum(quality.rejected_duplicate_count), 0)
+                               AS rejected_duplicate,
+                           COALESCE(
+                               array_agg(DISTINCT quality.vocabulary_fingerprint)
+                                   FILTER (WHERE quality.vocabulary_fingerprint IS NOT NULL),
+                               ARRAY[]::text[]
+                           ) AS vocabulary_fingerprints
+                    FROM graph_sync_attempts AS attempt
+                    JOIN graph_sync_attempt_results AS result
+                      ON result.attempt_id = attempt.id
+                    LEFT JOIN graph_sync_relationship_quality AS quality
+                      ON quality.attempt_id = attempt.id
+                    WHERE attempt.run_id = $1
+                      AND result.outcome IN ('primary_success', 'fallback_success')
+                    """,
+                    run["id"],
+                )
+
+        successful_attempts = int(metrics["successful_attempts"])
+        reported_attempts = int(metrics["reported_attempts"])
+        proposed_edges = int(metrics["proposed_edges"])
+        normalized_edges = int(metrics["normalized_edges"])
+        accepted_edges = int(metrics["accepted_edges"])
+        rejected_edges = int(metrics["rejected_edges"])
+        resolved_edges = int(metrics["resolved_edges"])
+        new_edges = int(metrics["new_edges"])
+        invalidated_edges = int(metrics["invalidated_edges"])
+        if reported_attempts == 0:
+            evidence_status = "none"
+        elif reported_attempts == successful_attempts:
+            evidence_status = "complete"
+        else:
+            evidence_status = "partial"
+        fingerprints = list(metrics["vocabulary_fingerprints"])
+        return {
+            "schema_version": 1,
+            "status": "available",
+            "generated_at": run["generated_at"],
+            "run": {
+                "id": run["id"],
+                "state": run["state"],
+                "sync_profile_fingerprint": run["sync_profile_fingerprint"],
+                "started_at": run["started_at"],
+                "stopped_at": run["stopped_at"],
+            },
+            "evidence": {
+                "status": evidence_status,
+                "successful_attempts": successful_attempts,
+                "reported_attempts": reported_attempts,
+                "missing_attempts": successful_attempts - reported_attempts,
+                "coverage_percent": _percentage(reported_attempts, successful_attempts),
+            },
+            "vocabulary": {
+                "fingerprints": fingerprints,
+                "mixed": len(fingerprints) > 1,
+            },
+            "relationships": {
+                "proposed": proposed_edges,
+                "normalized": normalized_edges,
+                "accepted": accepted_edges,
+                "rejected": rejected_edges,
+                "resolved": resolved_edges,
+                "new": new_edges,
+                "invalidated": invalidated_edges,
+            },
+            "rates_percent": {
+                "normalized_of_proposed": _percentage(normalized_edges, proposed_edges),
+                "accepted_of_proposed": _percentage(accepted_edges, proposed_edges),
+                "rejected_of_proposed": _percentage(rejected_edges, proposed_edges),
+                "resolved_of_accepted": _percentage(resolved_edges, accepted_edges),
+                "new_of_resolved": _percentage(new_edges, resolved_edges),
+                "invalidated_of_resolved": _percentage(invalidated_edges, resolved_edges),
+            },
+            "rejection_reasons": {
+                name: int(metrics[name])
+                for name in (
+                    "rejected_unknown_type",
+                    "rejected_missing_endpoint",
+                    "rejected_ambiguous_endpoint",
+                    "rejected_self_edge",
+                    "rejected_empty_fact",
+                    "rejected_duplicate",
+                )
             },
         }
 

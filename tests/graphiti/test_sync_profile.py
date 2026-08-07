@@ -2,6 +2,7 @@
 
 import pytest
 
+from src.graphiti.relationship_policy import RELATIONSHIP_VOCABULARY_FINGERPRINT
 from src.graphiti.sync_profile import GraphSyncExecutionProfile
 
 
@@ -24,6 +25,11 @@ def test_resolved_profile_is_deterministic_and_secret_free(monkeypatch):
     assert first == second
     assert first.sync_profile_fingerprint.startswith("sync:sha256:")
     assert first.embedding_profile_fingerprint.startswith("embedding:sha256:")
+    assert first.relationship_vocabulary_fingerprint == RELATIONSHIP_VOCABULARY_FINGERPRINT
+    assert (
+        first.sanitized_summary()["relationship_vocabulary_fingerprint"]
+        == RELATIONSHIP_VOCABULARY_FINGERPRINT
+    )
     assert "should-not-appear" not in str(first.sanitized_summary())
 
 

@@ -153,6 +153,7 @@ class GraphSyncWorker:
                 result.verification,
                 degraded=result.degraded,
                 graph_counts=result.graph_counts,
+                relationship_quality=result.relationship_quality,
             )
             return status, result
         except WorkerShutdownRequested as error:

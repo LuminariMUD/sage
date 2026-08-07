@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Canonical Relationship Policy and Quality Ledger (0.7.24)**
+  - Added an exact versioned vocabulary derived from the declared Graphiti edge types, with only case/spelling/separator aliases normalized; unknown semantic predicates fail closed instead of being guessed.
+  - Added pre-maintenance validation for missing, ambiguous, and self-referential endpoints, empty facts, and exact duplicate proposals. The sync-profile fingerprint now binds the vocabulary and alias policy.
+  - Added pending migration `0007_graph_relationship_quality` for atomic, append-only, content-free proposal, normalization, rejection-reason, and graph-maintenance evidence on verified successful attempts.
+  - Added `graph-quality-report` human/JSON operator commands with explicit evidence coverage and no synchronization-completeness claims. Crash-recovered successes without an in-process report remain visible as missing evidence.
+  - Verified 72 focused offline tests, the complete fresh-container fast gate (358 passed, 8 skipped, 116 intentionally deselected), and all 17 relevant rollback-isolated PostgreSQL tests. No provider request, worker, migration, graph write, service restart, or profile activation occurred.
+
 - **Controlled Durable Graph Rebuild (0.7.23)**
   - Added migration `0006_graph_rebuild_operations` with crash-recoverable rebuild state, sequence-validated append-only events, lock-ordered durable-run association, fail-closed source-job profile inheritance, and the last cleanly audited Graphiti sync/embedding profile pair.
   - Added read-only plan/status and separately confirmed prepare/finalize commands. Preparation verifies the recent matching backup before connecting, holds a crash-released cross-store clear lock, requires clean pre/post audits and no active run or lease, and commits durable job intent before the idempotent Neo4j clear.

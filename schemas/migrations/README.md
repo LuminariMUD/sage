@@ -18,6 +18,25 @@ The graph-sync ledger is intentionally evidence-preserving. There is no automate
 down migration that drops attempt history. Rollback uses the verified pre-migration
 database backup and the documented application rollback procedure.
 
+## Relationship quality evidence
+
+Migration `0007_graph_relationship_quality` adds one optional append-only,
+content-free quality row for each verified successful attempt. The database checks
+that proposed/accepted/rejected totals match the terminal attempt result, all
+stable rejection reasons reconcile, and maintenance counts are internally valid.
+Successful crash-recovery attempts with no in-process extraction report remain
+valid sync outcomes but visibly lack quality evidence.
+
+Read this evidence independently of sync completion:
+
+```bash
+make graph-quality-report
+make graph-quality-report-json RUN_ID=<run-uuid>
+```
+
+The report is operational extraction evidence, not a reviewed-corpus quality gate.
+It never includes episode text, extracted facts, prompts, responses, or credentials.
+
 ## Controlled graph rebuilds
 
 Migration `0006_graph_rebuild_operations` adds a crash-recoverable whole-graph

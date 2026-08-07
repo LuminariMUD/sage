@@ -10,6 +10,7 @@ from graphiti_core.nodes import EpisodeType
 
 from src.graphiti.edge_types import EDGE_TYPES
 from src.graphiti.entity_types import ENTITY_TYPES
+from src.graphiti.relationship_policy import RelationshipQualityReport
 from src.graphiti.sync_models import GraphCounts, JobLease, StableIdVerification
 from src.graphiti.sync_profile import GraphSyncExecutionProfile
 
@@ -32,6 +33,7 @@ class GraphProcessingResult:
     graph_counts: GraphCounts
     reused_existing: bool
     degraded: bool = False
+    relationship_quality: RelationshipQualityReport | None = None
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,7 @@ class GraphitiEpisodeProcessor:
 
     async def process(self, lease: JobLease) -> GraphProcessingResult:
         """Reuse, adopt, or create one node and return independently queried proof."""
+        stable_id = str(lease.episode_id)
         state = await self._inspect(lease)
         if state.candidate_count > 1 or state.stable_id_conflict_count:
             raise GraphIdentityConflictError("Neo4j episode identity is ambiguous or conflicting")
@@ -95,17 +98,18 @@ class GraphitiEpisodeProcessor:
 
         verification = self._verification(lease, state)
         if verification.is_exact:
+            quality = self._consume_relationship_quality(stable_id)
             return GraphProcessingResult(
                 verification=verification,
-                graph_counts=GraphCounts(),
+                graph_counts=self._graph_counts(None, quality),
                 reused_existing=True,
+                relationship_quality=quality,
             )
 
-        graph_counts = GraphCounts()
+        add_result = None
         reused_existing = state.candidate_count == 1
         if state.candidate_count == 0:
-            result = await self._add_episode(lease)
-            graph_counts = self._graph_counts(result)
+            add_result = await self._add_episode(lease)
 
         updated = await self._stamp_metadata(lease)
         if updated != 1:
@@ -117,10 +121,12 @@ class GraphitiEpisodeProcessor:
         verification = self._verification(lease, verified_state)
         if verified_state.candidate_content != lease.text or not verification.is_exact:
             raise GraphVerificationError("Neo4j episode failed exact post-write verification")
+        quality = self._consume_relationship_quality(stable_id)
         return GraphProcessingResult(
             verification=verification,
-            graph_counts=graph_counts,
+            graph_counts=self._graph_counts(add_result, quality),
             reused_existing=reused_existing,
+            relationship_quality=quality,
         )
 
     async def _inspect(self, lease: JobLease) -> _EpisodeState:
@@ -280,13 +286,24 @@ class GraphitiEpisodeProcessor:
             embedding_profile_fingerprint_count=state.embedding_profile_fingerprint_count,
         )
 
+    def _consume_relationship_quality(self, stable_id: str) -> RelationshipQualityReport | None:
+        consume_quality = getattr(self.graphiti.graphiti, "consume_relationship_quality", None)
+        return consume_quality(stable_id) if callable(consume_quality) else None
+
     @staticmethod
-    def _graph_counts(result: Any) -> GraphCounts:
-        if result is None:
-            return GraphCounts()
-        nodes = getattr(result, "nodes", None)
-        edges = getattr(result, "edges", None)
+    def _graph_counts(
+        result: Any,
+        quality: RelationshipQualityReport | None,
+    ) -> GraphCounts:
+        nodes = getattr(result, "nodes", None) if result is not None else None
+        edges = getattr(result, "edges", None) if result is not None else None
         return GraphCounts(
             accepted_entities=len(nodes) if nodes is not None else None,
-            accepted_edges=len(edges) if edges is not None else None,
+            proposed_edges=quality.proposed_edges if quality is not None else None,
+            accepted_edges=(
+                quality.accepted_edges
+                if quality is not None
+                else len(edges) if edges is not None else None
+            ),
+            rejected_edges=quality.rejected_edges if quality is not None else None,
         )

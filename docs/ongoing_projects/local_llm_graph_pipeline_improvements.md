@@ -441,6 +441,42 @@ the deleted corpus and cannot satisfy the new rebuild snapshot gate; create a fr
 verified backup only after separate operator authorization. The worker remains
 stopped.
 
+### 2026-08-07 - Canonical relationship policy and quality ledger checkpoint, not activated
+
+- Added a versioned canonical relationship policy derived exactly from the declared
+  `EDGE_TYPES` contract. Only spelling, case, and separator variants normalize;
+  unknown semantic predicates are rejected rather than guessed into a possibly
+  different meaning or direction.
+- Added a Graphiti subclass at the structured edge-response boundary. It rejects
+  missing, ambiguous, and self-referential endpoints, empty facts, unknown types,
+  and exact duplicates before pointer resolution or graph maintenance, then records
+  content-free proposed, normalized, accepted, rejected, resolved, new, and
+  invalidated counts. The policy fingerprint is now part of the durable sync profile.
+- Added pending migration `0007_graph_relationship_quality` for an optional
+  append-only row attached atomically to each verified successful attempt. Database
+  checks reconcile the attempt totals and stable rejection reasons. A crash-recovered
+  success without an in-process report remains synchronized but is explicitly
+  counted as missing quality evidence rather than silently treated as measured.
+- Added read-only `make graph-quality-report` and JSON output. The report contains
+  relationship-policy/maintenance rates and evidence coverage only; job completion,
+  throughput, and ETA remain in the separate sync run summary. It is operational
+  extraction evidence and does not replace reviewed-corpus precision/recall gates.
+
+Seventy-two focused offline tests pass, including direct proof that policy filtering
+precedes Graphiti maintenance. All 11 rollback-isolated repository tests pass with
+migration `0007`, atomic success/evidence persistence, immutable-row rejection,
+direct count-mismatch rejection, partial evidence coverage, and content-free report
+aggregation. The complete fresh-container fast gate passes 358 tests with 8 skips
+and 116 intentional deselections; all 17 relevant rollback-isolated PostgreSQL
+migration/repository tests pass.
+
+Live state was not changed. Migrations `0004` through `0007` remain pending; no
+provider/model call, worker, graph claim, ingestion, migration, backup, graph/vector
+write, service restart, or profile activation occurred. The configured OpenRouter
+target and existing runtime remain unactivated, and the worker freeze remains
+authoritative. The reviewed extraction corpus, selected-model measurement, and
+minimum quality thresholds are still open.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.

@@ -475,6 +475,39 @@ was restarted. The old backup represents the deleted corpus; a fresh verified
 backup is mandatory before any separately authorized activation. The worker freeze
 remains authoritative.
 
+### Canonical relationship policy and quality ledger checkpoint - implemented offline
+
+- Added a deterministic canonical relationship vocabulary and alias fingerprint
+  derived from the declared edge-type contract. Normalization is intentionally
+  limited to case/spelling/separator variants; semantic synonyms and unknown
+  predicates fail closed.
+- Interposed policy validation at Graphiti's structured edge-response boundary,
+  before pointer resolution and maintenance. Missing, ambiguous, self-referential,
+  empty-fact, unknown-type, and exact-duplicate proposals receive stable reason
+  counts without retaining source text, facts, prompts, or model responses.
+- Bound the relationship-policy fingerprint into the sync-profile fingerprint and
+  carried proposed, normalized, accepted, rejected, resolved, new, and invalidated
+  counts through independently verified success.
+- Added pending migration `0007_graph_relationship_quality` for atomic append-only
+  quality evidence. Database guards require a successful terminal result, exact
+  agreement with its edge totals, reconciled rejection reasons, and immutable rows.
+  Successful recovery without available in-process extraction evidence remains
+  valid but is explicitly reported as missing evidence.
+- Added separate read-only human/JSON quality reports. They aggregate extraction and
+  maintenance evidence by run and never use job completion as a quality proxy;
+  reviewed-corpus precision/recall and approval thresholds remain separate open
+  gates.
+
+Verification passes 72 focused offline tests and all 11 rollback-isolated graph
+repository tests. The latter apply migration `0007` only inside a temporary schema
+and prove atomic persistence, direct mismatch rejection, append-only enforcement,
+and partial-coverage reporting. The complete fresh-container fast gate passes 358
+tests with 8 skips and 116 intentional deselections, and all 17 relevant
+rollback-isolated PostgreSQL tests pass. No provider/model request, worker,
+migration, backup, graph/vector mutation, service restart, or profile activation
+occurred. Live migrations `0004` through `0007` remain pending and the operator
+freeze remains authoritative.
+
 ---
 
 ## 1. Executive Summary
@@ -1133,9 +1166,9 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [ ] Test combined versus staged entity/relationship extraction where truncation is observed.
 - [x] Implement the explicit primary/fallback route and record fallback success as degraded success.
 - [x] Coordinate Graphiti-internal and application retry counts under one maximum-provider-call budget.
-- [ ] Define and version the canonical relationship vocabulary and safe alias normalization.
-- [ ] Validate relationship endpoints before graph maintenance and record proposed/normalized/accepted/rejected counts.
-- [ ] Add graph-quality reports that are separate from synchronization-completeness reports.
+- [x] Define and version the canonical relationship vocabulary and safe alias normalization.
+- [x] Validate relationship endpoints before graph maintenance and record proposed/normalized/accepted/rejected counts.
+- [x] Add graph-quality reports that are separate from synchronization-completeness reports.
 - [ ] Keep one local worker as the default while correctness is being established.
 
 **Exit criteria:** The selected extraction route meets the approved parse, schema, and graph-quality thresholds; every exhausted episode enters visible `retry_wait` or `quarantined` state; no failed extraction is synchronized.

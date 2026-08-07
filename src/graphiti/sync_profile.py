@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
+from src.graphiti.relationship_policy import RELATIONSHIP_VOCABULARY_FINGERPRINT
 from src.graphiti.sync_models import validate_label
 from src.llm.provider_config import resolve_provider_settings
 
@@ -74,6 +75,7 @@ class GraphSyncExecutionProfile:
     max_entities: int
     max_relationships: int
     model_revision: str | None = None
+    relationship_vocabulary_fingerprint: str = RELATIONSHIP_VOCABULARY_FINGERPRINT
 
     def __post_init__(self) -> None:
         for value, label in (
@@ -85,6 +87,10 @@ class GraphSyncExecutionProfile:
             (self.model, "Model"),
             (self.prompt_version, "Prompt version"),
             (self.schema_version, "Schema version"),
+            (
+                self.relationship_vocabulary_fingerprint,
+                "Relationship vocabulary fingerprint",
+            ),
         ):
             validate_label(value, label)
         if self.model_revision is not None:
@@ -132,6 +138,7 @@ class GraphSyncExecutionProfile:
             "entity_types": _type_contract(ENTITY_TYPES),
             "edge_types": _type_contract(EDGE_TYPES),
             "normalization": NORMALIZATION_RULES_VERSION,
+            "relationship_vocabulary_fingerprint": RELATIONSHIP_VOCABULARY_FINGERPRINT,
             "route_fingerprint": route_fingerprint,
             "embedding_profile_fingerprint": embedding_fingerprint,
             "max_entities": max_entities,
@@ -154,6 +161,7 @@ class GraphSyncExecutionProfile:
             schema_version=schema_version,
             max_entities=max_entities,
             max_relationships=max_relationships,
+            relationship_vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
         )
 
     def sanitized_summary(self) -> dict[str, str | int | None]:
@@ -170,4 +178,5 @@ class GraphSyncExecutionProfile:
             "schema_version": self.schema_version,
             "max_entities": self.max_entities,
             "max_relationships": self.max_relationships,
+            "relationship_vocabulary_fingerprint": self.relationship_vocabulary_fingerprint,
         }

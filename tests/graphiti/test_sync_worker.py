@@ -10,6 +10,10 @@ from uuid import uuid4
 
 import pytest
 
+from src.graphiti.relationship_policy import (
+    RELATIONSHIP_VOCABULARY_FINGERPRINT,
+    RelationshipQualityReport,
+)
 from src.graphiti.sync_graph import GraphProcessingResult
 from src.graphiti.sync_models import (
     CompletionStatus,
@@ -219,6 +223,7 @@ async def test_worker_recovers_claims_verifies_and_stops_owned_run():
         "drain",
         "stop",
     ]
+    assert repository.successes[0]["relationship_quality"] is None
 
 
 async def test_worker_records_routed_fallback_as_degraded_success():
@@ -246,6 +251,36 @@ async def test_worker_records_routed_fallback_as_degraded_success():
     assert summary.synced == 1
     assert summary.degraded_synced == 1
     assert repository.successes[0]["degraded"] is True
+
+
+async def test_worker_forwards_relationship_quality_to_atomic_completion():
+    lease = _lease()
+    repository = FakeRepository(lease)
+    quality = RelationshipQualityReport(
+        vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
+        proposed_edges=1,
+        normalized_edges=0,
+        accepted_edges=1,
+        rejected_edges=0,
+    ).with_maintenance(resolved_edges=1, new_edges=1, invalidated_edges=0)
+
+    class QualityProcessor(FakeProcessor):
+        async def process(self, current_lease):
+            return GraphProcessingResult(
+                verification=_verification(current_lease),
+                graph_counts=GraphCounts(
+                    proposed_edges=1,
+                    accepted_edges=1,
+                    rejected_edges=0,
+                ),
+                reused_existing=False,
+                relationship_quality=quality,
+            )
+
+    summary = await _worker(repository, QualityProcessor(lease)).run(max_episodes=1)
+
+    assert summary.synced == 1
+    assert repository.successes[0]["relationship_quality"] is quality
 
 
 async def test_systemic_configuration_failure_pauses_without_stopping_run():

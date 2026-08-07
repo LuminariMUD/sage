@@ -269,6 +269,19 @@ def test_repository_migration_contains_required_durable_contract():
     ):
         assert required_fragment in graph_rebuild_sql
 
+    relationship_quality_sql = migrations[6].sql
+    for required_fragment in (
+        "CREATE TABLE graph_sync_relationship_quality",
+        "graph_sync_relationship_quality_fingerprint_check",
+        "graph_sync_relationship_quality_rejection_check",
+        "graph_sync_guard_relationship_quality",
+        "graph_sync_relationship_quality_guard",
+        "graph_sync_relationship_quality_append_only",
+        "relationship quality requires the current leased attempt",
+        "relationship quality does not match attempt graph counts",
+    ):
+        assert required_fragment in relationship_quality_sql
+
     retired_helper = (
         migrate_database.DEFAULT_MIGRATION_DIRECTORY.parent / "add_episode_uuid.sql"
     ).read_text(encoding="ascii")

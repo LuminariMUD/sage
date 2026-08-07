@@ -36,7 +36,7 @@ os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ.setdefault("GRAPHITI_TELEMETRY_ENABLED", "false")
 
-from graphiti_core import Graphiti
+from src.graphiti.policy_graphiti import PolicyGraphiti
 
 # graphiti-core names the episode node type EpisodicNode (older releases used EpisodeNode)
 try:
@@ -100,7 +100,7 @@ class LuminariGraphiti:
         openai_logger.setLevel(logging.WARNING)
 
         # Initialize Graphiti with configured clients
-        self.graphiti = Graphiti(
+        self.graphiti = PolicyGraphiti(
             uri=resolved_neo4j_uri,
             user=resolved_neo4j_user,
             password=resolved_neo4j_password,

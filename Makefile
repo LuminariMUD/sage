@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined graph-rebuild-status graph-rebuild-plan graph-rebuild-prepare graph-rebuild-finalize backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate embedding-shadow-status embedding-shadow-status-json embedding-shadow-register embedding-shadow-backfill embedding-shadow-recover-run embedding-shadow-build-index retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-shadow-retrieval benchmark-shadow-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-quality-report graph-quality-report-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined graph-rebuild-status graph-rebuild-plan graph-rebuild-prepare graph-rebuild-finalize backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate embedding-shadow-status embedding-shadow-status-json embedding-shadow-register embedding-shadow-backfill embedding-shadow-recover-run embedding-shadow-build-index retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-shadow-retrieval benchmark-shadow-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
 
 # Capability-aware host launcher. It reuses the model-profile resolver and
 # applies the no-Ollama override only when every selected capability is cloud.
@@ -51,6 +51,8 @@ help:
 	@echo "  make graph-sync-status        - Show durable graph job/run state (read-only)"
 	@echo "  make graph-sync-run-summary   - Show latest durable throughput/ETA/failures"
 	@echo "  make graph-sync-run-summary-json - Emit latest durable run summary as JSON"
+	@echo "  make graph-quality-report     - Show separate relationship-quality evidence"
+	@echo "  make graph-quality-report-json - Emit relationship-quality evidence as JSON"
 	@echo "  make graph-sync-list          - List failed/active graph jobs (read-only)"
 	@echo "  make graph-sync-recover-expired - Requeue or quarantine expired leases"
 	@echo "  make graph-sync-retry-waiting EPISODE_IDS='...' - Retry waiting jobs"
@@ -359,6 +361,16 @@ graph-sync-run-summary-json:
 	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
 		--json run-summary \
 		--window-seconds "$(or $(PROGRESS_WINDOW_SECONDS),300)" $(if $(strip $(RUN_ID)),--run-id "$(RUN_ID)",)
+
+.PHONY: graph-quality-report
+graph-quality-report:
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
+		quality-report $(if $(strip $(RUN_ID)),--run-id "$(RUN_ID)",)
+
+.PHONY: graph-quality-report-json
+graph-quality-report-json:
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
+		--json quality-report $(if $(strip $(RUN_ID)),--run-id "$(RUN_ID)",)
 
 .PHONY: graph-sync-list
 graph-sync-list:

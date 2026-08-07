@@ -1,6 +1,6 @@
 # Luminari Sage - Intelligent Lore Management System
 
-**Version**: 0.7.23
+**Version**: 0.7.24
 **Status**: Production Deployed
 **Deployment**: luminarimud.com:8003
 **Repository**: https://github.com/LuminariMUD/sage
@@ -71,6 +71,7 @@ Luminari Sage is a graph-based lore management system with AI-powered search and
 - **Semantic Chunking**: Intelligent document segmentation with Graphiti integration
 - **Entity & Relationship Extraction**: Automatic knowledge graph construction from markdown
 - **Bounded Graphiti Routing**: Durable extraction uses explicit candidate retries/fallback, post-validation request accounting, and degraded fallback outcomes
+- **Canonical Relationship Policy**: Versioned edge vocabulary, safe alias normalization, endpoint validation, append-only quality evidence, and separate read-only reporting
 - **Lore Validation System**: Comprehensive validation with finding storage and review workflow
 - **Correction System**: Batch corrections with rollback capabilities
 - **RESTful API**: 35+ endpoints for search, retrieval, validation, and corrections
@@ -614,5 +615,5 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ---
 
 **Last Updated**: 2026-08-07
-**Version**: 0.7.23
+**Version**: 0.7.24
 **Status**: Production Ready

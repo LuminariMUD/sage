@@ -14,6 +14,10 @@ import asyncpg
 import pytest
 
 from src.graphiti.rebuild import GraphRebuildRepository
+from src.graphiti.relationship_policy import (
+    RELATIONSHIP_VOCABULARY_FINGERPRINT,
+    RelationshipQualityReport,
+)
 from src.graphiti.sync_models import (
     CompletionStatus,
     FailureClass,
@@ -80,12 +84,14 @@ async def state_store() -> (
         MIGRATION_DIRECTORY / "0002_graph_sync_runtime.sql",
         MIGRATION_DIRECTORY / "0003_graph_sync_provider_call_intents.sql",
         MIGRATION_DIRECTORY / "0006_graph_rebuild_operations.sql",
+        MIGRATION_DIRECTORY / "0007_graph_relationship_quality.sql",
     ]
     if [path.name for path in migration_paths] != [
         "0001_graph_sync_lifecycle.sql",
         "0002_graph_sync_runtime.sql",
         "0003_graph_sync_provider_call_intents.sql",
         "0006_graph_rebuild_operations.sql",
+        "0007_graph_relationship_quality.sql",
     ]:
         raise RuntimeError("Graph sync integration migrations are unavailable or unexpected")
     schema_name = f"graph_sync_runtime_{uuid4().hex}"
@@ -131,6 +137,7 @@ async def state_store() -> (
                   'graph_sync_attempt_results',
                   'graph_sync_provider_call_intents',
                   'graph_sync_provider_calls',
+                  'graph_sync_relationship_quality',
                   'graph_rebuild_operations',
                   'graph_sync_profile_state',
                   'graph_rebuild_events'
@@ -138,7 +145,7 @@ async def state_store() -> (
             """,
             schema_name,
         )
-        if table_count != 10:
+        if table_count != 11:
             raise RuntimeError("Graph sync integration schema was not created in isolation")
     except Exception:
         await admin.execute("SET search_path TO public")
@@ -708,6 +715,174 @@ async def test_run_summary_reconstructs_progress_throughput_and_failures_from_le
 
     status = await repository.status_snapshot()
     assert status["latest_run_summary"]["run"]["id"] == run.id
+
+
+async def test_relationship_quality_is_append_only_and_reported_separately(state_store):
+    postgres, repository, _ = state_store
+    run = await repository.start_or_join_run(
+        worker_id="quality-worker", sync_profile_fingerprint=SYNC_PROFILE
+    )
+    policy = GraphSyncPolicy(max_job_attempts=2)
+    quality_lease = (
+        await repository.claim_jobs(
+            run_id=run.id,
+            worker_id="quality-worker",
+            route_fingerprint="route:test",
+            policy=policy,
+        )
+    )[0]
+    quality = RelationshipQualityReport(
+        vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
+        proposed_edges=4,
+        normalized_edges=1,
+        accepted_edges=2,
+        rejected_edges=2,
+        rejected_unknown_type=1,
+        rejected_missing_endpoint=1,
+    ).with_maintenance(resolved_edges=2, new_edges=1, invalidated_edges=0)
+    assert (
+        await repository.complete_verified_success(
+            quality_lease,
+            _verification(quality_lease),
+            graph_counts=GraphCounts(
+                proposed_edges=4,
+                accepted_edges=2,
+                rejected_edges=2,
+            ),
+            relationship_quality=quality,
+        )
+        is CompletionStatus.SYNCED
+    )
+
+    unreported_lease = (
+        await repository.claim_jobs(
+            run_id=run.id,
+            worker_id="quality-worker",
+            route_fingerprint="route:test",
+            policy=policy,
+        )
+    )[0]
+    assert (
+        await repository.complete_verified_success(
+            unreported_lease,
+            _verification(unreported_lease),
+        )
+        is CompletionStatus.SYNCED
+    )
+
+    report = await repository.relationship_quality_report(run.id)
+
+    assert report["status"] == "available"
+    assert report["run"]["id"] == run.id
+    assert report["evidence"] == {
+        "status": "partial",
+        "successful_attempts": 2,
+        "reported_attempts": 1,
+        "missing_attempts": 1,
+        "coverage_percent": 50.0,
+    }
+    assert report["vocabulary"] == {
+        "fingerprints": [RELATIONSHIP_VOCABULARY_FINGERPRINT],
+        "mixed": False,
+    }
+    assert report["relationships"] == {
+        "proposed": 4,
+        "normalized": 1,
+        "accepted": 2,
+        "rejected": 2,
+        "resolved": 2,
+        "new": 1,
+        "invalidated": 0,
+    }
+    assert report["rates_percent"]["accepted_of_proposed"] == 50.0
+    assert report["rates_percent"]["resolved_of_accepted"] == 100.0
+    assert report["rejection_reasons"]["rejected_unknown_type"] == 1
+    assert report["rejection_reasons"]["rejected_missing_endpoint"] == 1
+    assert "Episode 0" not in repr(report)
+
+    with pytest.raises(asyncpg.PostgresError):
+        await postgres.execute(
+            """
+            UPDATE graph_sync_relationship_quality
+            SET accepted_edge_count = accepted_edge_count + 1
+            WHERE attempt_id = $1
+            """,
+            quality_lease.attempt_id,
+        )
+
+    with pytest.raises(asyncpg.PostgresError):
+        await postgres.execute(
+            """
+            INSERT INTO graph_sync_relationship_quality (
+                attempt_id,
+                vocabulary_fingerprint,
+                proposed_edge_count,
+                normalized_edge_count,
+                accepted_edge_count,
+                rejected_edge_count,
+                resolved_edge_count,
+                new_edge_count,
+                invalidated_edge_count,
+                rejected_unknown_type_count,
+                rejected_missing_endpoint_count,
+                rejected_ambiguous_endpoint_count,
+                rejected_self_edge_count,
+                rejected_empty_fact_count,
+                rejected_duplicate_count
+            )
+            VALUES ($1, $2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+            """,
+            unreported_lease.attempt_id,
+            RELATIONSHIP_VOCABULARY_FINGERPRINT,
+        )
+
+    mismatched_lease = (
+        await repository.claim_jobs(
+            run_id=run.id,
+            worker_id="quality-worker",
+            route_fingerprint="route:test",
+            policy=policy,
+        )
+    )[0]
+    await postgres.execute(
+        """
+        INSERT INTO graph_sync_attempt_results (
+            attempt_id,
+            outcome,
+            provider_call_count,
+            proposed_edge_count,
+            accepted_edge_count,
+            rejected_edge_count
+        )
+        VALUES ($1, 'primary_success', 0, 2, 1, 1)
+        """,
+        mismatched_lease.attempt_id,
+    )
+    with pytest.raises(asyncpg.PostgresError):
+        await postgres.execute(
+            """
+            INSERT INTO graph_sync_relationship_quality (
+                attempt_id,
+                vocabulary_fingerprint,
+                proposed_edge_count,
+                normalized_edge_count,
+                accepted_edge_count,
+                rejected_edge_count,
+                resolved_edge_count,
+                new_edge_count,
+                invalidated_edge_count,
+                rejected_unknown_type_count,
+                rejected_missing_endpoint_count,
+                rejected_ambiguous_endpoint_count,
+                rejected_self_edge_count,
+                rejected_empty_fact_count,
+                rejected_duplicate_count
+            )
+            VALUES ($1, $2, 1, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0)
+            """,
+            mismatched_lease.attempt_id,
+            RELATIONSHIP_VOCABULARY_FINGERPRINT,
+        )
 
 
 async def test_rebuild_preserves_attempts_fences_runs_and_activates_profiles(state_store):

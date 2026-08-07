@@ -8,6 +8,10 @@ from uuid import uuid4
 
 import pytest
 
+from src.graphiti.relationship_policy import (
+    RELATIONSHIP_VOCABULARY_FINGERPRINT,
+    RelationshipQualityReport,
+)
 from src.graphiti.sync_graph import (
     GraphIdentityConflictError,
     GraphitiEpisodeProcessor,
@@ -124,6 +128,13 @@ class FakeGraphitiCore:
         self.add_calls = 0
         self.crash_before_write = False
         self.crash_after_write = False
+        self.quality_report = None
+
+    def consume_relationship_quality(self, episode_uuid):
+        del episode_uuid
+        report = self.quality_report
+        self.quality_report = None
+        return report
 
     async def add_episode(self, **kwargs):
         self.add_calls += 1
@@ -290,3 +301,26 @@ async def test_conflicting_content_is_never_relabelled_as_current():
     with pytest.raises(GraphIdentityConflictError, match="content conflicts"):
         await processor.process(lease)
     assert core.add_calls == 0
+
+
+async def test_verified_success_uses_premaintenance_relationship_quality_counts():
+    processor, _, core = _processor()
+    lease = _lease()
+    core.quality_report = RelationshipQualityReport(
+        vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
+        proposed_edges=4,
+        normalized_edges=1,
+        accepted_edges=2,
+        rejected_edges=2,
+        rejected_unknown_type=1,
+        rejected_missing_endpoint=1,
+    ).with_maintenance(resolved_edges=2, new_edges=1, invalidated_edges=0)
+
+    result = await processor.process(lease)
+
+    assert result.graph_counts.proposed_edges == 4
+    assert result.graph_counts.accepted_edges == 2
+    assert result.graph_counts.rejected_edges == 2
+    assert result.relationship_quality is not None
+    assert result.relationship_quality.normalized_edges == 1
+    assert core.quality_report is None

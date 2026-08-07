@@ -1,6 +1,6 @@
 # Testing Guide
 
-**Version**: 0.7.23
+**Version**: 0.7.24
 **Status**: Production Ready
 **Last Updated**: 2026-08-07
 
@@ -14,6 +14,7 @@ Comprehensive guide for testing Luminari Sage, covering unit tests, integration 
 - [Test Structure](#test-structure)
 - [Running Tests](#running-tests)
 - [Episode Retrieval Benchmark](#episode-retrieval-benchmark)
+- [Relationship Quality Evidence](#relationship-quality-evidence)
 - [Controlled Graph Rebuild](#controlled-graph-rebuild)
 - [Graphiti Extraction Benchmark](#graphiti-extraction-benchmark)
 - [Test Markers](#test-markers)
@@ -309,6 +310,37 @@ three is intentionally fail closed and can be insufficient for ordinary Graphiti
 processing. Do not turn an offline test pass into authorization to raise that budget
 or run ingestion; use the separately confirmed non-persistent benchmark first.
 
+## Relationship Quality Evidence
+
+The relationship-policy unit suite uses synthetic structured responses only. It
+proves exact canonical-vocabulary identity, spelling/case/separator-only alias
+normalization, missing/ambiguous/self endpoint rejection, empty-fact and exact-
+duplicate rejection, and policy execution before Graphiti pointer resolution or
+graph maintenance:
+
+```bash
+docker compose run --rm --no-deps api python -m pytest -q \
+  tests/graphiti/test_relationship_policy.py \
+  tests/graphiti/test_sync_graph.py \
+  tests/test_graph_sync_cli.py \
+  tests/test_database_migrations.py
+```
+
+After migration `0007_graph_relationship_quality` is separately authorized and
+applied, operators can inspect content-free attempt evidence without starting a
+worker or contacting Neo4j or a provider:
+
+```bash
+make graph-quality-report
+make graph-quality-report-json RUN_ID=<run-uuid>
+```
+
+The report covers proposed, normalized, accepted, rejected, resolved, new, and
+invalidated relationship counts plus stable rejection reasons. It explicitly
+reports missing evidence for successful crash-recovery attempts. These extraction
+and maintenance indicators are separate from synchronization completeness and do
+not replace reviewed-corpus precision/recall gates.
+
 ## Controlled Graph Rebuild
 
 The rebuild unit suite is offline. It proves confirmation ordering, recent verified
@@ -321,11 +353,11 @@ python -m pytest -q tests/test_graph_rebuild.py tests/test_database_migrations.p
 ```
 
 The isolated PostgreSQL suite applies graph migrations `0001` through `0003` plus
-`0006` in a temporary schema. Its rebuild case proves total attempt and immutable
-ledger preservation, retry-generation reset, direct-run fencing before clear,
-run-to-rebuild association, sequence-validated append-only transition events,
-fail-closed source-row profile inheritance during and after rebuild, and
-completed-profile activation:
+`0006` and `0007` in a temporary schema. Its cases prove total attempt and
+immutable ledger preservation, retry-generation reset, direct-run fencing before
+clear, run-to-rebuild association, sequence-validated append-only transition
+events, fail-closed source-row profile inheritance, completed-profile activation,
+and atomic append-only relationship-quality evidence with separate aggregation:
 
 ```bash
 python -m pytest -q tests/test_graph_sync_state_integration.py

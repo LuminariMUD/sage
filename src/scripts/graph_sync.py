@@ -19,7 +19,7 @@ from src.db.postgres import PostgresDB
 from src.graphiti.sync_models import GraphSyncStateError, JobState, sanitize_summary
 from src.graphiti.sync_state import GraphSyncRepository
 
-READ_ONLY_COMMANDS = {"status", "list", "attempts", "run-summary"}
+READ_ONLY_COMMANDS = {"status", "list", "attempts", "run-summary", "quality-report"}
 
 
 def json_default(value: object) -> Any:
@@ -137,6 +137,45 @@ def render_run_summary(summary: dict[str, Any]) -> str:
     )
 
 
+def render_quality_report(report: dict[str, Any]) -> str:
+    """Render content-free relationship evidence without sync-completeness claims."""
+    if report.get("run") is None:
+        return "No graph sync runs"
+    run = report["run"]
+    evidence = report["evidence"]
+    relationships = report["relationships"]
+    rates = report["rates_percent"]
+    reasons = report["rejection_reasons"]
+    fingerprints = report["vocabulary"]["fingerprints"]
+
+    def rate(name: str) -> str:
+        value = rates[name]
+        return "unavailable" if value is None else f"{float(value):.3f}%"
+
+    nonzero_reasons = [f"{name}={count}" for name, count in reasons.items() if count]
+    return "\n".join(
+        [
+            "Graph relationship quality report",
+            f"Run: {run['id']}",
+            f"Profile: {run['sync_profile_fingerprint']}",
+            "Evidence: "
+            f"{evidence['reported_attempts']}/{evidence['successful_attempts']} "
+            f"successful attempts ({evidence['status']})",
+            "Vocabulary fingerprints: " + (", ".join(fingerprints) if fingerprints else "none"),
+            "Relationships: "
+            + ", ".join(f"{name}={count}" for name, count in relationships.items()),
+            "Rates: "
+            f"accepted/proposed={rate('accepted_of_proposed')}, "
+            f"rejected/proposed={rate('rejected_of_proposed')}, "
+            f"normalized/proposed={rate('normalized_of_proposed')}, "
+            f"resolved/accepted={rate('resolved_of_accepted')}",
+            "Rejection reasons: " + (", ".join(nonzero_reasons) if nonzero_reasons else "none"),
+            "Scope: extraction and graph-maintenance evidence only; "
+            "synchronization completeness is reported separately.",
+        ]
+    )
+
+
 def render_rows(rows: list[dict[str, Any]], *, empty_message: str) -> str:
     """Render bounded records one per line for terminal inspection."""
     if not rows:
@@ -159,6 +198,8 @@ async def execute_command(args: argparse.Namespace, repository: GraphSyncReposit
             args.run_id,
             rolling_window_seconds=args.window_seconds,
         )
+    if args.command == "quality-report":
+        return await repository.relationship_quality_report(args.run_id)
     if args.command == "recover-expired":
         return await repository.recover_expired_leases(limit=args.limit)
     if args.command == "retry-waiting":
@@ -188,6 +229,8 @@ def render_result(args: argparse.Namespace, result: Any) -> str:
         return render_rows(result, empty_message="No attempts for this episode")
     if args.command == "run-summary":
         return render_run_summary(result)
+    if args.command == "quality-report":
+        return render_quality_report(result)
     if args.command == "recover-expired":
         return f"Recovered expired leases: {len(result)}"
     if args.command in {"retry-waiting", "retry-quarantined"}:
@@ -269,6 +312,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=300,
         help="Rolling throughput window from 60 to 86400 seconds",
     )
+
+    quality_report = commands.add_parser(
+        "quality-report",
+        help="Show relationship evidence separately from synchronization completeness",
+    )
+    quality_report.add_argument("--run-id", type=UUID)
 
     recover = commands.add_parser("recover-expired", help="Requeue or quarantine expired leases")
     add_limit(recover)
