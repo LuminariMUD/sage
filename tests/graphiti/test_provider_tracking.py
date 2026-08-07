@@ -21,7 +21,10 @@ from src.graphiti.sync_models import (
 )
 from src.graphiti.sync_profile import GraphSyncExecutionProfile
 from src.llm.provider_config import resolve_provider_settings
-from src.llm.retry import ModelSchemaValidationError
+from src.llm.retry import (
+    MalformedModelOutputError,
+    ModelSchemaValidationError,
+)
 
 
 def _profile():
@@ -143,6 +146,52 @@ async def test_tracker_records_failed_request_then_preserves_original_error():
     record = repository.records[0]
     assert record.failure_class is FailureClass.TRANSPORT
     assert record.failure_code == "provider_transport"
+
+
+def _http_error(status_code):
+    error = RuntimeError("private upstream detail")
+    error.status_code = status_code
+    return error
+
+
+@pytest.mark.parametrize(
+    ("error", "failure_class", "failure_code"),
+    [
+        (
+            MalformedModelOutputError("private malformed output"),
+            FailureClass.MALFORMED_JSON,
+            "malformed_model_output",
+        ),
+        (
+            ModelSchemaValidationError("private invalid output"),
+            FailureClass.SCHEMA_VALIDATION,
+            "model_schema_invalid",
+        ),
+        (
+            _http_error(402),
+            FailureClass.RESOURCE_EXHAUSTION,
+            "provider_resource_exhausted",
+        ),
+        (_http_error(503), FailureClass.TRANSPORT, "provider_http_transient"),
+        (_http_error(422), FailureClass.CONFIGURATION, "provider_request_rejected"),
+    ],
+)
+async def test_tracker_uses_the_same_failure_taxonomy_as_route_policy(
+    error, failure_class, failure_code
+):
+    events = []
+    repository = FakeRepository(events)
+    client, completions, _ = _client(events, error=error)
+    tracker = ProviderCallTracker(repository, _lease(), client, _profile())
+
+    with pytest.raises(type(error)):
+        async with tracker.installed():
+            await completions.create(model="qwen2.5:3b", messages=[])
+
+    record = repository.records[0]
+    assert record.failure_class is failure_class
+    assert record.failure_code == failure_code
+    assert "private" not in record.failure_summary
 
 
 async def test_tracker_discards_untrusted_response_metadata():

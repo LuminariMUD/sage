@@ -144,6 +144,7 @@ def test_model_output_failures_use_stable_content_free_taxonomy(error, failure_c
         (402, FailureClass.RESOURCE_EXHAUSTION, "provider_resource_exhausted", "pause_systemic"),
         (408, FailureClass.TRANSPORT, "provider_http_transient", "retry"),
         (409, FailureClass.TRANSPORT, "provider_http_transient", "retry"),
+        (422, FailureClass.CONFIGURATION, "provider_request_rejected", "pause_systemic"),
         (503, FailureClass.TRANSPORT, "provider_http_transient", "retry"),
     ],
 )

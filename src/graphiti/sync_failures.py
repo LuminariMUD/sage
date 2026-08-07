@@ -84,7 +84,7 @@ def classify_sync_failure(error: BaseException, *, shutting_down: bool = False) 
     ):
         return FailureRecord.build(
             failure_class=FailureClass.MALFORMED_JSON,
-            code="malformed_json",
+            code="malformed_model_output",
             summary="Model output could not be decoded as JSON",
             disposition=FailureDisposition.RETRY,
         )
@@ -128,7 +128,7 @@ def classify_sync_failure(error: BaseException, *, shutting_down: bool = False) 
     if isinstance(error, ModelSchemaValidationError) or "validationerror" in name:
         return FailureRecord.build(
             failure_class=FailureClass.SCHEMA_VALIDATION,
-            code="schema_validation_failed",
+            code="model_schema_invalid",
             summary="Model output failed schema validation",
             disposition=FailureDisposition.RETRY,
         )
@@ -163,6 +163,13 @@ def classify_sync_failure(error: BaseException, *, shutting_down: bool = False) 
             code="provider_transport",
             summary=error,
             disposition=FailureDisposition.RETRY,
+        )
+    if status is not None and 400 <= status < 500:
+        return FailureRecord.build(
+            failure_class=FailureClass.CONFIGURATION,
+            code="provider_request_rejected",
+            summary="Provider rejected the request configuration",
+            disposition=FailureDisposition.PAUSE_SYSTEMIC,
         )
     if isinstance(error, ValueError) or "configuration" in name:
         return FailureRecord.build(

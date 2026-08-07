@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
 
-from src.graphiti.sync_failures import classify_sync_failure
 from src.graphiti.sync_models import (
     FailureClass,
     JobLease,
@@ -22,6 +21,7 @@ from src.graphiti.sync_models import (
 from src.graphiti.sync_profile import GraphSyncExecutionProfile
 from src.graphiti.sync_state import GraphSyncRepository
 from src.llm.provider_config import TextModelCandidate
+from src.llm.retry import classify_provider_failure
 
 
 class ProviderTrackingError(ValueError):
@@ -103,6 +103,11 @@ def _take_transport_response(candidate_client: Any) -> Any | None:
         return reader()
     except Exception:
         return None
+
+
+def _durable_provider_failure(error: BaseException) -> tuple[FailureClass, str]:
+    classified = classify_provider_failure(error)
+    return FailureClass(classified.failure_class), classified.code
 
 
 class ProviderCallTracker:
@@ -285,13 +290,13 @@ class ProviderCallTracker:
             raise
         except Exception as error:
             response = _take_transport_response(candidate_client)
-            failure = classify_sync_failure(error)
+            failure_class, failure_code = _durable_provider_failure(error)
             record = self._failure_record(
                 ticket,
                 started_clock,
                 outcome=ProviderCallOutcome.FAILURE,
-                failure_class=failure.failure_class,
-                failure_code=failure.code,
+                failure_class=failure_class,
+                failure_code=failure_code,
                 response=response,
             )
             await self._complete(ticket, record)
@@ -329,13 +334,13 @@ class ProviderCallTracker:
             await self._complete(ticket, record, shield=True)
             raise
         except Exception as error:
-            failure = classify_sync_failure(error)
+            failure_class, failure_code = _durable_provider_failure(error)
             record = self._failure_record(
                 ticket,
                 started_clock,
                 outcome=ProviderCallOutcome.FAILURE,
-                failure_class=failure.failure_class,
-                failure_code=failure.code,
+                failure_class=failure_class,
+                failure_code=failure_code,
             )
             await self._complete(ticket, record)
             raise

@@ -333,6 +333,10 @@ ingestion, live mutation, or worker restart occurred.
   response metadata can supply actual model/upstream and token usage, but prompts,
   response content, validation values, and arbitrary exception detail never enter
   the provider-call ledger.
+- Route policy and provider-call completion now consume the same classified failure
+  identity. Offline regressions cover malformed and schema-invalid output, quota
+  exhaustion, HTTP 408/409/503 transport failures, and HTTP 422 request rejection,
+  preventing retry/fallback telemetry from disagreeing with the immutable ledger.
 - A successful non-primary candidate now reaches the verified attempt result and
   terminal worker summary as degraded success. An exhausted route enters the
   existing durable retry/quarantine state machine with all actual calls visible in
@@ -344,8 +348,8 @@ a nontrivial episode; it is not an approved operational recommendation. A larger
 ceiling still requires the bounded extraction benchmark, cost/resource review, and
 explicit activation decision.
 
-Eighty-one focused offline tests and the complete network-isolated fast gate pass:
-311 passed, 6 skipped, and 114 intentionally deselected. The ignored `.env` was not
+Eighty-seven focused offline tests and the complete network-isolated fast gate pass:
+317 passed, 6 skipped, and 114 intentionally deselected. The ignored `.env` was not
 opened or printed, and its configured OpenRouter credential was not used. No live
 provider/model request, benchmark, graph claim, ingestion, migration, profile
 transition, database/graph mutation, or worker restart occurred. The operator's

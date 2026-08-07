@@ -300,6 +300,9 @@ ingestion, or live mutation occurred. The worker remains stopped by operator req
   request is still reserved before dispatch and records its candidate identity plus
   available actual-model/upstream/usage metadata, while prompts, responses, invalid
   values, and arbitrary exception text remain outside the ledger.
+- Unified route-policy and immutable call-record failure classification, including
+  malformed/schema output, quota exhaustion, transient HTTP responses, and rejected
+  requests, so the retry decision and durable evidence cannot disagree.
 - Propagated non-primary success through verified completion as degraded and added a
   separate degraded-success count to the worker summary. Exhaustion uses the existing
   durable retry/quarantine state machine and sanitized attempt-chain inspection.
@@ -310,8 +313,8 @@ entity/edge extraction, deduplication, attributes, summaries, and enrichment eve
 when each call succeeds. It must remain unchanged until the bounded synthetic
 benchmark and a cost/GPU decision establish an authorized operational value.
 
-Eighty-one focused offline tests pass, and the complete network-isolated fast suite
-passes 311 tests with 6 skips and 114 intentional deselections. The ignored `.env`
+Eighty-seven focused offline tests pass, and the complete network-isolated fast suite
+passes 317 tests with 6 skips and 114 intentional deselections. The ignored `.env`
 was not opened or printed, and the configured OpenRouter credential was not used for
 a request. No provider/model call, benchmark, graph claim, ingestion, migration,
 profile transition, database/graph mutation, or worker restart occurred. The
