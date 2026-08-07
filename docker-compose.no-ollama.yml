@@ -1,0 +1,21 @@
+services:
+  # This override is selected only when no application or Graphiti capability
+  # resolves to Ollama. The base file remains the backward-compatible local
+  # default, while the capability-aware launcher uses this file for cloud-only
+  # profiles.
+  ollama:
+    profiles:
+      - local-ollama
+
+  ollama-init:
+    profiles:
+      - local-ollama
+
+  api:
+    depends_on:
+      ollama:
+        condition: service_healthy
+        required: false
+      ollama-init:
+        condition: service_completed_successfully
+        required: false

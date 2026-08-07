@@ -9,18 +9,21 @@ Keep the real `.env` mode `0600` and never commit it.
 - Date: 2026-08-07
 - Work branch: `main`
 - Repository: <https://github.com/LuminariMUD/sage>
-- All five long-running services are currently healthy: PostgreSQL, Neo4j,
-  Ollama, API/MCP, and the static chat UI.
-- PostgreSQL contains 14 lore documents and 611 episodes. All 611 episodes have
-  768-dimensional embeddings.
-- The operator stopped graph ingestion at 305 of 611 synchronized episodes and
-  requested that it remain stopped. Durable state contains 305 `synced` and 306
-  `pending` jobs, with zero leases, retries, quarantines, attempts, or provider
-  calls. Neo4j contains exactly 305 populated and distinct episode stable IDs,
-  and the read-only graph audit reports zero drift.
+- The legacy all-Ollama runtime remains healthy: PostgreSQL, Neo4j, Ollama,
+  API/MCP, and the static chat UI are running. The newly configured provider
+  profile has not been activated by a restart.
+- PostgreSQL contains 14 preserved lore documents, zero episodes, zero durable
+  graph-sync jobs, and zero runs. Neo4j contains zero nodes and zero
+  relationships after deletion of the operator-rejected corpus.
+- The ignored local target profile selects OpenRouter for application and
+  Graphiti text and embeddings. `make provider-stack-plan` resolves that target
+  to `ollama-not-required`, so the next authorized `make dev` will omit both Ollama
+  services. Ingestion remains frozen.
 - The development image builds successfully. The current deterministic-suite
   result is recorded in `docs/CHANGELOG.md` and the two active project plans.
-- Black and Ruff checks pass across all 130 Python files in `src` and `tests`.
+- The fresh-container offline fast gate passes 324 tests with 8 skips and 114
+  intentional deselections. Host-only Compose renders pass for cloud-only and
+  all-local service sets.
 - An authenticated desktop/mobile browser check now passes through the real
   LangChain/Ollama chat path: message creation and the SSE stream both return
   `200`, an answer renders, and there are no console/page errors, leaked API
@@ -60,7 +63,7 @@ and 25 entities/relationships per episode to prevent runaway local generation.
 
 ## Prerequisites
 
-- Docker Engine with Compose v2
+- Docker Engine with Compose v2.20 or newer (`required: false` support)
 - NVIDIA driver and NVIDIA Container Toolkit for GPU-backed Ollama
 - Git and Make
 - Free host ports, or alternate values in `.env`
@@ -109,10 +112,12 @@ Start the complete development stack:
 make dev
 ```
 
-`make dev` builds the development API image, starts the databases and Ollama,
-pulls the three required models through the one-shot `ollama-init` service, and
-starts API/MCP and UI only after their dependencies are ready. Model pulls are
-idempotent on later starts.
+`make dev` resolves every application and Graphiti capability before starting
+Compose. All-cloud profiles omit both `ollama` and `ollama-init`; mixed and local
+profiles start Ollama and pull only the selected models through the one-shot init
+service. API/MCP and UI start after their selected dependencies are ready. Model
+pulls are idempotent on later starts. Use `make provider-stack-plan` for a
+credential-free preview.
 
 ## Verify the running stack
 

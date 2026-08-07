@@ -1,6 +1,6 @@
 # Testing Guide
 
-**Version**: 0.7.21
+**Version**: 0.7.22
 **Status**: Production Ready
 **Last Updated**: 2026-08-07
 

@@ -1,10 +1,14 @@
 # Luminari Sage - Hybrid Graph RAG System with Semantic Chunking
-.PHONY: help dev down status logs restart test test-all
+.PHONY: help dev down status logs restart provider-stack-plan test test-all
 .PHONY: load-canon load-draft load-all create-episodes generate-embeddings sync-to-graphiti sync-to-graphiti-ollama sync-to-graphiti-openai
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
 .PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate embedding-shadow-status embedding-shadow-status-json embedding-shadow-register embedding-shadow-backfill embedding-shadow-recover-run embedding-shadow-build-index retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-shadow-retrieval benchmark-shadow-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
+
+# Capability-aware host launcher. It reuses the model-profile resolver and
+# applies the no-Ollama override only when every selected capability is cloud.
+PROVIDER_COMPOSE = python3 src/scripts/compose_provider_stack.py
 
 # Support for verbose mode
 ifdef VERBOSE
@@ -70,6 +74,7 @@ help:
 	@echo "  make benchmark-shadow-retrieval SHADOW_EMBEDDING_PROVIDER=... CONFIRM_RETRIEVAL_BENCHMARK=... - Candidate quality benchmark"
 	@echo "  make provider-config-check    - Validate and show sanitized provider profiles"
 	@echo "  make provider-config-check-json - Emit sanitized provider profiles as JSON"
+	@echo "  make provider-stack-plan      - Show whether local Ollama services are required"
 	@echo "  make provider-text-probe CONFIRM_PROVIDER_PROBE=RUN_PROVIDER_PROBE - One bounded text call"
 	@echo "  make provider-embedding-probe CONFIRM_PROVIDER_PROBE=RUN_PROVIDER_PROBE - One bounded embedding call"
 	@echo "  make benchmark-graphiti CONFIRM_GRAPHITI_BENCHMARK=RUN_GRAPHITI_BENCHMARK - Fixed-corpus extraction benchmark"
@@ -563,32 +568,36 @@ benchmark-graphiti-openai:
 
 .PHONY: dev
 dev:
-	@echo "🚀 Starting the complete local development stack..."
-	@docker compose up -d --build
+	@echo "Starting the capability-selected local development stack..."
+	@$(PROVIDER_COMPOSE) up -d --build --remove-orphans
+
+.PHONY: provider-stack-plan
+provider-stack-plan:
+	@$(PROVIDER_COMPOSE) plan
 
 .PHONY: down
 down:
-	@echo "🛑 Stopping the local development stack (data volumes are preserved)..."
+	@echo "Stopping the local development stack (data volumes are preserved)..."
 	@docker compose down
 
 .PHONY: logs
 logs:
-	@echo "📋 API Container logs..."
+	@echo "API container logs..."
 	@docker compose logs -f api
 
 .PHONY: logs-tail
 logs-tail:
-	@echo "📋 API Container logs (last 50 lines)..."
+	@echo "API container logs (last 50 lines)..."
 	@docker compose logs --tail=50 api
 
 .PHONY: restart
 restart:
-	@echo "🔄 Restarting all services..."
-	@docker compose restart
+	@echo "Restarting selected services..."
+	@$(PROVIDER_COMPOSE) up -d --force-recreate --remove-orphans api ui
 
 .PHONY: shell
 shell:
-	@echo "🐚 Opening shell in API container..."
+	@echo "Opening shell in API container..."
 	@docker compose exec api bash
 
 # =============================================================================

@@ -13,6 +13,9 @@ from src.llm.pydantic_ai_factory import create_text_model
 def _select_openrouter(monkeypatch, *, model="qwen/qwen-test"):
     monkeypatch.setenv("TEXT_PROVIDER", "openrouter")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "ollama")
+    monkeypatch.setenv("GRAPHITI_TEXT_PROVIDER", "openrouter")
+    monkeypatch.setenv("GRAPHITI_EMBEDDING_PROVIDER", "ollama")
+    monkeypatch.setenv("GRAPHITI_EXTRACTION_FALLBACK_PROVIDER", "")
     monkeypatch.delenv("OPENROUTER_KEY", raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", "offline-unit-test-secret")
     monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
@@ -21,9 +24,16 @@ def _select_openrouter(monkeypatch, *, model="qwen/qwen-test"):
     monkeypatch.setenv("OPENROUTER_CHAT_MODEL", model)
 
 
-def test_langchain_ollama_keeps_native_chat_adapter(monkeypatch):
+def _select_ollama(monkeypatch):
     monkeypatch.setenv("TEXT_PROVIDER", "ollama")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "ollama")
+    monkeypatch.setenv("GRAPHITI_TEXT_PROVIDER", "ollama")
+    monkeypatch.setenv("GRAPHITI_EMBEDDING_PROVIDER", "ollama")
+    monkeypatch.setenv("GRAPHITI_EXTRACTION_FALLBACK_PROVIDER", "")
+
+
+def test_langchain_ollama_keeps_native_chat_adapter(monkeypatch):
+    _select_ollama(monkeypatch)
     monkeypatch.setenv("OLLAMA_CHAT_MODEL", "qwen2.5:7b")
 
     model = get_chat_model(streaming=False)
@@ -74,8 +84,7 @@ def test_pydantic_ai_openrouter_uses_same_validated_candidate(monkeypatch):
 
 
 def test_pydantic_ai_ollama_needs_no_remote_key(monkeypatch):
-    monkeypatch.setenv("TEXT_PROVIDER", "ollama")
-    monkeypatch.setenv("EMBEDDING_PROVIDER", "ollama")
+    _select_ollama(monkeypatch)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)

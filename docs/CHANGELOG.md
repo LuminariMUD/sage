@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Capability-Selected Local Provider Services (0.7.22)**
+  - Added a host-side Compose launcher that reuses the existing capability/model resolver and applies a cloud-only override when no application or Graphiti capability needs Ollama.
+  - Made local start and selected-service restart omit `ollama` and `ollama-init` for all-cloud profiles while preserving the unchanged base topology for mixed and all-Ollama profiles; stop and inspection commands do not require provider resolution.
+  - Added a credential-free `make provider-stack-plan` preview and fail-closed guards for invalid provider selections or sensitive fields at the model-init boundary.
+  - Isolated framework adapter tests from process-level Graphiti selectors so local `.env` choices cannot contaminate provider-matrix expectations.
+  - Verified 19 focused host tests, both real Compose render paths, and the complete fresh-container offline fast gate: 324 passed, 8 skipped, and 114 intentionally deselected. The configured all-OpenRouter target resolves to a four-service cloud-only dependency set; no service restart or provider request occurred.
+
 - **OpenRouter Target Profile Configuration and Corpus Reset (0.7.21)**
   - Preconfigured the public environment template with `qwen/qwen3.7-flash` for application text and Graphiti extraction and `perplexity/pplx-embed-v1-0.6b` at 1024 dimensions for embeddings, while retaining its credential-free all-Ollama default selectors.
   - Configured the ignored local environment as an explicit all-OpenRouter application/Graphiti text-and-embedding profile and migrated the local compatibility credential to canonical `OPENROUTER_API_KEY` transport without exposing it.

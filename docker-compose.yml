@@ -259,9 +259,11 @@ services:
       - ./ui:/app/ui:ro
       - ./pytest.ini:/app/pytest.ini:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./Makefile:/app/Makefile:ro
       - ./.gitleaks.toml:/app/.gitleaks.toml:ro
       - ./.env.example:/app/.env.example:ro
       - ./docker-compose.yml:/app/docker-compose.yml:ro
+      - ./docker-compose.no-ollama.yml:/app/docker-compose.no-ollama.yml:ro
       - ./docker-compose.prod.yml:/app/docker-compose.prod.yml:ro
       - ./docker-compose.openai.yml:/app/docker-compose.openai.yml:ro
       - ./docker-compose.openrouter.yml:/app/docker-compose.openrouter.yml:ro

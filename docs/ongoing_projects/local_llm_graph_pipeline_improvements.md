@@ -151,6 +151,9 @@ The complete offline fast suite passes 213 tests with 6 skips and 109 deselected
 
 This slice does not make the base API service's Ollama dependency conditional, so cloud-only startup still has follow-up work. No graph job was claimed, no provider call was made, and the operator's stop instruction remains authoritative.
 
+That local dependency limitation is closed by the capability-selected services
+checkpoint below.
+
 ### 2026-08-07 - Guarded provider operations checkpoint, no activation
 
 - Added human and JSON configuration checks that resolve the selected application and Graphiti profiles without constructing a request or exposing credentials.
@@ -366,6 +369,37 @@ The authoritative read-only graph audit is clean at zero PostgreSQL episodes, ze
 Neo4j episodic nodes, zero stable IDs, and zero drift findings. All services remain
 healthy and no worker process exists. The deletion did not run a provider/model,
 start ingestion, or activate the newly configured OpenRouter profile.
+
+### 2026-08-07 - Capability-selected local services checkpoint, not activated
+
+- Added a host-side Compose launcher that reads the already-resolved, secret-free
+  `ollama-init` environment and reuses the shared Ollama model-profile resolver.
+- Added a cloud-only Compose override that places `ollama` and `ollama-init` behind
+  an inactive profile and makes the API dependencies optional only in that
+  override. The unchanged base Compose file remains the all-Ollama default.
+- Routed `make dev` and selected-service restart through the launcher and added
+  `make provider-stack-plan` for a sanitized, non-mutating preview. Stop and
+  inspection commands remain usable without resolving a valid provider profile.
+- Mixed profiles retain Ollama when even one application, Graphiti, embedding, or
+  fallback capability needs it. Invalid providers and any sensitive field added
+  to the init resolver fail before Docker Compose can start services.
+- Isolated framework adapter tests from the operator's process-level provider
+  selectors so an Ollama-only test cannot accidentally validate an unrelated
+  OpenRouter Graphiti capability.
+
+The real ignored all-OpenRouter target profile resolves to `ollama-not-required`, with
+`ollama_required: false` and zero local models. Host rendering proves that its
+service set contains PostgreSQL, Neo4j, API/MCP, and UI but omits both Ollama
+services; the all-local render still contains all six services. Nineteen focused
+host tests pass. A fresh dependency-complete container passes the complete offline
+fast gate: 324 passed, 8 skipped, and 114 intentionally deselected. The two new
+container skips are host-only Docker CLI render checks and both pass on the host.
+
+The already-running legacy service set was not restarted, so the configured
+OpenRouter profile remains inactive and the prior Ollama container remains the
+current runtime until a separately authorized restart. No model was pulled or
+warmed, no provider request was made, no graph job was claimed, and no ingestion,
+migration, vector write, or graph mutation occurred.
 
 ## Why this project exists
 

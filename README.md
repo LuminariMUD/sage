@@ -1,6 +1,6 @@
 # Luminari Sage - Intelligent Lore Management System
 
-**Version**: 0.7.21
+**Version**: 0.7.22
 **Status**: Production Deployed
 **Deployment**: luminarimud.com:8003
 **Repository**: https://github.com/LuminariMUD/sage
@@ -165,8 +165,8 @@ chmod 600 .env
 # Edit .env with database/auth secrets and only the credentials required by
 # your selected text and embedding providers
 
-# Start all services (PostgreSQL, Neo4j, API)
-docker compose up -d
+# Start only the services required by the selected provider capabilities
+make dev
 
 # Check service health
 docker compose logs -f api
@@ -583,5 +583,5 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ---
 
 **Last Updated**: 2026-08-07
-**Version**: 0.7.21
+**Version**: 0.7.22
 **Status**: Production Ready

@@ -164,6 +164,10 @@ The complete offline fast suite passes 213 tests with 6 skips and 109 intentiona
 
 This checkpoint makes model pulls and warmups conditional, but it does not yet make the base API/Ollama service dependency graph conditional. Phase 8's exit criterion that each deployment start only required services therefore remains open.
 
+That development dependency limitation is closed by the capability-selected local
+services checkpoint below; the broader Phase 8 operational exit criteria remain
+open.
+
 ### Guarded provider operations checkpoint - implemented offline
 
 The provider-neutral operations slice now exposes safe configuration inspection and bounded opt-in probes without activating any provider during implementation:
@@ -401,6 +405,35 @@ The authoritative graph audit reports zero PostgreSQL episodes, zero Neo4j episo
 nodes/stable IDs, and zero drift findings. All services remain healthy, the worker
 is absent, and no provider request, ingestion, migration, or OpenRouter activation
 was performed during deletion.
+
+### Capability-selected local services checkpoint - implemented offline
+
+- Added a host-side Compose launcher that obtains only the secret-free
+  `ollama-init` capability environment from resolved Compose configuration and
+  passes it through the existing shared model-profile resolver.
+- Added a cloud-only override that disables both Ollama services and relaxes their
+  API dependencies only for that selected stack. The base Compose topology remains
+  unchanged for all-Ollama compatibility, and any mixed profile keeps Ollama when
+  one selected capability still needs a local model.
+- Routed local start and selected-service restart through the selector, added a
+  credential-free `provider-stack-plan` target, and made invalid provider or
+  sensitive init configuration fail before service startup. Stop and inspection
+  commands remain available even when provider configuration is invalid.
+- Added offline coverage for all-local, all-OpenRouter, mixed, invalid, secret
+  boundary, command construction, and both Compose render paths. Provider adapter
+  tests now set their Graphiti selectors explicitly instead of inheriting the
+  operator's local profile.
+
+The ignored all-OpenRouter target resolves to `ollama-not-required`, requires zero Ollama
+models, and renders only PostgreSQL, Neo4j, API/MCP, and UI. The all-local render
+continues to include `ollama` and `ollama-init`. Nineteen focused host tests pass,
+and the fresh-container offline fast gate passes 324 tests with 8 skips and 114
+intentional deselections. The two added skips require the host Docker CLI and both
+render checks pass on the host.
+
+This checkpoint did not restart the already-running services, activate OpenRouter,
+run a provider/model call, claim a graph job, perform ingestion, apply a migration,
+or mutate vector/graph data. The worker freeze remains authoritative.
 
 ---
 
@@ -1130,6 +1163,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Add OpenRouter secret transport to development Compose, production Compose, deployment scripts, and CI/CD.
 - [x] Ensure all-Ollama deployments do not mount or require an OpenRouter secret.
 - [x] Make Ollama model initialization and warmup conditional on selected capabilities.
+  - [x] Make local Compose omit `ollama` and `ollama-init` when no selected capability requires Ollama, while preserving mixed and all-local startup.
 - [x] Add provider-neutral Make targets for configuration checks, model probes, embedding probes, and Graphiti benchmarks.
   - [x] Add sanitized configuration checks plus exact-confirmation, one-call text and embedding probes.
   - [x] Replace the legacy state-mutating Graphiti benchmark with a versioned, non-persistent, durable-lifecycle-safe harness.
