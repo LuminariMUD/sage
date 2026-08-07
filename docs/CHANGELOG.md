@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Policy-Aligned Graphiti Extraction Benchmark (0.7.25)**
+  - Added `luminari-graphiti-extraction:v2` with explicit parse/schema expectations and canonical directed relationship contracts while retaining v1 as historical input.
+  - Replaced the benchmark's combined extraction helper with the same staged entity-then-relationship boundary used by production and applied the canonical relationship policy before scoring.
+  - Added content-free structured-success and relationship proposed/normalized/accepted/rejected/reason summaries, policy fingerprint drift refusal, and a versioned benchmark-extraction identity.
+  - Proved Graphiti requests native JSON-schema output and independently applies Pydantic validation; selected-model support still requires the separately confirmed live benchmark.
+  - Verified 23 focused offline tests and the complete fresh-container fast gate (362 passed, 8 skipped, 116 intentionally deselected). No provider/model request, worker, migration, graph/vector write, service restart, or profile activation occurred.
+
 - **Canonical Relationship Policy and Quality Ledger (0.7.24)**
   - Added an exact versioned vocabulary derived from the declared Graphiti edge types, with only case/spelling/separator aliases normalized; unknown semantic predicates fail closed instead of being guessed.
   - Added pre-maintenance validation for missing, ambiguous, and self-referential endpoints, empty facts, and exact duplicate proposals. The sync-profile fingerprint now binds the vocabulary and alias policy.

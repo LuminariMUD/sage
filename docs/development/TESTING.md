@@ -1,6 +1,6 @@
 # Testing Guide
 
-**Version**: 0.7.24
+**Version**: 0.7.25
 **Status**: Production Ready
 **Last Updated**: 2026-08-07
 
@@ -370,7 +370,7 @@ runs; it requires a fresh verified backup and its exact confirmation token.
 
 ## Graphiti Extraction Benchmark
 
-The Graphiti benchmark is an opt-in provider operation, not a normal pytest suite. It runs the selected Graphiti text candidate against the checked-in synthetic corpus without connecting to PostgreSQL or Neo4j and without constructing an embedding client. It still makes real model requests, may incur cost, and sends the synthetic corpus to the selected provider under the configured routing/privacy policy.
+The Graphiti benchmark is an opt-in provider operation, not a normal pytest suite. It runs the selected Graphiti text candidate against the checked-in v2 synthetic corpus without connecting to PostgreSQL or Neo4j and without constructing an embedding client. The v2 cases declare expected parse/schema success, canonical relationship types, important entities, and directed relationships. The harness uses the same staged entity-then-relationship extraction and pre-maintenance relationship policy as the durable worker. It still makes real model requests, may incur cost, and sends the synthetic corpus to the selected provider under the configured routing/privacy policy.
 
 Validate the selected profile without network access first:
 
@@ -385,7 +385,7 @@ make benchmark-graphiti \
   CONFIRM_GRAPHITI_BENCHMARK=RUN_GRAPHITI_BENCHMARK
 ```
 
-Optional controls are `GRAPHITI_BENCHMARK_CANDIDATE=primary|fallback|all`, `GRAPHITI_BENCHMARK_CONCURRENCY=1|2`, and `GRAPHITI_BENCHMARK_MAX_CALLS=N`. The call ceiling applies separately to each candidate/corpus-case pair and cannot exceed the configured Graphiti route limit; selecting `all` therefore authorizes that ceiling for every declared candidate. Output contains counts, recall, latency, usage, safe model/upstream labels, and fingerprints; it never emits corpus text, prompts, responses, extracted facts, vectors, credentials, or exception detail.
+Optional controls are `GRAPHITI_BENCHMARK_CANDIDATE=primary|fallback|all`, `GRAPHITI_BENCHMARK_CONCURRENCY=1|2`, and `GRAPHITI_BENCHMARK_MAX_CALLS=N`. The call ceiling applies separately to each candidate/corpus-case pair and cannot exceed the configured Graphiti route limit; staged extraction normally needs at least one entity call and one relationship call. Selecting `all` authorizes that ceiling for every declared candidate. Output contains parse/schema success, counts, recall, relationship proposal/normalization/acceptance/rejection reasons, latency, usage, safe model/upstream labels, and fingerprints. It never emits corpus text, prompts, responses, extracted facts, vectors, credentials, or exception detail.
 
 The command exits `0` only when every case completes without a recovered provider failure and both corpus recall thresholds pass. It exits `1` for a completed but failed quality/reliability gate and `2` for refusal or invalid/incomplete configuration. The legacy `benchmark-graphiti-openai` target and `scripts/benchmark_graphiti.sh` path intentionally refuse execution.
 

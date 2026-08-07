@@ -191,7 +191,10 @@ async def test_single_attempt_client_independently_validates_structured_response
     class RequiredResponse(BaseModel):
         required_value: int
 
+    request = {}
+
     async def create(**kwargs):
+        request.update(kwargs)
         return SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content='{"wrong": 1}'))]
         )
@@ -212,6 +215,9 @@ async def test_single_attempt_client_independently_validates_structured_response
         )
 
     assert "wrong" not in str(captured.value)
+    assert request["response_format"]["type"] == "json_schema"
+    assert request["response_format"]["json_schema"]["name"] == "RequiredResponse"
+    assert "required_value" in str(request["response_format"]["json_schema"]["schema"])
 
 
 async def test_single_attempt_client_classifies_length_finish_reason():

@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, "/app")
 
 from src.graphiti.benchmark import (
+    BENCHMARK_EXTRACTION_VERSION,
     BenchmarkCorpus,
     benchmark_candidate,
     load_benchmark_corpus,
@@ -22,7 +23,7 @@ from src.graphiti.sync_profile import GraphSyncExecutionProfile
 from src.llm.provider_config import ProviderSettings, resolve_provider_settings
 
 BENCHMARK_CONFIRMATION = "RUN_GRAPHITI_BENCHMARK"
-DEFAULT_CORPUS = Path("/app/benchmarks/graphiti_extraction_v1.json")
+DEFAULT_CORPUS = Path("/app/benchmarks/graphiti_extraction_v2.json")
 
 
 def _emit(report: Mapping[str, object], *, as_json: bool, error: bool = False) -> None:
@@ -40,17 +41,26 @@ def _emit(report: Mapping[str, object], *, as_json: bool, error: bool = False) -
         return
     print(f"Graphiti extraction benchmark: {status}", file=destination)
     print(f"Corpus: {report['corpus_id']} ({report['corpus_fingerprint']})", file=destination)
+    print(f"Extraction boundary: {report['benchmark_extraction_version']}", file=destination)
     print(f"Sync profile: {report['sync_profile_fingerprint']}", file=destination)
     results = report["candidates"]
     assert isinstance(results, list)
     for result in results:
         assert isinstance(result, Mapping)
+        relationship_quality = result["relationship_quality"]
+        assert isinstance(relationship_quality, Mapping)
+        accepted_rate = relationship_quality["accepted_of_proposed"]
+        accepted_rate_text = (
+            "unavailable" if accepted_rate is None else f"{float(accepted_rate):.3f}"
+        )
         print(
             "Candidate: "
             f"{result['provider']}:{result['requested_model']} "
             f"status={result['status']} cases={result['case_count']} "
+            f"structured={result['schema_success_cases']}/{result['case_count']} "
             f"entity_recall={float(result['entity_recall']):.3f} "
             f"relationship_recall={float(result['relationship_recall']):.3f} "
+            f"relationship_acceptance={accepted_rate_text} "
             f"provider_calls={result['provider_calls']}",
             file=destination,
         )
@@ -149,6 +159,9 @@ async def run(
                     sync_profile_fingerprint=profile.sync_profile_fingerprint,
                     prompt_version=profile.prompt_version,
                     schema_version=profile.schema_version,
+                    relationship_vocabulary_fingerprint=(
+                        profile.relationship_vocabulary_fingerprint
+                    ),
                     max_entities=profile.max_entities,
                     max_relationships=profile.max_relationships,
                     maximum_provider_calls=maximum_provider_calls,
@@ -172,10 +185,12 @@ async def run(
         "status": "passed" if passed else "failed",
         "corpus_id": corpus.corpus_id,
         "corpus_fingerprint": corpus.fingerprint,
+        "benchmark_extraction_version": BENCHMARK_EXTRACTION_VERSION,
         "sync_profile_fingerprint": profile.sync_profile_fingerprint,
         "route_fingerprint": route.fingerprint,
         "prompt_version": profile.prompt_version,
         "schema_version_id": profile.schema_version,
+        "relationship_vocabulary_fingerprint": (profile.relationship_vocabulary_fingerprint),
         "candidate_selection": args.candidate,
         "concurrency": args.concurrency,
         "maximum_provider_calls_per_case": maximum_provider_calls,

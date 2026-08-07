@@ -474,8 +474,43 @@ Live state was not changed. Migrations `0004` through `0007` remain pending; no
 provider/model call, worker, graph claim, ingestion, migration, backup, graph/vector
 write, service restart, or profile activation occurred. The configured OpenRouter
 target and existing runtime remain unactivated, and the worker freeze remains
-authoritative. The reviewed extraction corpus, selected-model measurement, and
-minimum quality thresholds are still open.
+authoritative. A representative human-reviewed corpus expansion, selected-model
+measurement, and minimum quality thresholds are still open.
+
+### 2026-08-07 - Policy-aligned extraction benchmark checkpoint, not executed
+
+- Added `luminari-graphiti-extraction:v2` while retaining v1 as historical input.
+  Every v2 case explicitly requires parse and schema success, names expected
+  entities, and uses canonical directed relationship types; corpus loading rejects
+  omitted outcomes, unknown vocabulary, and invalid endpoint references.
+- Replaced the benchmark's combined extraction helper with the production-aligned
+  staged entity-then-relationship boundary. Relationship proposals pass through
+  the same normalization and endpoint policy before extracted edges are scored,
+  without constructing an embedder or touching PostgreSQL or Neo4j.
+- Added a versioned benchmark-extraction identity and bound its fingerprint to the
+  corpus, route, candidate, sync profile, prompt/schema, relationship vocabulary,
+  call ceiling, and concurrency. A vocabulary/profile mismatch fails before client
+  construction.
+- Extended sanitized results with parse/schema success and expectation coverage,
+  relationship proposed/normalized/accepted/rejected totals, stable rejection
+  reasons, policy evidence coverage, and acceptance/rejection rates. Episode text,
+  prompts, responses, facts, names, credentials, vectors, and exception detail are
+  still omitted.
+- Proved that the pinned Graphiti client sends native JSON-schema response formats
+  and independently validates returned objects with Pydantic. Whether each selected
+  live model actually honors constrained decoding remains part of the confirmed
+  candidate benchmark rather than an offline claim.
+
+Twenty-three focused offline benchmark/route tests pass. The complete fresh-
+container fast gate passes 362 tests with 8 skips and 116 intentional deselections.
+No benchmark was executed: no provider/model request, worker, database migration,
+graph/vector write, service restart, or profile activation occurred.
+
+The fixed synthetic extraction contract is now versioned and policy-aligned. A
+human-approved representative lore expansion, candidate results, operational call
+ceiling, baseline-relative thresholds, and the combined-versus-staged comparison
+remain open until the relevant review and live-run authorizations. Migrations
+`0004` through `0007` remain pending and the worker freeze remains authoritative.
 
 ## Why this project exists
 

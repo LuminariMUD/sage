@@ -508,6 +508,32 @@ migration, backup, graph/vector mutation, service restart, or profile activation
 occurred. Live migrations `0004` through `0007` remain pending and the operator
 freeze remains authoritative.
 
+### Policy-aligned extraction benchmark checkpoint - implemented, not executed
+
+- Added `luminari-graphiti-extraction:v2` with required parse/schema expectations,
+  expected entities, and canonical directed relationships. V1 remains available as
+  a historical input; v2 is the default for new runs.
+- Replaced the non-persistent harness's combined extractor with the same staged
+  entity-then-relationship boundary used by the durable worker. The canonical
+  relationship policy now runs before benchmark scoring, while the harness still
+  constructs no embedder and connects to neither PostgreSQL nor Neo4j.
+- Bound a versioned harness identity and the relationship-vocabulary fingerprint
+  into benchmark provenance. Drift is rejected before candidate-client creation.
+- Added sanitized per-case and aggregate parse/schema outcomes, expectation matches,
+  relationship proposals, normalizations, acceptances, rejections, stable reasons,
+  and evidence coverage alongside recall, latency, usage, and provider identity.
+- Added offline proof that Graphiti requests native JSON-schema responses and then
+  independently validates the decoded object. Actual constrained-decoding behavior
+  remains model/provider-specific and requires the separately confirmed live run.
+
+Twenty-three focused tests and the complete fresh-container fast gate (362 passed,
+8 skipped, 116 intentionally deselected) pass. The benchmark was not executed and
+no provider/model request, worker, migration, graph/vector mutation, service
+restart, or profile activation occurred. The synthetic contract is complete; a
+human-approved representative expansion, reviewed candidate results, thresholds,
+and the measured combined-versus-staged decision remain open. Migrations `0004`
+through `0007` remain pending and the operator freeze remains authoritative.
+
 ---
 
 ## 1. Executive Summary
@@ -1117,7 +1143,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Capture a PostgreSQL and Neo4j backup and verify restore instructions.
 - [x] Run and archive the current manual PostgreSQL/Neo4j ID-set reconciliation as the audit baseline.
 - [x] Create a versioned retrieval benchmark with lore questions and expected episodes/entities.
-- [ ] Create a versioned extraction corpus with expected parse/schema outcomes, important entities, and important relationships.
+- [x] Create a versioned extraction corpus with expected parse/schema outcomes, important entities, and important relationships.
 - [ ] Capture current Nomic retrieval metrics, 3B/7B extraction behavior, Graphiti quality, latency, GPU use, and failure classes.
 - [ ] Approve the error taxonomy, sync-profile fingerprint fields, attempt limits, lease policy, and hard release invariants.
 - [ ] Select OpenRouter text models for each required task and document their required capabilities.
@@ -1162,7 +1188,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 ### Phase 3 — Structured extraction reliability and graph quality
 
 - [ ] Benchmark local `qwen2.5:3b`, local `qwen2.5:7b`, and any candidate OpenRouter extraction model on the fixed corpus.
-- [ ] Enable verified schema-constrained output and independently validate every response.
+- [x] Enable verified schema-constrained output and independently validate every response.
 - [ ] Test combined versus staged entity/relationship extraction where truncation is observed.
 - [x] Implement the explicit primary/fallback route and record fallback success as degraded success.
 - [x] Coordinate Graphiti-internal and application retry counts under one maximum-provider-call budget.
@@ -1207,6 +1233,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Verify vector dimensions and cosine configuration before Graphiti initialization.
 - [ ] Update Graphiti benchmark scripts and summaries.
   - [x] Replace the legacy mutating script with a versioned, non-persistent, provider-neutral harness and sanitized summary schema.
+  - [x] Align the harness with staged production extraction, canonical relationship policy, and parse/schema plus rejection-reason summaries.
   - [ ] Record reviewed results for the selected text candidate after explicit live-run authorization.
 - [x] Add a graph rebuild command that records the active sync and embedding profiles.
 - [x] Require graph rebuild jobs to use the durable lifecycle, attempt ledger, and audit contract.

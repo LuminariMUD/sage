@@ -9,22 +9,30 @@ from types import SimpleNamespace
 
 import pytest
 
+from src.graphiti import benchmark as benchmark_module
 from src.graphiti.benchmark import (
     BenchmarkCallBudgetExceeded,
     BenchmarkConfigurationError,
+    BenchmarkExtractionResult,
     BenchmarkProviderCallBudget,
     benchmark_candidate,
+    extract_staged_policy_graph,
     load_benchmark_corpus,
     score_benchmark_case,
 )
 from src.graphiti.provider_config import create_graphiti_llm_client
 from src.graphiti.provider_tracking import ProviderCallTracker
+from src.graphiti.relationship_policy import (
+    RELATIONSHIP_VOCABULARY_FINGERPRINT,
+    RelationshipQualityReport,
+)
 from src.graphiti.sync_profile import GraphSyncExecutionProfile
 from src.llm.provider_config import resolve_provider_settings
+from src.llm.retry import ModelSchemaValidationError
 from src.scripts import benchmark_graphiti
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CORPUS_PATH = PROJECT_ROOT / "benchmarks" / "graphiti_extraction_v1.json"
+CORPUS_PATH = PROJECT_ROOT / "benchmarks" / "graphiti_extraction_v2.json"
 
 
 def _candidate():
@@ -64,13 +72,40 @@ def _fake_client(candidate, events=None):
     return SimpleNamespace(client=transport), completions, create
 
 
+def _extraction(
+    nodes,
+    edges,
+    *,
+    proposed_edges=None,
+    normalized_edges=0,
+):
+    accepted_edges = len(edges)
+    proposed_edges = accepted_edges if proposed_edges is None else proposed_edges
+    rejected_edges = proposed_edges - accepted_edges
+    return BenchmarkExtractionResult(
+        nodes=nodes,
+        edges=edges,
+        node_episode_index_map={},
+        relationship_quality=RelationshipQualityReport(
+            vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
+            proposed_edges=proposed_edges,
+            normalized_edges=normalized_edges,
+            accepted_edges=accepted_edges,
+            rejected_edges=rejected_edges,
+            rejected_unknown_type=rejected_edges,
+        ),
+    )
+
+
 def test_checked_in_corpus_is_versioned_bounded_and_referentially_valid():
     corpus = load_benchmark_corpus(CORPUS_PATH)
 
-    assert corpus.schema_version == 1
-    assert corpus.corpus_id == "luminari-graphiti-extraction:v1"
+    assert corpus.schema_version == 2
+    assert corpus.corpus_id == "luminari-graphiti-extraction:v2"
     assert corpus.fingerprint.startswith("corpus:sha256:")
     assert len(corpus.cases) == 3
+    assert all(case.expect_parse_success for case in corpus.cases)
+    assert all(case.expect_schema_success for case in corpus.cases)
     assert all(case.expected_entities for case in corpus.cases)
     assert all(case.expected_relationships for case in corpus.cases)
 
@@ -82,6 +117,32 @@ def test_corpus_rejects_relationships_that_reference_unknown_entities(tmp_path):
     path.write_text(json.dumps(payload), encoding="utf-8")
 
     with pytest.raises(BenchmarkConfigurationError, match="endpoints"):
+        load_benchmark_corpus(path)
+
+
+def test_corpus_requires_explicit_outcomes_and_canonical_relationship_types(tmp_path):
+    payload = json.loads(CORPUS_PATH.read_text(encoding="utf-8"))
+    del payload["cases"][0]["expect_schema_success"]
+    path = tmp_path / "missing-outcome.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BenchmarkConfigurationError, match="Boolean"):
+        load_benchmark_corpus(path)
+
+    payload = json.loads(CORPUS_PATH.read_text(encoding="utf-8"))
+    payload["cases"][0]["expected_relationships"][0]["types"] = ["RELATES_TO"]
+    path = tmp_path / "unknown-relationship.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BenchmarkConfigurationError, match="canonical vocabulary"):
+        load_benchmark_corpus(path)
+
+    payload = json.loads(CORPUS_PATH.read_text(encoding="utf-8"))
+    payload["cases"][0]["expect_parse_success"] = False
+    path = tmp_path / "unexpected-failure.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BenchmarkConfigurationError, match="must require"):
         load_benchmark_corpus(path)
 
 
@@ -106,6 +167,69 @@ def test_case_scoring_reports_counts_without_extracted_content():
     assert score["relationship_recall"] == 1
     assert "sensitive extracted fact" not in str(score)
     assert "Crimson Spindle" not in str(score)
+
+
+async def test_staged_benchmark_extraction_applies_policy_before_edges(monkeypatch):
+    nodes = [
+        SimpleNamespace(uuid="alpha", name="Alpha"),
+        SimpleNamespace(uuid="beta", name="Beta"),
+    ]
+
+    class Delegate:
+        async def generate_response(self, *args, **kwargs):
+            return {
+                "edges": [
+                    {
+                        "source_entity_name": "Alpha",
+                        "target_entity_name": "Beta",
+                        "relation_type": "OPPOSED_TO",
+                        "fact": "A valid fact",
+                        "episode_indices": [0],
+                    },
+                    {
+                        "source_entity_name": "Alpha",
+                        "target_entity_name": "Beta",
+                        "relation_type": "RELATES_TO",
+                        "fact": "An unknown predicate",
+                        "episode_indices": [0],
+                    },
+                ]
+            }
+
+    async def fake_extract_nodes(*args):
+        return nodes, {"alpha": [0], "beta": [0]}
+
+    async def fake_extract_edges(clients, *args):
+        response = await clients.llm_client.generate_response([], prompt_name="extract_edges.edge")
+        assert [edge["relation_type"] for edge in response["edges"]] == ["OpposedTo"]
+        return [
+            SimpleNamespace(
+                source_node_uuid="alpha",
+                target_node_uuid="beta",
+                name="OpposedTo",
+            )
+        ]
+
+    monkeypatch.setattr(benchmark_module, "extract_nodes", fake_extract_nodes)
+    monkeypatch.setattr(benchmark_module, "extract_edges", fake_extract_edges)
+    episode = SimpleNamespace(group_id="benchmark", uuid="episode")
+
+    result = await extract_staged_policy_graph(
+        SimpleNamespace(llm_client=Delegate()),
+        episode,
+        [],
+        entity_types={},
+        edge_types={},
+        edge_type_map={},
+        custom_extraction_instructions="bounded",
+    )
+
+    assert len(result.nodes) == 2
+    assert len(result.edges) == 1
+    assert result.relationship_quality.proposed_edges == 2
+    assert result.relationship_quality.accepted_edges == 1
+    assert result.relationship_quality.normalized_edges == 1
+    assert result.relationship_quality.rejected_unknown_type == 1
 
 
 @pytest.mark.asyncio
@@ -158,7 +282,12 @@ async def test_candidate_benchmark_scores_fixed_cases_without_persistence_or_con
             )
             for relationship in case.expected_relationships
         ]
-        return nodes, edges, {}
+        return _extraction(
+            nodes,
+            edges,
+            proposed_edges=len(edges) + int(case.id == "crimson_guard"),
+            normalized_edges=int(case.id == "crimson_guard"),
+        )
 
     report = await benchmark_candidate(
         corpus,
@@ -167,6 +296,7 @@ async def test_candidate_benchmark_scores_fixed_cases_without_persistence_or_con
         sync_profile_fingerprint="sync:test",
         prompt_version="prompt:v1",
         schema_version="schema:v1",
+        relationship_vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
         max_entities=25,
         max_relationships=25,
         maximum_provider_calls=2,
@@ -179,8 +309,42 @@ async def test_candidate_benchmark_scores_fixed_cases_without_persistence_or_con
     assert report["entity_recall"] == 1
     assert report["relationship_recall"] == 1
     assert report["provider_calls"] == len(corpus.cases)
+    assert report["parse_success_cases"] == len(corpus.cases)
+    assert report["schema_success_cases"] == len(corpus.cases)
+    assert report["structured_expectation_matches"] == len(corpus.cases)
+    assert report["relationship_quality"]["evidence_cases"] == len(corpus.cases)
+    assert report["relationship_quality"]["proposed_edges"] == 4
+    assert report["relationship_quality"]["accepted_edges"] == 3
+    assert report["relationship_quality"]["rejection_reasons"]["rejected_unknown_type"] == 1
     assert "sensitive extracted fact" not in str(report)
     assert all(case.episode not in str(report) for case in corpus.cases)
+
+
+async def test_candidate_benchmark_rejects_relationship_policy_drift_before_client():
+    touched = False
+
+    def forbidden(*args):
+        nonlocal touched
+        touched = True
+        raise AssertionError("client construction must remain unused")
+
+    with pytest.raises(BenchmarkConfigurationError, match="vocabulary is not current"):
+        await benchmark_candidate(
+            load_benchmark_corpus(CORPUS_PATH),
+            _candidate(),
+            route_fingerprint="route:test",
+            sync_profile_fingerprint="sync:test",
+            prompt_version="prompt:v1",
+            schema_version="schema:v1",
+            relationship_vocabulary_fingerprint="relationships:sha256:" + ("0" * 64),
+            max_entities=25,
+            max_relationships=25,
+            maximum_provider_calls=2,
+            concurrency=1,
+            client_factory=forbidden,
+        )
+
+    assert touched is False
 
 
 @pytest.mark.asyncio
@@ -235,7 +399,7 @@ async def test_recovered_provider_failure_is_reported_as_degraded_without_detail
             )
             for relationship in case.expected_relationships
         ]
-        return nodes, edges, {}
+        return _extraction(nodes, edges)
 
     report = await benchmark_candidate(
         corpus,
@@ -244,6 +408,7 @@ async def test_recovered_provider_failure_is_reported_as_degraded_without_detail
         sync_profile_fingerprint="sync:test",
         prompt_version="prompt:v1",
         schema_version="schema:v1",
+        relationship_vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
         max_entities=25,
         max_relationships=25,
         maximum_provider_calls=2,
@@ -278,6 +443,7 @@ async def test_candidate_benchmark_records_budget_exhaustion_without_exception_d
         sync_profile_fingerprint="sync:test",
         prompt_version="prompt:v1",
         schema_version="schema:v1",
+        relationship_vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
         max_entities=25,
         max_relationships=25,
         maximum_provider_calls=1,
@@ -292,6 +458,39 @@ async def test_candidate_benchmark_records_budget_exhaustion_without_exception_d
         result["failure_code"] == "provider_call_budget_exhausted" for result in report["cases"]
     )
     assert "unreachable sensitive detail" not in str(report)
+
+
+async def test_candidate_benchmark_reports_parse_and_schema_outcomes_separately():
+    corpus = load_benchmark_corpus(CORPUS_PATH)
+    candidate = _candidate()
+
+    async def extractor(*args, **kwargs):
+        raise ModelSchemaValidationError("sensitive invalid response")
+
+    report = await benchmark_candidate(
+        corpus,
+        candidate,
+        route_fingerprint="route:test",
+        sync_profile_fingerprint="sync:test",
+        prompt_version="prompt:v1",
+        schema_version="schema:v1",
+        relationship_vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
+        max_entities=25,
+        max_relationships=25,
+        maximum_provider_calls=1,
+        concurrency=1,
+        client_factory=lambda selected: _fake_client(selected)[0],
+        extractor=extractor,
+    )
+
+    assert report["status"] == "failed"
+    assert report["parse_success_cases"] == len(corpus.cases)
+    assert report["schema_success_cases"] == 0
+    assert report["structured_expectation_matches"] == 0
+    assert report["relationship_quality"]["evidence_cases"] == 0
+    assert all(result["parse_success"] is True for result in report["cases"])
+    assert all(result["schema_success"] is False for result in report["cases"])
+    assert "sensitive invalid response" not in str(report)
 
 
 @pytest.mark.asyncio
@@ -361,8 +560,12 @@ async def test_cli_can_compare_declared_candidates_without_exposing_secret(capsy
             "provider": candidate.connection.provider,
             "requested_model": candidate.model,
             "case_count": len(corpus.cases),
+            "schema_success_cases": len(corpus.cases),
             "entity_recall": 1.0,
             "relationship_recall": 1.0,
+            "relationship_quality": {
+                "accepted_of_proposed": 1.0,
+            },
             "provider_calls": len(corpus.cases),
         }
 
@@ -407,3 +610,4 @@ def test_legacy_benchmark_is_inert_and_corpus_is_mounted_read_only():
     assert "UPDATE episodes" not in legacy
     assert "docker exec" not in legacy
     assert "./benchmarks:/app/benchmarks:ro" in compose
+    assert benchmark_graphiti.DEFAULT_CORPUS.name == "graphiti_extraction_v2.json"
