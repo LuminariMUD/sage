@@ -8,6 +8,11 @@
 | Scope            | Ollama, Graphiti, PostgreSQL-to-Neo4j synchronization, local observability, and browser chat verification |
 | Umbrella program | [Ollama and OpenRouter Provider Upgrade Plan](./ollama_openrouter_provider_upgrade_plan.md)               |
 
+> **Current live state:** The operator rejected the previous 611-episode corpus as
+> unusable and ordered its deletion. PostgreSQL now has zero episodes and zero
+> graph-sync ledger rows; Neo4j has zero nodes and zero relationships. All earlier
+> 611/305 counts in this document are historical evidence only, not accepted data.
+
 ## Relationship to the umbrella program
 
 The provider upgrade plan is authoritative for shared architecture, terminology, sequencing, release invariants, migrations, and the definition of done. This document owns the observed local evidence and the detailed Ollama/Graphiti work needed to satisfy those requirements on the 8 GB GPU development stack.
@@ -320,11 +325,53 @@ a request. No provider/model call, benchmark, graph claim, ingestion, migration,
 profile transition, database/graph mutation, or worker restart occurred. The
 operator's stop instruction remains authoritative.
 
+### 2026-08-07 - OpenRouter target profile configuration, not activated
+
+- Preconfigured the public `.env.example` OpenRouter slots with
+  `qwen/qwen3.7-flash` for application text and Graphiti extraction plus
+  `perplexity/pplx-embed-v1-0.6b` at its native 1024 dimensions for embeddings.
+  The template intentionally remains all-Ollama by default, so a copied example
+  still resolves without a cloud credential.
+- Configured the ignored local `.env` as an explicit all-OpenRouter profile for
+  application text, application embeddings, Graphiti text, and Graphiti
+  embeddings. Migrated the locally supplied compatibility alias to the canonical
+  `OPENROUTER_API_KEY` field without displaying or changing its value.
+- A dependency-complete, network-free resolver check proves all four selectors,
+  both Qwen model resolutions, the Perplexity model resolution, and both
+  1024-dimensional embedding profiles. Compose configuration also validates, and
+  46 focused environment/provider/deployment tests pass offline.
+
+The running services were not restarted, so this target profile is configured but
+not activated. The physical episode vector column remains 768-dimensional and must
+not receive the configured 1024-dimensional embeddings until the pending embedding
+migrations, backfill, index, quality, and cutover gates are completed. No
+provider/model call, benchmark, graph claim, ingestion, migration, vector write, or
+worker restart occurred; the operator's worker stop remains authoritative.
+
+### 2026-08-07 - Rejected corpus deleted
+
+The operator explicitly rejected the earlier extraction run and its entire episode
+corpus as unusable. The corpus and all derived graph state were removed immediately:
+
+- Deleted all 611 PostgreSQL episodes, all 611 derived durable sync jobs, and the
+  lone zero-attempt run record. Attempt, result, request-intent, and provider-call
+  ledgers are all empty.
+- Deleted the complete Neo4j graph produced from that corpus: 818 nodes and 2,756
+  relationships. Post-delete verification reports zero nodes and zero relationships.
+- Preserved all 14 source lore documents and reset their processing and Graphiti
+  status to `pending`, with no processed timestamp, so no source claims the deleted
+  corpus still exists.
+
+The authoritative read-only graph audit is clean at zero PostgreSQL episodes, zero
+Neo4j episodic nodes, zero stable IDs, and zero drift findings. All services remain
+healthy and no worker process exists. The deletion did not run a provider/model,
+start ingestion, or activate the newly configured OpenRouter profile.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.
 
-The current sync is safe and resumable: PostgreSQL is marked synchronized only after exactly one Neo4j episode with the expected stable ID is independently verified. The improvements below preserve that invariant while making failure handling durable, explainable, testable, and provider-neutral.
+The synchronization contract is safe and resumable: PostgreSQL is marked synchronized only after exactly one Neo4j episode with the expected stable ID is independently verified. The improvements below preserve that invariant while making failure handling durable, explainable, testable, and provider-neutral.
 
 The intended processing model is idempotent at-least-once delivery; this workstream does not attempt a cross-database exactly-once transaction. PostgreSQL owns synchronization intent and attempt history; the stable episode UUID makes Neo4j writes repeatable; independent reconciliation proves convergence.
 

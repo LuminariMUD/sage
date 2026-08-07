@@ -36,6 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OpenRouter Target Profile Configuration and Corpus Reset (0.7.21)**
+  - Preconfigured the public environment template with `qwen/qwen3.7-flash` for application text and Graphiti extraction and `perplexity/pplx-embed-v1-0.6b` at 1024 dimensions for embeddings, while retaining its credential-free all-Ollama default selectors.
+  - Configured the ignored local environment as an explicit all-OpenRouter application/Graphiti text-and-embedding profile and migrated the local compatibility credential to canonical `OPENROUTER_API_KEY` transport without exposing it.
+  - Proved the complete target profile through a dependency-complete network-free resolver check, Compose validation, and 46 focused offline tests. Services were not restarted; the physical 768-dimensional vector space still requires the pending migration, backfill, quality, and cutover gates, and the graph worker remains stopped.
+  - Removed the operator-rejected corpus in full: 611 PostgreSQL episodes, 611 derived jobs, one zero-attempt run, 818 Neo4j nodes, and 2,756 relationships. Preserved and reset all 14 source documents; the authoritative graph audit is clean at zero records and zero drift.
+
 - **Durable Graphiti Extraction Routing (0.7.20)**
   - Wired the confirmation-gated durable worker to Graphiti's complete ordered text route. Each episode receives one operation-wide call ceiling across Graphiti's concurrent internal generation tasks; same-candidate retry and candidate fallback are limited to their declared failure classes, while authentication/configuration failures cannot fall back.
   - Added a single-attempt candidate client that replaces graphiti-core's implicit four-attempt retry wrapper, retains `max_retries=0` on every transport, independently validates Pydantic response schemas, and classifies `finish_reason=length` as an output-limit failure.

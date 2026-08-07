@@ -9,6 +9,11 @@
 | Compatibility target  | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
 | Supporting workstream | [Local LLM and Graph Pipeline Improvements](./local_llm_graph_pipeline_improvements.md)                |
 
+> **Current live state:** The operator rejected the previous 611-episode corpus as
+> unusable and ordered its deletion. PostgreSQL now has zero episodes and zero
+> graph-sync ledger rows; Neo4j has zero nodes and zero relationships. Every earlier
+> 611/305 count below is historical checkpoint evidence, not accepted graph data.
+
 ---
 
 ## Implementation checkpoint - 2026-08-07
@@ -355,6 +360,48 @@ provider/model request, benchmark, graph claim, ingestion, migration, profile
 transition, database/graph mutation, or worker restart occurred. The operator's
 stop instruction remains authoritative.
 
+### OpenRouter target profile configuration checkpoint - configured, not activated
+
+- The public `.env.example` now preconfigures the non-secret OpenRouter model
+  choices: `qwen/qwen3.7-flash` for application text and Graphiti extraction, and
+  `perplexity/pplx-embed-v1-0.6b` with 1024-dimensional output for embeddings.
+  Its selectors remain all-Ollama by default so the public template preserves the
+  no-cloud-credential startup contract.
+- The ignored local `.env` explicitly selects OpenRouter for application text,
+  application embeddings, Graphiti text, and Graphiti embeddings. The configured
+  compatibility credential was moved to canonical `OPENROUTER_API_KEY` transport
+  without exposing or modifying its value.
+- A network-free resolver check in the application image proves the four provider
+  selectors, requested text/Graphiti models, embedding model, and both 1024-width
+  profiles; Compose rendering succeeds, and 46 focused
+  environment/provider/deployment tests pass offline.
+
+No running service was restarted and the target profile is not an embedding-space
+cutover. The empty physical episode vector column remains 768-dimensional, so
+migrations `0004` and `0005`, candidate backfill/indexing, quality comparison, and
+explicit activation remain prerequisites for future 1024-dimensional reads or
+writes. No provider request, benchmark, migration, graph claim, ingestion, vector
+mutation, or worker restart occurred, and the operator-requested worker freeze
+remains active.
+
+### Rejected corpus deletion checkpoint
+
+The operator explicitly rejected the previous extraction run and all of its episode
+and graph output as unusable. The obsolete data was removed immediately:
+
+- PostgreSQL deleted all 611 episodes, all 611 derived sync jobs, and the retained
+  zero-attempt run. Attempts, results, provider intents, and provider calls are all
+  empty.
+- Neo4j deleted all 818 nodes and all 2,756 relationships produced by the rejected
+  corpus. Independent post-delete counts are zero for both.
+- All 14 source lore documents were preserved and reset to pending processing and
+  Graphiti state with no processed timestamp.
+
+The authoritative graph audit reports zero PostgreSQL episodes, zero Neo4j episodic
+nodes/stable IDs, and zero drift findings. All services remain healthy, the worker
+is absent, and no provider request, ingestion, migration, or OpenRouter activation
+was performed during deletion.
+
 ---
 
 ## 1. Executive Summary
@@ -635,7 +682,8 @@ OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_API_KEY=
 OPENROUTER_SITE_URL=
 OPENROUTER_APP_NAME=Luminari Sage
-OPENROUTER_CHAT_MODEL=
+OPENROUTER_CHAT_MODEL=qwen/qwen3.7-flash
+OPENROUTER_GRAPHITI_MODEL=qwen/qwen3.7-flash
 OPENROUTER_CREATIVE_MODEL=
 OPENROUTER_REASONING_MODEL=
 OPENROUTER_EXTRACTION_MODEL=
