@@ -40,6 +40,30 @@ jobs:
           tar -xzf "${RUNNER_TEMP}/${archive}" -C "${RUNNER_TEMP}" gitleaks
           install -m 0755 "${RUNNER_TEMP}/gitleaks" "${RUNNER_TEMP}/bin-gitleaks"
 
+      - name: Verify OpenRouter secret detection contract
+        run: |
+          set -euo pipefail
+          fixture_dir="${RUNNER_TEMP}/gitleaks-openrouter-fixture"
+          report="${RUNNER_TEMP}/gitleaks-openrouter-self-test.json"
+          mkdir -p "$fixture_dir"
+          printf 'OPENROUTER_API_KEY=sk-or-v1-%064d\n' 0 > "$fixture_dir/.env"
+
+          set +e
+          "${RUNNER_TEMP}/bin-gitleaks" dir "$fixture_dir" \
+            --config "${GITHUB_WORKSPACE}/.gitleaks.toml" \
+            --enable-rule openrouter-api-key \
+            --redact=100 \
+            --report-format=json \
+            --report-path="$report"
+          scan_status=$?
+          set -e
+
+          if (( scan_status != 1 )); then
+            echo "OpenRouter scanner self-test returned $scan_status instead of detecting the fixture." >&2
+            exit 1
+          fi
+          grep -Eq '"RuleID"[[:space:]]*:[[:space:]]*"openrouter-api-key"' "$report"
+
       - name: Scan repository and full Git history
         run: |
           "${RUNNER_TEMP}/bin-gitleaks" git . \

@@ -91,9 +91,17 @@ Generate independent values for `POSTGRES_PASSWORD`, `NEO4J_PASSWORD`,
 python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
 ```
 
-Keep `LLM_PROVIDER=ollama`, `GRAPHITI_PROVIDER=ollama`, and
-`USE_LOCAL_EMBEDDINGS=true` for the fully local profile. An OpenAI key is not
-needed for the intended local execution path.
+Keep `TEXT_PROVIDER=ollama`, `EMBEDDING_PROVIDER=ollama`, and the two Graphiti
+provider overrides empty (inherit) or explicitly `ollama` for the fully local
+profile. No cloud-provider key is required for that path. When OpenRouter is
+selected, prefer exactly one of `OPENROUTER_API_KEY` or
+`OPENROUTER_API_KEY_FILE`; `OPENROUTER_KEY` is a deprecated compatibility alias
+and cannot be combined with either canonical input.
+
+The public `.env.example` is contract-tested against every field accepted by
+the provider resolver. Keep empty selector values and explanatory comments on
+separate lines: dotenv parsers can treat a comment after an empty assignment as
+the assignment's value.
 
 Start the complete development stack:
 

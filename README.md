@@ -1,6 +1,6 @@
 # Luminari Sage - Intelligent Lore Management System
 
-**Version**: 0.7.15
+**Version**: 0.7.16
 **Status**: Production Deployed
 **Deployment**: luminarimud.com:8003
 **Repository**: https://github.com/LuminariMUD/sage
@@ -161,7 +161,8 @@ cd sage
 # Copy and configure environment
 cp .env.example .env
 chmod 600 .env
-# Edit .env with your OpenAI API key and database passwords
+# Edit .env with database/auth secrets and only the credentials required by
+# your selected text and embedding providers
 
 # Start all services (PostgreSQL, Neo4j, API)
 docker compose up -d
@@ -398,17 +399,18 @@ The repository received a full credential and runtime hardening review on
 
 All secrets must be configured in `.env` (never commit this file):
 
-**Required production secrets**:
+**Always-required production secrets**:
 
 - `SAGE_API_KEY` - Backend API authentication (64-character hex)
 - `POSTGRES_PASSWORD` - PostgreSQL password (16+ characters)
 - `NEO4J_PASSWORD` - Neo4j password (16+ characters)
-- `OPENAI_API_KEY` - OpenAI API for embeddings/LLM
 - `SAGE_MCP_KEY` - MCP operations authentication
 - `SAGE_MCP_BACKEND_KEY` - MCP backend access authentication
 
-**Optional secrets**:
+**Provider-dependent and optional secrets**:
 
+- `OPENAI_API_KEY` or `OPENAI_API_KEY_FILE` - required only when direct OpenAI is selected
+- `OPENROUTER_API_KEY` or `OPENROUTER_API_KEY_FILE` - required only when OpenRouter is selected; `OPENROUTER_KEY` is a deprecated compatibility alias
 - `LANGSMITH_API_KEY` - LangSmith tracing (optional)
 
 ### Generate Secure Credentials
@@ -495,5 +497,5 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ---
 
 **Last Updated**: 2026-07-30
-**Version**: 0.7.15
+**Version**: 0.7.16
 **Status**: Production Ready

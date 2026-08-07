@@ -182,6 +182,15 @@ The harness is now safe to operate after a separate cost/privacy/model decision,
 
 Thirty-one focused offline unit/CLI tests pass. The complete fast suite passes 249 tests with 6 skips and 110 intentional deselections, and all 11 isolated graph-sync lifecycle/migration integration tests pass. Read-only validation against the stopped live tables reports 611 jobs: 305 synchronized, 306 pending, zero leases, zero retry/quarantine rows, and zero durable attempts/provider calls. The retained zero-attempt historical run is stopped, so throughput is zero and ETA is correctly unavailable. No job was claimed, no provider request or graph/database write occurred outside generated test schemas, and the worker remains stopped by operator request.
 
+### 2026-08-07 - Provider environment and secret-scanner checkpoint, offline
+
+- Added an explicit, enforced registry for every environment field consumed by the provider resolver, including task-specific models/capabilities, retry controls, OpenRouter routing policy, embeddings, Graphiti overrides, and secret-file inputs. An undeclared internal lookup now fails instead of creating silent configuration drift.
+- Expanded `.env.example` to cover the complete registry while keeping all direct and file-backed credential fields empty. A regression now parses the public template exactly as `python-dotenv` does and proves its default all-Ollama application and Graphiti profiles resolve without any cloud credential.
+- Fixed an existing template defect where the inline comment after an empty `GRAPHITI_EXTRACTION_FALLBACK_PROVIDER=` became the configured provider value when the file was copied.
+- Added a dedicated OpenRouter key-signature rule to Gitleaks, static rule-contract tests, and a CI self-test that generates a synthetic key and requires the pinned scanner to identify it with full redaction before scanning repository history.
+
+Thirty focused configuration/scanner tests and the complete network-isolated fast suite pass: 254 passed, 6 service-dependent skips, and 110 intentional deselections. The real `.env` remained ignored and unstaged, repository-history scanning reported no leak, and no provider/model request, graph claim, ingestion, or live data mutation occurred. The worker remains stopped by operator request.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.

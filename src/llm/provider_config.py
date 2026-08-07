@@ -113,6 +113,125 @@ _ROUTING_SLUG = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$")
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 _FALSE_VALUES = frozenset({"0", "false", "no", "off"})
 
+_TEXT_PROVIDER_PREFIXES = ("OLLAMA", "OPENROUTER", "OPENAI")
+_TEXT_TASK_ENV_SUFFIXES = (
+    "MODEL",
+    "PROMPT_PROFILE",
+    "CAPABILITIES",
+    "CONTEXT_TOKENS",
+    "TEMPERATURE",
+    "REVISION",
+)
+PROVIDER_SECRET_VALUE_FIELDS = frozenset(
+    {
+        "OPENAI_API_KEY",
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_KEY",
+    }
+)
+PROVIDER_SECRET_FILE_FIELDS = frozenset(
+    {
+        "OPENAI_API_KEY_FILE",
+        "OPENROUTER_API_KEY_FILE",
+    }
+)
+PROVIDER_ENVIRONMENT_FIELDS = frozenset(
+    {
+        "TEXT_PROVIDER",
+        "EMBEDDING_PROVIDER",
+        "LLM_PROVIDER",
+        "USE_LOCAL_EMBEDDINGS",
+        "LLM_MODEL",
+        "EMBEDDING_MODEL",
+        "OLLAMA_BASE_URL",
+        "OLLAMA_REQUEST_TIMEOUT",
+        "OLLAMA_EMBEDDING_MODEL",
+        "OLLAMA_EMBEDDING_DIMENSIONS",
+        "OLLAMA_EMBEDDING_BATCH_SIZE",
+        "OLLAMA_EMBEDDING_REVISION",
+        "OLLAMA_EMBEDDING_INPUT_TYPE",
+        "OPENROUTER_BASE_URL",
+        "OPENROUTER_API_KEY",
+        "OPENROUTER_API_KEY_FILE",
+        "OPENROUTER_KEY",
+        "OPENROUTER_SITE_URL",
+        "OPENROUTER_APP_NAME",
+        "OPENROUTER_REQUEST_TIMEOUT",
+        "OPENROUTER_GRAPHITI_MODEL",
+        "OPENROUTER_EMBEDDING_MODEL",
+        "OPENROUTER_EMBEDDING_DIMENSIONS",
+        "OPENROUTER_EMBEDDING_BATCH_SIZE",
+        "OPENROUTER_EMBEDDING_ENCODING_FORMAT",
+        "OPENROUTER_EMBEDDING_REVISION",
+        "OPENROUTER_EMBEDDING_INPUT_TYPE",
+        "OPENAI_BASE_URL",
+        "OPENAI_API_KEY",
+        "OPENAI_API_KEY_FILE",
+        "OPENAI_REQUEST_TIMEOUT",
+        "OPENAI_EMBEDDING_DIMENSIONS",
+        "OPENAI_EMBEDDING_BATCH_SIZE",
+        "OPENAI_EMBEDDING_REVISION",
+        "SENTENCE_TRANSFORMERS_MODEL",
+        "SENTENCE_TRANSFORMERS_DIMENSIONS",
+        "SENTENCE_TRANSFORMERS_BATCH_SIZE",
+        "SENTENCE_TRANSFORMERS_TIMEOUT",
+        "SAGE_SENTENCE_TRANSFORMERS_REVISION",
+        "GRAPHITI_PROVIDER",
+        "GRAPHITI_TEXT_PROVIDER",
+        "GRAPHITI_EMBEDDING_PROVIDER",
+        "GRAPHITI_TEXT_MODEL",
+        "GRAPHITI_TEXT_MODEL_REVISION",
+        "GRAPHITI_LLM_MODEL",
+        "GRAPHITI_REQUEST_TIMEOUT",
+        "GRAPHITI_EXTRACTION_TEMPERATURE",
+        "GRAPHITI_EXTRACTION_PRIMARY_ATTEMPTS",
+        "GRAPHITI_EXTRACTION_FALLBACK_PROVIDER",
+        "GRAPHITI_EXTRACTION_FALLBACK_MODEL",
+        "GRAPHITI_EXTRACTION_FALLBACK_ATTEMPTS",
+        "GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS",
+        "GRAPHITI_EMBEDDING_MODEL",
+        "GRAPHITI_EMBEDDING_DIMENSIONS",
+        "GRAPHITI_EMBEDDING_MODEL_REVISION",
+        "GRAPH_SYNC_LEASE_SECONDS",
+        "GRAPH_SYNC_MAX_JOB_ATTEMPTS",
+        "GRAPH_SYNC_RETRY_BASE_SECONDS",
+        "GRAPH_SYNC_RETRY_MAX_SECONDS",
+        "GRAPH_SYNC_MAX_PROVIDER_CALLS",
+        *PROVIDER_SECRET_VALUE_FIELDS,
+        *PROVIDER_SECRET_FILE_FIELDS,
+        *(f"{prefix}_MAX_CONTEXT_TOKENS" for prefix in _TEXT_PROVIDER_PREFIXES),
+        *(
+            f"{prefix}_{suffix}"
+            for prefix in _TEXT_PROVIDER_PREFIXES
+            for suffix in (
+                "TRANSPORT_MAX_ATTEMPTS",
+                "TRANSPORT_RETRY_ON",
+                "RETRY_BASE_SECONDS",
+                "RETRY_MAX_SECONDS",
+            )
+        ),
+        *(
+            f"{prefix}_{task.upper()}_{suffix}"
+            for prefix in _TEXT_PROVIDER_PREFIXES
+            for task in TEXT_TASKS
+            for suffix in _TEXT_TASK_ENV_SUFFIXES
+        ),
+        *(
+            f"OPENROUTER_{capability}_{suffix}"
+            for capability in ("TEXT", "EMBEDDING")
+            for suffix in (
+                "ALLOW_FALLBACKS",
+                "REQUIRE_PARAMETERS",
+                "DATA_COLLECTION",
+                "ZDR",
+                "PROVIDER_ORDER",
+                "PROVIDER_ONLY",
+                "PROVIDER_IGNORE",
+            )
+        ),
+    }
+)
+
 
 def _canonical_fingerprint(namespace: str, payload: Mapping[str, object]) -> str:
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
@@ -519,6 +638,8 @@ class ProviderSettingsResolver:
         self._warned_legacy: set[str] = set()
 
     def _value(self, name: str, default: str = "") -> str:
+        if name not in PROVIDER_ENVIRONMENT_FIELDS:
+            raise RuntimeError(f"Provider environment field is undeclared: {name}")
         value = self.environment.get(name)
         return value.strip() if value is not None and value.strip() else default
 

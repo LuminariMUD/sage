@@ -6,7 +6,7 @@ import logging
 
 import pytest
 
-from src.llm.provider_config import resolve_provider_settings
+from src.llm.provider_config import ProviderSettingsResolver, resolve_provider_settings
 
 
 def _ollama_environment() -> dict[str, str]:
@@ -50,6 +50,13 @@ def test_all_ollama_resolves_without_any_cloud_key():
     assert settings.text_route("chat").primary.model == "qwen2.5:7b"
     assert settings.embedding_profile.dimensions == 768
     assert settings.embedding_profile.connection.api_key is None
+
+
+def test_resolver_refuses_undeclared_environment_field_access():
+    resolver = ProviderSettingsResolver({})
+
+    with pytest.raises(RuntimeError, match="Provider environment field is undeclared"):
+        resolver._value("OPENROUTER_API_KEEY")
 
 
 @pytest.mark.parametrize(

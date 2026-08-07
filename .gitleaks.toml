@@ -74,6 +74,14 @@ keywords = ["sk-"]
 tags = ["api", "openai", "key"]
 
 [[rules]]
+id = "openrouter-api-key"
+description = "OpenRouter API Key"
+regex = '''\b(sk-or-v1-[a-zA-Z0-9_-]{32,})\b'''
+secretGroup = 1
+keywords = ["sk-or-v1-"]
+tags = ["api", "openrouter", "key"]
+
+[[rules]]
 id = "langsmith-api-key"
 description = "LangSmith API Key"
 regex = '''ls__[a-zA-Z0-9_-]{40,}'''

@@ -5,6 +5,15 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from dotenv import dotenv_values
+
+from src.llm.provider_config import (
+    PROVIDER_ENVIRONMENT_FIELDS,
+    PROVIDER_SECRET_FILE_FIELDS,
+    PROVIDER_SECRET_VALUE_FIELDS,
+    resolve_provider_settings,
+)
+
 ENV_EXAMPLE = Path(__file__).resolve().parents[1] / ".env.example"
 SOURCE_ROOT = ENV_EXAMPLE.parent / "src"
 ASSIGNMENT = re.compile(r"^([A-Z][A-Z0-9_]*)=(.*)$")
@@ -90,7 +99,7 @@ REQUIRED_RUNTIME_FIELDS = {
     "USE_LEGACY_LANGCHAIN",
     "USE_LOCAL_EMBEDDINGS",
     "UVICORN_LOG_LEVEL",
-}
+} | PROVIDER_ENVIRONMENT_FIELDS
 
 PUBLIC_SECRET_FIELDS = {
     "LANGSMITH_API_KEY",
@@ -102,7 +111,7 @@ PUBLIC_SECRET_FIELDS = {
     "SAGE_API_KEY",
     "SAGE_MCP_BACKEND_KEY",
     "SAGE_MCP_KEY",
-}
+} | PROVIDER_SECRET_VALUE_FIELDS
 
 
 def _assignments() -> list[tuple[str, str]]:
@@ -133,6 +142,27 @@ def test_env_example_never_contains_secret_placeholders():
 
     # A production image must be supplied as an immutable digest by deployment tooling.
     assert values["SAGE_IMAGE"] == ""
+
+
+def test_env_example_documents_provider_secret_file_transport():
+    values = dict(_assignments())
+
+    assert all(values[name] == "" for name in PROVIDER_SECRET_VALUE_FIELDS)
+    assert all(values[name] == "" for name in PROVIDER_SECRET_FILE_FIELDS)
+    assert "OPENROUTER_KEY_FILE" not in values
+
+
+def test_env_example_default_provider_profile_resolves_without_cloud_secrets():
+    environment = {name: value or "" for name, value in dotenv_values(ENV_EXAMPLE).items()}
+
+    settings = resolve_provider_settings(environment)
+
+    assert settings.text_provider == "ollama"
+    assert settings.embedding_provider == "ollama"
+    assert settings.graphiti_text_provider == "ollama"
+    assert settings.graphiti_embedding_provider == "ollama"
+    assert settings.text_route("chat").primary.connection.api_key is None
+    assert settings.embedding_profile.connection.api_key is None
 
 
 def test_env_example_covers_literal_python_environment_lookups():

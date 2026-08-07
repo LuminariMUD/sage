@@ -1,6 +1,6 @@
 # User Guide
 
-**Version**: 0.7.15
+**Version**: 0.7.16
 **Status**: Production Ready
 **Last Updated**: 2025-11-12
 

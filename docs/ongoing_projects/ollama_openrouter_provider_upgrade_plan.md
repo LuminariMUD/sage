@@ -201,6 +201,17 @@ The remaining Phase 1 aggregate-observability contract is now implemented withou
 
 Thirty-one focused offline unit/CLI tests pass. The complete fast suite passes 249 tests with 6 skips and 110 intentional deselections, and all 11 isolated graph-sync lifecycle/migration integration tests pass. The real read-only command reports the stopped 611-job snapshot at 305 synchronized and 306 pending, with no leases, retries, quarantines, durable attempts, or provider calls. It correctly reports the retained zero-attempt run as stopped with no ETA. The command made no mutation, no graph job was claimed, no model/provider request occurred, and the operator-requested worker freeze remains active.
 
+### Provider environment and secret-scanner checkpoint - implemented offline
+
+The remaining Phase 8 environment/scanner contract is now implemented without activating any provider:
+
+- `PROVIDER_ENVIRONMENT_FIELDS` is the enforced source of truth for selectors, credentials, task-specific model/capability settings, retries, routing policy, embeddings, Graphiti overrides, and durable graph policy settings. Resolver code cannot silently read an undeclared field.
+- `.env.example` now documents every accepted provider field. Direct credentials and credential-file paths remain empty, the copied default resolves as Ollama/Ollama for both application and Graphiti, and the deprecated `OPENROUTER_KEY` remains an explicit one-window alias rather than an ambiguous secret-file input.
+- Fixed the empty Graphiti fallback selector: its inline comment was previously parsed by `python-dotenv` as a nonempty provider name.
+- Gitleaks now has an explicit OpenRouter signature rule. Unit tests validate its match boundary, and the security workflow generates a synthetic key and requires the pinned scanner to detect it with full redaction before the full-history scan.
+
+Thirty focused configuration/scanner tests pass. The complete network-isolated fast suite passes 254 tests with 6 skips and 110 intentional deselections; Ruff, Black, isort, Actionlint, the synthetic scanner test, and a 28-commit redacted history scan also pass. The real ignored `.env` was not displayed or staged. No provider/model request, graph claim, ingestion, or live data mutation occurred, and the worker remains stopped by operator request.
+
 ---
 
 ## 1. Executive Summary
@@ -929,7 +940,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [ ] Add Make targets for graph-sync status, safe retries, `graph-audit`, and the complete release gate.
   - [x] Expose read-only status/run summaries, confirmation-gated retries, and human/JSON graph audit commands.
   - [ ] Add the complete local release-gate target after its component contract is implemented.
-- [ ] Update secret scanners and environment contract tests.
+- [x] Update secret scanners and environment contract tests.
 - [ ] Add sanitized health/readiness, queue/lease state, provider-level metrics, and graph-quality summaries.
 - [ ] Alert on quarantined growth, stale leases, audit drift, profile mismatch, retry storms, and sustained provider failure.
 - [ ] Document cost, privacy, ZDR, data-collection routing, and outage behavior.

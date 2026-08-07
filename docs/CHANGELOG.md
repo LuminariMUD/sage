@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Provider Environment and Secret-Scanner Contract (0.7.16)**
+  - Added one enforced provider-environment field registry covering selectors, task overrides, retries, routing, embeddings, Graphiti, and secret-file inputs.
+  - Expanded `.env.example` to document every accepted provider field with empty credential values and added a regression proving its default all-Ollama profile resolves without cloud credentials.
+  - Fixed the empty Graphiti fallback selector whose inline comment was parsed as a real provider value when the template was copied.
+  - Added an explicit OpenRouter key-signature rule, static rule tests, and an executable synthetic-key self-test in the full-history Gitleaks workflow.
+  - Verified 254 fast tests with 6 skips and 110 intentional deselections. Validation was network-isolated; no provider call, graph claim, ingestion, or live data mutation occurred.
+
 - **Durable Graph Sync Run Observability (0.7.15)**
   - Added repeatable-read, read-only run summaries over current profile state and immutable run/attempt/provider ledgers.
   - Added completion percentage, eligible/expired work, rolling verified throughput, explicit ETA availability reasons, attempt/provider failure classes, reserved/completed call totals, and graph/token telemetry coverage.
