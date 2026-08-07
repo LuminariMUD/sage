@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
 
 # Support for verbose mode
 ifdef VERBOSE
@@ -45,6 +45,8 @@ help:
 	@echo "  make graph-audit              - Reconcile PostgreSQL and Neo4j (read-only)"
 	@echo "  make graph-audit-json         - Emit machine-readable reconciliation JSON"
 	@echo "  make graph-sync-status        - Show durable graph job/run state (read-only)"
+	@echo "  make graph-sync-run-summary   - Show latest durable throughput/ETA/failures"
+	@echo "  make graph-sync-run-summary-json - Emit latest durable run summary as JSON"
 	@echo "  make graph-sync-list          - List failed/active graph jobs (read-only)"
 	@echo "  make graph-sync-recover-expired - Requeue or quarantine expired leases"
 	@echo "  make graph-sync-retry-waiting EPISODE_IDS='...' - Retry waiting jobs"
@@ -310,6 +312,18 @@ graph-audit-json:
 .PHONY: graph-sync-status
 graph-sync-status:
 	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py status
+
+.PHONY: graph-sync-run-summary
+graph-sync-run-summary:
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
+		run-summary \
+		--window-seconds "$(or $(PROGRESS_WINDOW_SECONDS),300)" $(if $(strip $(RUN_ID)),--run-id "$(RUN_ID)",)
+
+.PHONY: graph-sync-run-summary-json
+graph-sync-run-summary-json:
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
+		--json run-summary \
+		--window-seconds "$(or $(PROGRESS_WINDOW_SECONDS),300)" $(if $(strip $(RUN_ID)),--run-id "$(RUN_ID)",)
 
 .PHONY: graph-sync-list
 graph-sync-list:

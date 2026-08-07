@@ -18,6 +18,7 @@ from src.graphiti.sync_models import (
     FailureClass,
     FailureDisposition,
     FailureRecord,
+    GraphCounts,
     GraphSyncPolicy,
     InvalidTransitionError,
     LeaseLostError,
@@ -621,3 +622,79 @@ async def test_reserved_provider_call_survives_worker_crash_without_false_comple
     assert chain[0]["provider_call_count"] == 1
     assert chain[0]["provider_calls"][0]["call_number"] == 1
     assert chain[0]["provider_calls"][0]["outcome"] is None
+
+
+async def test_run_summary_reconstructs_progress_throughput_and_failures_from_ledger(
+    state_store,
+):
+    _, repository, _ = state_store
+    run = await repository.start_or_join_run(
+        worker_id="worker-a", sync_profile_fingerprint=SYNC_PROFILE
+    )
+    policy = GraphSyncPolicy(max_job_attempts=3, max_provider_calls=1)
+
+    successful_lease = (
+        await repository.claim_jobs(
+            run_id=run.id,
+            worker_id="worker-a",
+            route_fingerprint="route:test",
+            policy=policy,
+        )
+    )[0]
+    await repository.record_provider_call(successful_lease, _provider_call())
+    assert (
+        await repository.complete_verified_success(
+            successful_lease,
+            _verification(successful_lease),
+            graph_counts=GraphCounts(accepted_entities=2, accepted_edges=1),
+        )
+        is CompletionStatus.SYNCED
+    )
+
+    failed_lease = (
+        await repository.claim_jobs(
+            run_id=run.id,
+            worker_id="worker-a",
+            route_fingerprint="route:test",
+            policy=policy,
+        )
+    )[0]
+    failure = FailureRecord.build(
+        failure_class=FailureClass.MALFORMED_JSON,
+        code="malformed_json",
+        summary="synthetic parse failure",
+        disposition=FailureDisposition.RETRY,
+    )
+    assert await repository.complete_failure(failed_lease, failure) is CompletionStatus.RETRY_WAIT
+
+    summary = await repository.run_summary(run.id)
+
+    assert summary["status"] == "available"
+    assert summary["run"]["id"] == run.id
+    assert summary["progress"]["job_counts"] == {
+        "pending": 1,
+        "leased": 0,
+        "retry_wait": 1,
+        "quarantined": 0,
+        "synced": 1,
+    }
+    assert summary["progress"]["completion_percent"] == pytest.approx(33.333)
+    assert summary["progress"]["remaining_jobs"] == 2
+    assert summary["progress"]["rolling_verified"] == 1
+    assert summary["progress"]["rolling_verified_per_minute"] > 0
+    assert summary["progress"]["eta_status"] in {"warming_up", "available"}
+    assert summary["attempts"]["outcomes"]["primary_success"] == 1
+    assert summary["attempts"]["outcomes"]["retry_wait"] == 1
+    assert summary["attempts"]["failure_classes"]["malformed_json"] == 1
+    assert summary["attempts"]["graph_counts"]["accepted_entities"] == 2
+    assert summary["attempts"]["graph_counts"]["proposed_entities"] is None
+    assert summary["attempts"]["graph_count_reported_attempts"]["accepted_entities"] == 1
+    assert summary["attempts"]["graph_count_reported_attempts"]["proposed_entities"] == 0
+    assert summary["provider_calls"]["reserved"] == 1
+    assert summary["provider_calls"]["completed"] == 1
+    assert summary["provider_calls"]["usage"]["total_tokens"] is None
+    assert summary["provider_calls"]["usage_reported_calls"]["total_tokens"] == 0
+    assert "Episode 0" not in repr(summary)
+
+    status = await repository.status_snapshot()
+    assert status["latest_run_summary"]["run"]["id"] == run.id

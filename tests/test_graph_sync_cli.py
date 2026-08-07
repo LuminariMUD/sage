@@ -9,6 +9,49 @@ from src.graphiti.sync_models import RunRecord, RunState
 from src.scripts import graph_sync
 
 
+def _run_summary(run_id: UUID) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "status": "available",
+        "run": {
+            "id": run_id,
+            "state": "running",
+            "sync_profile_fingerprint": "sync:test",
+        },
+        "progress": {
+            "synced_jobs": 8,
+            "total_jobs": 10,
+            "remaining_jobs": 2,
+            "completion_percent": 80.0,
+            "eligible_now": 2,
+            "expired_leases": 0,
+            "rolling_verified_per_minute": 1.0,
+            "rolling_window_seconds": 300.0,
+            "approximate_eta_seconds": 120,
+            "eta_status": "available",
+        },
+        "attempts": {
+            "attempts": 6,
+            "completed_attempts": 6,
+            "outcomes": {
+                "primary_success": 5,
+                "fallback_success": 0,
+                "retry_wait": 1,
+                "quarantined": 0,
+                "paused_systemic": 0,
+                "cancelled": 0,
+                "shutdown": 0,
+            },
+            "failure_classes": {"malformed_json": 1, "authentication": 0},
+        },
+        "provider_calls": {
+            "reserved": 7,
+            "completed": 7,
+            "failure_classes": {"malformed_json": 1, "authentication": 0},
+        },
+    }
+
+
 def test_parser_requires_explicit_confirmation_for_quarantine_retry():
     episode_id = "11111111-1111-1111-1111-111111111111"
     args = graph_sync.build_parser().parse_args(["retry-quarantined", episode_id])
@@ -52,6 +95,7 @@ def test_status_renderer_includes_zero_states_and_run_identity():
             "sync_profile_fingerprint": "sync:test",
             "heartbeat_at": datetime(2026, 8, 7, tzinfo=UTC),
         },
+        "latest_run_summary": _run_summary(run_id),
     }
 
     rendered = graph_sync.render_status(snapshot)
@@ -59,6 +103,35 @@ def test_status_renderer_includes_zero_states_and_run_identity():
     assert "pending: 3" in rendered
     assert "quarantined: 0" in rendered
     assert f"Active run: {run_id}" in rendered
+    assert "Profile completion: 8/10 (80.000%)" in rendered
+    assert "Rolling verified throughput: 1.000 episodes/min" in rendered
+    assert "Run failure classes: malformed_json=1" in rendered
+
+
+def test_run_summary_renderer_exposes_only_bounded_operational_aggregates():
+    run_id = UUID("22222222-2222-2222-2222-222222222222")
+
+    rendered = graph_sync.render_run_summary(_run_summary(run_id))
+
+    assert f"Run: {run_id}" in rendered
+    assert "Completion: 8/10 (80.000%)" in rendered
+    assert "Approximate ETA: 120 seconds" in rendered
+    assert "Attempt failure classes: malformed_json=1" in rendered
+    assert "Provider calls: 7/7 completed" in rendered
+
+
+async def test_run_summary_dispatches_window_and_optional_identity():
+    run_id = UUID("22222222-2222-2222-2222-222222222222")
+    args = graph_sync.build_parser().parse_args(
+        ["run-summary", "--run-id", str(run_id), "--window-seconds", "900"]
+    )
+    repository = AsyncMock()
+    repository.run_summary.return_value = _run_summary(run_id)
+
+    result = await graph_sync.execute_command(args, repository)
+
+    assert result["run"]["id"] == run_id
+    repository.run_summary.assert_awaited_once_with(run_id, rolling_window_seconds=900)
 
 
 async def test_run_uses_read_only_connection_for_inspection():
@@ -78,6 +151,7 @@ async def test_run_uses_read_only_connection_for_inspection():
             "completed_provider_calls": 0,
         },
         "active_run": None,
+        "latest_run_summary": {"schema_version": 1, "status": "no_runs", "run": None},
     }
 
     with (
@@ -88,6 +162,28 @@ async def test_run_uses_read_only_connection_for_inspection():
 
     postgres_class.assert_called_once_with(read_only=True)
     postgres.connect.assert_awaited_once()
+    postgres.disconnect.assert_awaited_once()
+
+
+async def test_run_summary_uses_read_only_connection():
+    args = graph_sync.build_parser().parse_args(["--json", "run-summary"])
+    postgres = AsyncMock()
+    repository = AsyncMock()
+    repository.run_summary.return_value = {
+        "schema_version": 1,
+        "status": "no_runs",
+        "run": None,
+    }
+
+    with (
+        patch.object(graph_sync, "PostgresDB", return_value=postgres) as postgres_class,
+        patch.object(graph_sync, "GraphSyncRepository", return_value=repository),
+    ):
+        assert await graph_sync.run(args) == 0
+
+    postgres_class.assert_called_once_with(read_only=True)
+    postgres.connect.assert_awaited_once()
+    repository.run_summary.assert_awaited_once_with(None, rolling_window_seconds=300)
     postgres.disconnect.assert_awaited_once()
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -11,6 +11,7 @@ from src.db.postgres import PostgresDB
 from src.graphiti.sync_models import (
     AttemptOutcome,
     CompletionStatus,
+    FailureClass,
     FailureDisposition,
     FailureRecord,
     GraphCounts,
@@ -21,6 +22,7 @@ from src.graphiti.sync_models import (
     LeaseLostError,
     ProviderCallIntent,
     ProviderCallLimitExceeded,
+    ProviderCallOutcome,
     ProviderCallRecord,
     ProviderCallTicket,
     RunRecord,
@@ -32,10 +34,14 @@ from src.graphiti.sync_models import (
     validate_failure_code,
     validate_label,
 )
+from src.graphiti.sync_progress import derive_run_progress
 
 RUN_START_LOCK_ID = 731047850174
 MAX_CLAIM_BATCH = 100
 MAX_OPERATOR_BATCH = 500
+DEFAULT_PROGRESS_WINDOW_SECONDS = 300
+MIN_PROGRESS_WINDOW_SECONDS = 60
+MAX_PROGRESS_WINDOW_SECONDS = 86_400
 
 
 class GraphSyncRepository:
@@ -1061,6 +1067,323 @@ class GraphSyncRepository:
                 )
                 return int(result.split()[-1])
 
+    async def run_summary(
+        self,
+        run_id: UUID | None = None,
+        *,
+        rolling_window_seconds: int = DEFAULT_PROGRESS_WINDOW_SECONDS,
+    ) -> dict[str, Any]:
+        """Read one internally consistent summary from an explicit read-only snapshot."""
+        async with self.postgres.acquire() as connection:
+            async with connection.transaction(isolation="repeatable_read", readonly=True):
+                return await self._run_summary(
+                    connection,
+                    run_id,
+                    rolling_window_seconds=rolling_window_seconds,
+                )
+
+    async def _run_summary(
+        self,
+        connection: Any,
+        run_id: UUID | None = None,
+        *,
+        rolling_window_seconds: int = DEFAULT_PROGRESS_WINDOW_SECONDS,
+    ) -> dict[str, Any]:
+        """Reconstruct one sanitized run summary entirely from durable ledger state."""
+        if run_id is not None and not isinstance(run_id, UUID):
+            raise ValueError("Run ID must be a UUID")
+        if (
+            isinstance(rolling_window_seconds, bool)
+            or not isinstance(rolling_window_seconds, int)
+            or not MIN_PROGRESS_WINDOW_SECONDS
+            <= rolling_window_seconds
+            <= MAX_PROGRESS_WINDOW_SECONDS
+        ):
+            raise ValueError("Rolling progress window must be between 60 and 86400 seconds")
+
+        run = await connection.fetchrow(
+            """
+            SELECT id,
+                   state,
+                   worker_id,
+                   sync_profile_fingerprint,
+                   started_at,
+                   updated_at,
+                   heartbeat_at,
+                   stopped_at,
+                   last_failure_class,
+                   last_failure_code,
+                   last_failure_summary,
+                   clock_timestamp() AS generated_at
+            FROM graph_sync_runs
+            WHERE $1::uuid IS NULL OR id = $1
+            ORDER BY started_at DESC
+            LIMIT 1
+            """,
+            run_id,
+        )
+        if run is None:
+            if run_id is not None:
+                raise InvalidTransitionError("Graph sync run does not exist")
+            return {
+                "schema_version": 1,
+                "status": "no_runs",
+                "run": None,
+            }
+
+        counts = await connection.fetchrow(
+            """
+            SELECT count(*) FILTER (WHERE state = 'pending') AS pending,
+                   count(*) FILTER (WHERE state = 'leased') AS leased,
+                   count(*) FILTER (WHERE state = 'retry_wait') AS retry_wait,
+                   count(*) FILTER (WHERE state = 'quarantined') AS quarantined,
+                   count(*) FILTER (WHERE state = 'synced') AS synced,
+                   count(*) FILTER (
+                       WHERE state = 'pending'
+                          OR (
+                              state = 'retry_wait'
+                              AND next_attempt_at <= clock_timestamp()
+                          )
+                   ) AS eligible_now,
+                   count(*) FILTER (
+                       WHERE state = 'leased'
+                         AND lease_expires_at <= clock_timestamp()
+                   ) AS expired_leases
+            FROM graph_sync_jobs
+            WHERE sync_profile_fingerprint = $1
+            """,
+            run["sync_profile_fingerprint"],
+        )
+        job_counts = {state.value: int(counts[state.value]) for state in JobState}
+
+        attempts = await connection.fetchrow(
+            """
+            SELECT count(attempt.id) AS attempts,
+                   count(result.attempt_id) AS completed_attempts,
+                   count(*) FILTER (
+                       WHERE result.outcome = 'primary_success'
+                   ) AS primary_success,
+                   count(*) FILTER (
+                       WHERE result.outcome = 'fallback_success'
+                   ) AS fallback_success,
+                   count(*) FILTER (
+                       WHERE result.outcome = 'retry_wait'
+                   ) AS retry_wait,
+                   count(*) FILTER (
+                       WHERE result.outcome = 'quarantined'
+                   ) AS quarantined,
+                   count(*) FILTER (
+                       WHERE result.outcome = 'paused_systemic'
+                   ) AS paused_systemic,
+                   count(*) FILTER (
+                       WHERE result.outcome = 'cancelled'
+                   ) AS cancelled,
+                   count(*) FILTER (
+                       WHERE result.outcome = 'shutdown'
+                   ) AS shutdown,
+                   sum(result.proposed_entity_count) AS proposed_entities,
+                   sum(result.accepted_entity_count) AS accepted_entities,
+                   sum(result.rejected_entity_count) AS rejected_entities,
+                   sum(result.proposed_edge_count) AS proposed_edges,
+                   sum(result.accepted_edge_count) AS accepted_edges,
+                   sum(result.rejected_edge_count) AS rejected_edges,
+                   count(result.proposed_entity_count)
+                       AS proposed_entities_reported_attempts,
+                   count(result.accepted_entity_count)
+                       AS accepted_entities_reported_attempts,
+                   count(result.rejected_entity_count)
+                       AS rejected_entities_reported_attempts,
+                   count(result.proposed_edge_count)
+                       AS proposed_edges_reported_attempts,
+                   count(result.accepted_edge_count)
+                       AS accepted_edges_reported_attempts,
+                   count(result.rejected_edge_count)
+                       AS rejected_edges_reported_attempts
+            FROM graph_sync_attempts AS attempt
+            LEFT JOIN graph_sync_attempt_results AS result
+              ON result.attempt_id = attempt.id
+            WHERE attempt.run_id = $1
+            """,
+            run["id"],
+        )
+        outcome_counts = {outcome.value: int(attempts[outcome.value]) for outcome in AttemptOutcome}
+
+        provider = await connection.fetchrow(
+            """
+            SELECT count(intent.id) AS reserved,
+                   count(provider_call.id) AS completed,
+                   count(*) FILTER (
+                       WHERE provider_call.outcome = 'success'
+                   ) AS success,
+                   count(*) FILTER (
+                       WHERE provider_call.outcome = 'failure'
+                   ) AS failure,
+                   count(*) FILTER (
+                       WHERE provider_call.outcome = 'cancelled'
+                   ) AS cancelled,
+                   sum(provider_call.prompt_tokens) AS prompt_tokens,
+                   sum(provider_call.completion_tokens) AS completion_tokens,
+                   sum(provider_call.total_tokens) AS total_tokens,
+                   count(provider_call.prompt_tokens) AS prompt_tokens_reported_calls,
+                   count(provider_call.completion_tokens)
+                       AS completion_tokens_reported_calls,
+                   count(provider_call.total_tokens) AS total_tokens_reported_calls
+            FROM graph_sync_attempts AS attempt
+            LEFT JOIN graph_sync_provider_call_intents AS intent
+              ON intent.attempt_id = attempt.id
+            LEFT JOIN graph_sync_provider_calls AS provider_call
+              ON provider_call.attempt_id = intent.attempt_id
+             AND provider_call.call_number = intent.call_number
+            WHERE attempt.run_id = $1
+            """,
+            run["id"],
+        )
+
+        failure_rows = await connection.fetch(
+            """
+            SELECT scope, failure_class, count(*) AS count
+            FROM (
+                SELECT 'attempt'::text AS scope, result.failure_class
+                FROM graph_sync_attempts AS attempt
+                JOIN graph_sync_attempt_results AS result
+                  ON result.attempt_id = attempt.id
+                WHERE attempt.run_id = $1
+                  AND result.failure_class IS NOT NULL
+                UNION ALL
+                SELECT 'provider'::text AS scope, provider_call.failure_class
+                FROM graph_sync_attempts AS attempt
+                JOIN graph_sync_provider_calls AS provider_call
+                  ON provider_call.attempt_id = attempt.id
+                WHERE attempt.run_id = $1
+                  AND provider_call.failure_class IS NOT NULL
+            ) AS failures
+            GROUP BY scope, failure_class
+            ORDER BY scope, failure_class
+            """,
+            run["id"],
+        )
+        failure_counts = {
+            scope: {failure.value: 0 for failure in FailureClass}
+            for scope in ("attempt", "provider")
+        }
+        for row in failure_rows:
+            failure_counts[row["scope"]][row["failure_class"]] = int(row["count"])
+
+        generated_at = run["generated_at"]
+        measured_at = run["stopped_at"] or generated_at
+        window_started_at = max(
+            run["started_at"],
+            measured_at - timedelta(seconds=rolling_window_seconds),
+        )
+        rolling_verified = int(
+            await connection.fetchval(
+                """
+                SELECT count(*)
+                FROM graph_sync_attempts AS attempt
+                JOIN graph_sync_attempt_results AS result
+                  ON result.attempt_id = attempt.id
+                WHERE attempt.run_id = $1
+                  AND result.outcome IN ('primary_success', 'fallback_success')
+                  AND result.completed_at >= $2
+                  AND result.completed_at <= $3
+                """,
+                run["id"],
+                window_started_at,
+                measured_at,
+            )
+        )
+        progress = derive_run_progress(
+            job_counts=job_counts,
+            run_state=run["state"],
+            started_at=run["started_at"],
+            measured_at=measured_at,
+            rolling_window_started_at=window_started_at,
+            rolling_verified=rolling_verified,
+        )
+        progress.update(
+            {
+                "eligible_now": int(counts["eligible_now"]),
+                "expired_leases": int(counts["expired_leases"]),
+                "progress_scope": "current_sync_profile",
+                "profile_state_observed_at": generated_at,
+                "run_metrics_measured_at": measured_at,
+            }
+        )
+
+        last_failure_summary = run["last_failure_summary"]
+        if last_failure_summary is not None:
+            last_failure_summary = sanitize_summary(last_failure_summary)
+        return {
+            "schema_version": 1,
+            "status": "available",
+            "generated_at": generated_at,
+            "run": {
+                "id": run["id"],
+                "state": run["state"],
+                "worker_id": run["worker_id"],
+                "sync_profile_fingerprint": run["sync_profile_fingerprint"],
+                "started_at": run["started_at"],
+                "heartbeat_at": run["heartbeat_at"],
+                "stopped_at": run["stopped_at"],
+                "last_failure_class": run["last_failure_class"],
+                "last_failure_code": run["last_failure_code"],
+                "last_failure_summary": last_failure_summary,
+            },
+            "progress": progress,
+            "attempts": {
+                "attempts": int(attempts["attempts"]),
+                "completed_attempts": int(attempts["completed_attempts"]),
+                "outcomes": outcome_counts,
+                "failure_classes": failure_counts["attempt"],
+                "graph_counts": {
+                    name: int(attempts[name]) if attempts[name] is not None else None
+                    for name in (
+                        "proposed_entities",
+                        "accepted_entities",
+                        "rejected_entities",
+                        "proposed_edges",
+                        "accepted_edges",
+                        "rejected_edges",
+                    )
+                },
+                "graph_count_reported_attempts": {
+                    name: int(attempts[f"{name}_reported_attempts"])
+                    for name in (
+                        "proposed_entities",
+                        "accepted_entities",
+                        "rejected_entities",
+                        "proposed_edges",
+                        "accepted_edges",
+                        "rejected_edges",
+                    )
+                },
+            },
+            "provider_calls": {
+                "reserved": int(provider["reserved"]),
+                "completed": int(provider["completed"]),
+                "outcomes": {
+                    outcome.value: int(provider[outcome.value]) for outcome in ProviderCallOutcome
+                },
+                "failure_classes": failure_counts["provider"],
+                "usage": {
+                    name: int(provider[name]) if provider[name] is not None else None
+                    for name in (
+                        "prompt_tokens",
+                        "completion_tokens",
+                        "total_tokens",
+                    )
+                },
+                "usage_reported_calls": {
+                    name: int(provider[f"{name}_reported_calls"])
+                    for name in (
+                        "prompt_tokens",
+                        "completion_tokens",
+                        "total_tokens",
+                    )
+                },
+            },
+        }
+
     async def status_snapshot(self) -> dict[str, Any]:
         """Return bounded operator status without episode text or secrets."""
         counts = await self.postgres.fetch("""
@@ -1113,6 +1436,7 @@ class GraphSyncRepository:
             "job_attempts": totals["attempts"],
             "ledger": dict(attempt_totals),
             "active_run": visible_run,
+            "latest_run_summary": await self.run_summary(),
         }
 
     async def list_jobs(

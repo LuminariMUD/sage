@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Durable Graph Sync Run Observability (0.7.15)**
+  - Added repeatable-read, read-only run summaries over current profile state and immutable run/attempt/provider ledgers.
+  - Added completion percentage, eligible/expired work, rolling verified throughput, explicit ETA availability reasons, attempt/provider failure classes, reserved/completed call totals, and graph/token telemetry coverage.
+  - Added human/JSON CLI and Make targets for latest or selected runs, embedded the overview in ordinary graph-sync status, and attached durable terminal summaries to future authorized worker output.
+  - Made the legacy worker status path use a read-only database connection and restricted JSON serialization to known durable value types.
+  - Verified 249 fast tests with 6 skips and 110 intentional deselections, plus all 11 isolated graph-sync lifecycle/migration integration tests. Live validation was read-only; no graph job, provider call, Neo4j write, or ingestion occurred.
+
 - **Non-Persistent Graphiti Extraction Benchmark (0.7.14)**
   - Replaced the legacy state-mutating benchmark with a three-case, versioned synthetic corpus and Graphiti's in-memory combined extraction boundary.
   - Added primary/fallback candidate comparison, concurrency capped at two, per-case actual-call ceilings, disabled SDK retries, degraded-retry reporting, and content-free quality summaries.

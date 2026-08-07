@@ -13,13 +13,16 @@ import signal
 import socket
 import sys
 from contextlib import suppress
+from datetime import datetime
 from pathlib import Path
+from uuid import UUID
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from src.db import close_postgres_db, get_postgres_db
+from src.db.postgres import PostgresDB
 from src.graphiti import initialize_graphiti
 from src.graphiti.sync_graph import GraphitiEpisodeProcessor
 from src.graphiti.sync_models import GraphSyncPolicy, sanitize_summary
@@ -30,6 +33,15 @@ from src.llm.provider_config import resolve_provider_settings
 from src.security import install_sensitive_logging
 
 RUN_CONFIRMATION = "RUN_DURABLE_GRAPH_SYNC"
+
+
+def json_default(value: object) -> str:
+    """Serialize only known durable-summary scalar types."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, UUID):
+        return str(value)
+    raise TypeError(f"Unsupported JSON value type: {type(value).__name__}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -60,13 +72,14 @@ def policy_from_environment() -> GraphSyncPolicy:
 
 
 async def _status() -> int:
-    postgres = await get_postgres_db()
+    postgres = PostgresDB(read_only=True)
+    await postgres.connect()
     try:
         snapshot = await GraphSyncRepository(postgres).status_snapshot()
-        print(json.dumps(snapshot, default=str, sort_keys=True))
+        print(json.dumps(snapshot, default=json_default, sort_keys=True))
         return 0
     finally:
-        await close_postgres_db()
+        await postgres.disconnect()
 
 
 async def _run_worker(args: argparse.Namespace) -> int:
@@ -91,12 +104,19 @@ async def _run_worker(args: argparse.Namespace) -> int:
             with suppress(NotImplementedError):
                 loop.add_signal_handler(signal_name, worker.request_shutdown)
         summary = await worker.run(max_episodes=args.max_episodes)
+        durable_run_summary = (
+            await repository.run_summary(UUID(summary.run_id))
+            if summary.run_id is not None
+            else None
+        )
         print(
             json.dumps(
                 {
                     "profile": profile.sanitized_summary(),
                     "summary": summary.as_dict(),
+                    "durable_run_summary": durable_run_summary,
                 },
+                default=json_default,
                 sort_keys=True,
             )
         )

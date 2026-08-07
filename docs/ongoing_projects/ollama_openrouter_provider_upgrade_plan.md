@@ -188,6 +188,19 @@ Eleven new offline benchmark tests cover corpus integrity, referential validatio
 
 This checkpoint provides the versioned harness and summary schema, but it does not supply a selected-model quality result. Phase 6's live structured-extraction verification and benchmark-result record remain open until the operator explicitly authorizes a provider run.
 
+### Durable graph-sync run observability checkpoint - implemented read-only
+
+The remaining Phase 1 aggregate-observability contract is now implemented without activating ingestion:
+
+- Added a stable run-summary schema derived from current profile job state plus the immutable run, attempt, request-intent, and provider-call ledgers.
+- Reports separate job states, attempt outcomes, attempt/provider failure classes, reserved versus completed calls, graph-count coverage, and usage coverage. Missing graph/token telemetry remains `null` with explicit coverage counts rather than being misreported as zero.
+- Added completion percentage, configurable rolling verified episodes per minute, and an explicitly approximate ETA with stable unavailable reasons for warming, stopped, paused, quarantined, or insufficient-progress states.
+- Every summary is read through one repeatable-read, read-only PostgreSQL transaction. Human and JSON renderers omit episode IDs/text, prompts, responses, vectors, credentials, model output, and arbitrary exception representations.
+- Added read-only CLI and Make entrypoints for the latest or an explicitly selected run, embedded the overview in normal graph-sync status, and attached the durable terminal summary to future explicitly authorized worker output.
+- Changed the older worker `--status` compatibility path to create a read-only PostgreSQL client instead of the normal schema-initializing connection.
+
+Thirty-one focused offline unit/CLI tests pass. The complete fast suite passes 249 tests with 6 skips and 110 intentional deselections, and all 11 isolated graph-sync lifecycle/migration integration tests pass. The real read-only command reports the stopped 611-job snapshot at 305 synchronized and 306 pending, with no leases, retries, quarantines, durable attempts, or provider calls. It correctly reports the retained zero-attempt run as stopped with no ETA. The command made no mutation, no graph job was claimed, no model/provider request occurred, and the operator-requested worker freeze remains active.
+
 ---
 
 ## 1. Executive Summary
@@ -812,7 +825,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Bind claims and success to a source-content fingerprint and requeue changes detected during an active lease.
 - [x] Add CLI commands to list state, retry eligible failures, retry quarantined rows explicitly, and inspect sanitized attempt chains.
 - [x] Add the read-only `graph-audit` command with human/JSON output and exit codes `0`, `1`, and `2`.
-- [ ] Add structured run summaries, progress, rolling throughput, approximate ETA, and failure-class counts.
+- [x] Add structured run summaries, progress, rolling throughput, approximate ETA, and failure-class counts.
 - [x] Add fault-injection tests for termination before write, after write, before verification, and after verification.
 - [ ] Run the complete 611-episode audit and recovery tests using the current Ollama/Nomic configuration.
 
@@ -914,6 +927,8 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
   - [x] Add sanitized configuration checks plus exact-confirmation, one-call text and embedding probes.
   - [x] Replace the legacy state-mutating Graphiti benchmark with a versioned, non-persistent, durable-lifecycle-safe harness.
 - [ ] Add Make targets for graph-sync status, safe retries, `graph-audit`, and the complete release gate.
+  - [x] Expose read-only status/run summaries, confirmation-gated retries, and human/JSON graph audit commands.
+  - [ ] Add the complete local release-gate target after its component contract is implemented.
 - [ ] Update secret scanners and environment contract tests.
 - [ ] Add sanitized health/readiness, queue/lease state, provider-level metrics, and graph-quality summaries.
 - [ ] Alert on quarantined growth, stale leases, audit drift, profile mismatch, retry storms, and sustained provider failure.

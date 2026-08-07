@@ -19,7 +19,7 @@ from src.db.postgres import PostgresDB
 from src.graphiti.sync_models import GraphSyncStateError, JobState, sanitize_summary
 from src.graphiti.sync_state import GraphSyncRepository
 
-READ_ONLY_COMMANDS = {"status", "list", "attempts"}
+READ_ONLY_COMMANDS = {"status", "list", "attempts", "run-summary"}
 
 
 def json_default(value: object) -> Any:
@@ -64,7 +64,77 @@ def render_status(snapshot: dict[str, Any]) -> str:
                 f"Run heartbeat: {active_run['heartbeat_at'].isoformat()}",
             ]
         )
+    latest_summary = snapshot.get("latest_run_summary")
+    if isinstance(latest_summary, dict) and latest_summary.get("run") is not None:
+        progress = latest_summary["progress"]
+        failures = latest_summary["attempts"]["failure_classes"]
+        nonzero_failures = [f"{name}={count}" for name, count in failures.items() if count]
+        lines.extend(
+            [
+                "Profile completion: "
+                f"{progress['synced_jobs']}/{progress['total_jobs']} "
+                f"({float(progress['completion_percent']):.3f}%)",
+                "Rolling verified throughput: "
+                f"{float(progress['rolling_verified_per_minute']):.3f} episodes/min",
+                "Approximate ETA: "
+                + (
+                    f"{progress['approximate_eta_seconds']} seconds"
+                    if progress["approximate_eta_seconds"] is not None
+                    else f"unavailable ({progress['eta_status']})"
+                ),
+                "Run failure classes: "
+                + (", ".join(nonzero_failures) if nonzero_failures else "none"),
+            ]
+        )
     return "\n".join(lines)
+
+
+def render_run_summary(summary: dict[str, Any]) -> str:
+    """Render one durable run summary without episode or provider content."""
+    if summary.get("run") is None:
+        return "No graph sync runs"
+    run = summary["run"]
+    progress = summary["progress"]
+    attempts = summary["attempts"]
+    provider_calls = summary["provider_calls"]
+    attempt_failures = [
+        f"{name}={count}" for name, count in attempts["failure_classes"].items() if count
+    ]
+    provider_failures = [
+        f"{name}={count}" for name, count in provider_calls["failure_classes"].items() if count
+    ]
+    eta = (
+        f"{progress['approximate_eta_seconds']} seconds"
+        if progress["approximate_eta_seconds"] is not None
+        else f"unavailable ({progress['eta_status']})"
+    )
+    return "\n".join(
+        [
+            "Graph sync run summary",
+            f"Run: {run['id']}",
+            f"State: {run['state']}",
+            f"Profile: {run['sync_profile_fingerprint']}",
+            "Completion: "
+            f"{progress['synced_jobs']}/{progress['total_jobs']} "
+            f"({float(progress['completion_percent']):.3f}%)",
+            f"Remaining jobs: {progress['remaining_jobs']}",
+            f"Eligible now: {progress['eligible_now']}",
+            f"Expired leases: {progress['expired_leases']}",
+            "Rolling verified throughput: "
+            f"{float(progress['rolling_verified_per_minute']):.3f} episodes/min "
+            f"over {float(progress['rolling_window_seconds']):.3f} seconds",
+            f"Approximate ETA: {eta}",
+            f"Attempts: {attempts['completed_attempts']}/{attempts['attempts']} completed",
+            "Attempt outcomes: "
+            + ", ".join(f"{name}={count}" for name, count in attempts["outcomes"].items()),
+            "Attempt failure classes: "
+            + (", ".join(attempt_failures) if attempt_failures else "none"),
+            "Provider calls: "
+            f"{provider_calls['completed']}/{provider_calls['reserved']} completed",
+            "Provider failure classes: "
+            + (", ".join(provider_failures) if provider_failures else "none"),
+        ]
+    )
 
 
 def render_rows(rows: list[dict[str, Any]], *, empty_message: str) -> str:
@@ -84,6 +154,11 @@ async def execute_command(args: argparse.Namespace, repository: GraphSyncReposit
         return await repository.list_jobs(states=args.state, limit=args.limit)
     if args.command == "attempts":
         return await repository.attempt_chain(args.episode_id, limit=args.limit)
+    if args.command == "run-summary":
+        return await repository.run_summary(
+            args.run_id,
+            rolling_window_seconds=args.window_seconds,
+        )
     if args.command == "recover-expired":
         return await repository.recover_expired_leases(limit=args.limit)
     if args.command == "retry-waiting":
@@ -111,6 +186,8 @@ def render_result(args: argparse.Namespace, result: Any) -> str:
         return render_rows(result, empty_message="No matching graph sync jobs")
     if args.command == "attempts":
         return render_rows(result, empty_message="No attempts for this episode")
+    if args.command == "run-summary":
+        return render_run_summary(result)
     if args.command == "recover-expired":
         return f"Recovered expired leases: {len(result)}"
     if args.command in {"retry-waiting", "retry-quarantined"}:
@@ -180,6 +257,18 @@ def build_parser() -> argparse.ArgumentParser:
     attempts = commands.add_parser("attempts", help="Inspect one sanitized attempt chain")
     attempts.add_argument("episode_id", type=UUID)
     add_limit(attempts)
+
+    run_summary = commands.add_parser(
+        "run-summary",
+        help="Reconstruct durable completion, throughput, ETA, and failure counts",
+    )
+    run_summary.add_argument("--run-id", type=UUID)
+    run_summary.add_argument(
+        "--window-seconds",
+        type=int,
+        default=300,
+        help="Rolling throughput window from 60 to 86400 seconds",
+    )
 
     recover = commands.add_parser("recover-expired", help="Requeue or quarantine expired leases")
     add_limit(recover)

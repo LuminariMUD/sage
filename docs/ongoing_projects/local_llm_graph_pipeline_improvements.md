@@ -171,6 +171,17 @@ The complete offline fast suite passes 232 tests with 6 skips and 109 deselected
 
 The harness is now safe to operate after a separate cost/privacy/model decision, but no candidate quality result is claimed. The operator's stop instruction remains authoritative for the durable worker and all ingestion.
 
+### 2026-08-07 - Durable run observability checkpoint, read-only
+
+- Added a versioned, sanitized durable run-summary contract reconstructed from graph jobs, immutable attempt results, request reservations, and provider-call completions.
+- Added current-profile completion counts and percentage, eligible work, expired leases, per-run outcomes, attempt/provider failure-class counts, graph-count coverage, token-usage coverage, and separate reserved/completed request totals.
+- Added a configurable rolling verified-throughput window and an explicitly approximate ETA. ETA is withheld with a stable reason while warming up or when the run is stopped, systemically paused, blocked by quarantine, or has insufficient recent progress.
+- Run-summary queries execute in one repeatable-read, read-only PostgreSQL transaction. Reports contain no episode IDs or text, prompts, responses, vectors, credentials, model output, or unbounded exception detail.
+- Added `run-summary` to the operator CLI, `make graph-sync-run-summary`, and `make graph-sync-run-summary-json`; the ordinary status output now includes the same completion/rate/ETA/failure overview. An authorized worker's terminal JSON will include the durable summary after its run stops.
+- Corrected the legacy worker entrypoint's `--status` path to use a read-only database connection and restricted its JSON serializer to known datetime/UUID values.
+
+Thirty-one focused offline unit/CLI tests pass. The complete fast suite passes 249 tests with 6 skips and 110 intentional deselections, and all 11 isolated graph-sync lifecycle/migration integration tests pass. Read-only validation against the stopped live tables reports 611 jobs: 305 synchronized, 306 pending, zero leases, zero retry/quarantine rows, and zero durable attempts/provider calls. The retained zero-attempt historical run is stopped, so throughput is zero and ETA is correctly unavailable. No job was claimed, no provider request or graph/database write occurred outside generated test schemas, and the worker remains stopped by operator request.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.

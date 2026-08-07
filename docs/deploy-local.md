@@ -6,24 +6,20 @@ Keep the real `.env` mode `0600` and never commit it.
 
 ## Current checkpoint
 
-- Date: 2026-08-06
-- Work branch: `codex/local-dev-stack`
+- Date: 2026-08-07
+- Work branch: `main`
 - Repository: <https://github.com/LuminariMUD/sage>
 - All five long-running services are currently healthy: PostgreSQL, Neo4j,
   Ollama, API/MCP, and the static chat UI.
 - PostgreSQL contains 14 lore documents and 611 episodes. All 611 episodes have
   768-dimensional embeddings.
-- The active incremental Graphiti pass was last audited at 202 linked episodes
-  and 409 pending. Neo4j had exactly 202 episode nodes, 202 populated stable
-  IDs, and 202 distinct stable IDs. Three 3B extractions exhausted
-  structured-output retries: `50480869-ff15-41b2-b1ae-a4f1a81b88c8`,
-  `f2679d10-f47a-49bc-b9bd-4476e8516f69`, and
-  `77f8cd22-8959-4756-bb60-f6aebbac09d5`. They remain unsynced, have no orphan
-  Neo4j episodes, and are ready for a later 7B retry. A live post-hardening
-  extraction completed in about 29 seconds with exactly one matching stable ID
-  in each store.
-- The development image builds successfully. The fast deterministic suite is
-  green: 62 passed, 5 service-dependent skips, and 99 live/slow tests excluded.
+- The operator stopped graph ingestion at 305 of 611 synchronized episodes and
+  requested that it remain stopped. Durable state contains 305 `synced` and 306
+  `pending` jobs, with zero leases, retries, quarantines, attempts, or provider
+  calls. Neo4j contains exactly 305 populated and distinct episode stable IDs,
+  and the read-only graph audit reports zero drift.
+- The development image builds successfully. The current deterministic-suite
+  result is recorded in `docs/CHANGELOG.md` and the two active project plans.
 - Black and Ruff checks pass across all 130 Python files in `src` and `tests`.
 - An authenticated desktop/mobile browser check now passes through the real
   LangChain/Ollama chat path: message creation and the SSE stream both return
@@ -33,7 +29,8 @@ Keep the real `.env` mode `0600` and never commit it.
 Resume work from this checkpoint by running:
 
 ```bash
-git switch codex/local-dev-stack
+git switch main
+git pull --ff-only origin main
 docker compose ps --all
 make status
 ```
@@ -197,7 +194,18 @@ Monitor progress without changing data:
 make embedding-status
 make graphiti-status
 make graph-sync-status
+make graph-sync-run-summary
+make graph-sync-run-summary-json
 ```
+
+The run-summary commands use one repeatable-read, read-only PostgreSQL
+transaction. They report current-profile completion, job eligibility, expired
+leases, run outcomes, failure-class counts, reserved/completed provider calls,
+telemetry coverage, rolling verified episodes per minute, and an explicitly
+approximate ETA. Use `RUN_ID=<uuid>` for a historical run and
+`PROGRESS_WINDOW_SECONDS=<60..86400>` to change the default five-minute rolling
+window. A missing ETA always includes a stable reason such as `warming_up`,
+`stopped`, `paused_systemic`, `blocked_quarantine`, or `insufficient_progress`.
 
 Graph synchronization is inert unless both `--run` and the exact confirmation
 token are supplied. The Make target enforces the same gate. Do not run it while
