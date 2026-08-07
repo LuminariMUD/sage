@@ -37,9 +37,20 @@ jobs:
           NEO4J_USER: ${{ secrets.NEO4J_USER }}
           NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           SAGE_API_KEY: ${{ secrets.SAGE_API_KEY }}
           SAGE_MCP_KEY: ${{ secrets.SAGE_MCP_KEY }}
           SAGE_MCP_BACKEND_KEY: ${{ secrets.SAGE_MCP_BACKEND_KEY }}
+          TEXT_PROVIDER: ${{ vars.TEXT_PROVIDER }}
+          EMBEDDING_PROVIDER: ${{ vars.EMBEDDING_PROVIDER }}
+          GRAPHITI_TEXT_PROVIDER: ${{ vars.GRAPHITI_TEXT_PROVIDER }}
+          GRAPHITI_EMBEDDING_PROVIDER: ${{ vars.GRAPHITI_EMBEDDING_PROVIDER }}
+          GRAPHITI_EXTRACTION_FALLBACK_PROVIDER: ${{ vars.GRAPHITI_EXTRACTION_FALLBACK_PROVIDER }}
+          GRAPHITI_EXTRACTION_FALLBACK_MODEL: ${{ vars.GRAPHITI_EXTRACTION_FALLBACK_MODEL }}
+          OPENROUTER_CHAT_MODEL: ${{ vars.OPENROUTER_CHAT_MODEL }}
+          OPENROUTER_GRAPHITI_MODEL: ${{ vars.OPENROUTER_GRAPHITI_MODEL }}
+          OPENROUTER_EMBEDDING_MODEL: ${{ vars.OPENROUTER_EMBEDDING_MODEL }}
+          OLLAMA_BASE_URL: ${{ vars.OLLAMA_BASE_URL }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
@@ -50,7 +61,7 @@ jobs:
           required=(
             PRODUCTION_HOST PRODUCTION_USER PRODUCTION_SSH_KEY PRODUCTION_KNOWN_HOSTS
             POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB
-            NEO4J_USER NEO4J_PASSWORD OPENAI_API_KEY
+            NEO4J_USER NEO4J_PASSWORD
             SAGE_API_KEY SAGE_MCP_KEY SAGE_MCP_BACKEND_KEY
           )
           missing=()
@@ -61,6 +72,67 @@ jobs:
           done
           if (( ${#missing[@]} )); then
             printf 'Missing required deployment secret: %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
+          text_provider=${TEXT_PROVIDER:-openai}
+          embedding_provider=${EMBEDDING_PROVIDER:-openai}
+          graphiti_text_provider=${GRAPHITI_TEXT_PROVIDER:-$text_provider}
+          graphiti_embedding_provider=${GRAPHITI_EMBEDDING_PROVIDER:-$embedding_provider}
+          providers=(
+            "$text_provider"
+            "$embedding_provider"
+            "$graphiti_text_provider"
+            "$graphiti_embedding_provider"
+          )
+          if [[ -n "$GRAPHITI_EXTRACTION_FALLBACK_PROVIDER" ]]; then
+            providers+=("$GRAPHITI_EXTRACTION_FALLBACK_PROVIDER")
+            if [[ -z "$GRAPHITI_EXTRACTION_FALLBACK_MODEL" ]]; then
+              echo "GRAPHITI_EXTRACTION_FALLBACK_MODEL is required when fallback is selected." >&2
+              exit 1
+            fi
+          fi
+
+          needs_openai=
+          needs_openrouter=
+          needs_ollama=
+          for provider in "${providers[@]}"; do
+            case "$provider" in
+              openai) needs_openai=1 ;;
+              openrouter) needs_openrouter=1 ;;
+              ollama) needs_ollama=1 ;;
+              *)
+                echo "Unsupported production provider: $provider" >&2
+                exit 1
+                ;;
+            esac
+          done
+          if [[ -n "$needs_openai" && -z "$OPENAI_API_KEY" ]]; then
+            echo "OPENAI_API_KEY is required by the selected production providers." >&2
+            exit 1
+          fi
+          if [[ -n "$needs_openrouter" && -z "$OPENROUTER_API_KEY" ]]; then
+            echo "OPENROUTER_API_KEY is required by the selected production providers." >&2
+            exit 1
+          fi
+          if [[ "$text_provider" == "openrouter" && -z "$OPENROUTER_CHAT_MODEL" ]]; then
+            echo "OPENROUTER_CHAT_MODEL is required for OpenRouter application text." >&2
+            exit 1
+          fi
+          if [[ "$graphiti_text_provider" == "openrouter" \
+            && -z "$OPENROUTER_GRAPHITI_MODEL" \
+            && -z "$OPENROUTER_CHAT_MODEL" ]]; then
+            echo "OPENROUTER_GRAPHITI_MODEL or OPENROUTER_CHAT_MODEL is required for Graphiti text." >&2
+            exit 1
+          fi
+          if [[ ( "$embedding_provider" == "openrouter" \
+            || "$graphiti_embedding_provider" == "openrouter" ) \
+            && -z "$OPENROUTER_EMBEDDING_MODEL" ]]; then
+            echo "OPENROUTER_EMBEDDING_MODEL is required for OpenRouter embeddings." >&2
+            exit 1
+          fi
+          if [[ -n "$needs_ollama" && ! "$OLLAMA_BASE_URL" =~ ^https?://[^[:space:]]+$ ]]; then
+            echo "OLLAMA_BASE_URL must be set to an explicit HTTP(S) production endpoint." >&2
             exit 1
           fi
           if [[ ! "$PRODUCTION_USER" =~ ^[A-Za-z_][A-Za-z0-9._-]*$ ]]; then
@@ -137,6 +209,11 @@ jobs:
             -- docker-compose.prod.yml "$target:/tmp/luminari-sage-deploy/docker-compose.yml"
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -- \
+            docker-compose.openai.yml \
+            docker-compose.openrouter.yml \
+            "$target:/tmp/luminari-sage-deploy/"
+          scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -- \
             schemas/postgresql_schema.sql \
             "$target:/tmp/luminari-sage-deploy/postgresql_schema.sql"
           scp -o BatchMode=yes -o StrictHostKeyChecking=yes \
@@ -154,6 +231,7 @@ jobs:
           NEO4J_USER: ${{ secrets.NEO4J_USER }}
           NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
           SAGE_API_KEY: ${{ secrets.SAGE_API_KEY }}
           SAGE_MCP_KEY: ${{ secrets.SAGE_MCP_KEY }}
@@ -161,6 +239,16 @@ jobs:
           GHCR_ACTOR: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SAGE_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          TEXT_PROVIDER: ${{ vars.TEXT_PROVIDER }}
+          EMBEDDING_PROVIDER: ${{ vars.EMBEDDING_PROVIDER }}
+          GRAPHITI_TEXT_PROVIDER: ${{ vars.GRAPHITI_TEXT_PROVIDER }}
+          GRAPHITI_EMBEDDING_PROVIDER: ${{ vars.GRAPHITI_EMBEDDING_PROVIDER }}
+          GRAPHITI_EXTRACTION_FALLBACK_PROVIDER: ${{ vars.GRAPHITI_EXTRACTION_FALLBACK_PROVIDER }}
+          GRAPHITI_EXTRACTION_FALLBACK_MODEL: ${{ vars.GRAPHITI_EXTRACTION_FALLBACK_MODEL }}
+          OPENROUTER_CHAT_MODEL: ${{ vars.OPENROUTER_CHAT_MODEL }}
+          OPENROUTER_GRAPHITI_MODEL: ${{ vars.OPENROUTER_GRAPHITI_MODEL }}
+          OPENROUTER_EMBEDDING_MODEL: ${{ vars.OPENROUTER_EMBEDDING_MODEL }}
+          OLLAMA_BASE_URL: ${{ vars.OLLAMA_BASE_URL }}
         run: |
           set -euo pipefail
           target="${PRODUCTION_USER}@${PRODUCTION_HOST}"
@@ -175,6 +263,7 @@ jobs:
             printf '%s\0' "$NEO4J_USER"
             printf '%s\0' "$NEO4J_PASSWORD"
             printf '%s\0' "$OPENAI_API_KEY"
+            printf '%s\0' "$OPENROUTER_API_KEY"
             printf '%s\0' "$LANGSMITH_API_KEY"
             printf '%s\0' "$SAGE_API_KEY"
             printf '%s\0' "$SAGE_MCP_KEY"
@@ -182,5 +271,15 @@ jobs:
             printf '%s\0' "$GHCR_ACTOR"
             printf '%s\0' "$GHCR_TOKEN"
             printf '%s\0' "$SAGE_IMAGE"
+            printf '%s\0' "${TEXT_PROVIDER:-openai}"
+            printf '%s\0' "${EMBEDDING_PROVIDER:-openai}"
+            printf '%s\0' "$GRAPHITI_TEXT_PROVIDER"
+            printf '%s\0' "$GRAPHITI_EMBEDDING_PROVIDER"
+            printf '%s\0' "$GRAPHITI_EXTRACTION_FALLBACK_PROVIDER"
+            printf '%s\0' "$GRAPHITI_EXTRACTION_FALLBACK_MODEL"
+            printf '%s\0' "$OPENROUTER_CHAT_MODEL"
+            printf '%s\0' "$OPENROUTER_GRAPHITI_MODEL"
+            printf '%s\0' "$OPENROUTER_EMBEDDING_MODEL"
+            printf '%s\0' "$OLLAMA_BASE_URL"
           } | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -- "$target" \
             'bash /tmp/luminari-sage-deploy/deploy_remote.sh'

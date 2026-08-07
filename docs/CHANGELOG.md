@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Bounded Provider Routes and Selected-Secret Deployment (0.7.11)**
+  - Added classified OpenRouter transport retries with finite backoff, bounded `Retry-After` handling, SDK retries disabled at observable boundaries, and no replay after an in-band streaming failure.
+  - Added a provider-neutral text-route executor with separate transport/model/fallback attempts, a hard actual-call ceiling, sanitized provenance, failure-class routing, and explicit degraded fallback success.
+  - Added same-profile OpenRouter embedding retries while preserving the no-cross-model-fallback contract.
+  - Split production OpenAI and OpenRouter credentials into provider-selected Compose overrides; all-Ollama deployment requires and mounts neither cloud key, while mixed profiles receive only their selected secrets.
+  - Made CI/remote deployment validate effective providers and models, keep NUL-delimited secrets out of child-process environments, remove stale unselected key files, and require an explicit production Ollama endpoint.
+  - Verified 203 offline fast tests with 6 skips plus a four-profile production Compose render matrix. No provider call, graph claim, or ingestion was executed, and the operator-requested worker freeze remains active.
+
 - **Provider-Neutral Ollama/OpenRouter Profiles (0.7.10)**
   - Added typed, immutable text routes, embedding profiles, Graphiti overrides, bounded policy settings, selected-provider validation, secret-free fingerprints, and profile-aware caches.
   - Added OpenRouter text and embedding adapters through existing OpenAI-compatible libraries, with explicit privacy/routing policy, streaming and structured request support, usage/model provenance, indexed embedding ordering, and strict vector validation.

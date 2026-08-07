@@ -50,7 +50,9 @@ def create_text_model(
         api_key=api_key,
         base_url=_openai_compatible_base_url(selected),
         timeout=selected.connection.timeout_seconds,
-        max_retries=selected.connection.transport_retry.maximum_attempts - 1,
+        # Keep SDK calls observable. Bounded retries belong to the explicit
+        # provider adapter/route executor, not a framework-internal loop.
+        max_retries=0,
         default_headers=selected.connection.default_headers,
     )
     settings = OpenAIChatModelSettings(

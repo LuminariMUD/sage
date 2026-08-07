@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import stat
@@ -79,6 +80,19 @@ FAILURE_CLASSES = frozenset(
         "internal",
     }
 )
+_TRANSPORT_RETRY_FAILURES = frozenset({"transport", "rate_limit", "resource_exhaustion"})
+_MODEL_RETRY_FAILURES = frozenset(
+    {
+        "transport",
+        "rate_limit",
+        "resource_exhaustion",
+        "output_limit",
+        "malformed_json",
+        "schema_validation",
+        "graph_validation",
+    }
+)
+_TEXT_FALLBACK_FAILURES = _MODEL_RETRY_FAILURES
 _TASK_CAPABILITIES: dict[TextTask, frozenset[str]] = {
     "chat": frozenset({"chat", "streaming"}),
     "creative": frozenset({"chat", "streaming"}),
@@ -156,6 +170,12 @@ class TransportRetryPolicy:
             raise ValueError("Transport maximum attempts must be between 1 and 10")
         if not self.retry_on.issubset(FAILURE_CLASSES):
             raise ValueError("Transport retry classes are invalid")
+        if not self.retry_on.issubset(_TRANSPORT_RETRY_FAILURES):
+            raise ValueError("Transport retry policy contains a nonretryable failure class")
+        if not math.isfinite(self.base_delay_seconds) or not math.isfinite(
+            self.maximum_delay_seconds
+        ):
+            raise ValueError("Transport retry delays must be finite")
         if self.base_delay_seconds < 0 or self.maximum_delay_seconds < self.base_delay_seconds:
             raise ValueError("Transport retry delay bounds are invalid")
         if self.maximum_delay_seconds > 300:
@@ -297,6 +317,8 @@ class TextModelCandidate:
             raise ValueError("Text candidate capabilities are invalid")
         if not self.retry_on.issubset(FAILURE_CLASSES):
             raise ValueError("Text candidate retry classes are invalid")
+        if not self.retry_on.issubset(_MODEL_RETRY_FAILURES):
+            raise ValueError("Text candidate retry policy contains a nonretryable failure class")
         if self.connection.provider == "openrouter" and self.routing is None:
             raise ValueError("OpenRouter text candidates require explicit routing policy")
         if self.connection.provider != "openrouter" and self.routing is not None:
@@ -339,12 +361,18 @@ class TextRouteProfile:
             raise ValueError("Text route candidates must be unique")
         if not self.fallback_on.issubset(FAILURE_CLASSES):
             raise ValueError("Text route fallback classes are invalid")
+        if not self.fallback_on.issubset(_TEXT_FALLBACK_FAILURES):
+            raise ValueError("Text route fallback policy contains a prohibited failure class")
         if len(self.candidates) == 1 and self.fallback_on:
             raise ValueError("A single-candidate route cannot declare model fallback")
         if not 1 <= self.maximum_provider_calls <= 100:
             raise ValueError("Text route provider-call limit must be between 1 and 100")
-        if self.maximum_provider_calls < self.candidates[0].maximum_model_attempts:
-            raise ValueError("Text route call limit cannot undercut its primary candidate")
+        required_calls = sum(
+            candidate.maximum_model_attempts * candidate.connection.transport_retry.maximum_attempts
+            for candidate in self.candidates
+        )
+        if self.maximum_provider_calls < required_calls:
+            raise ValueError("Text route call limit cannot undercut declared candidate attempts")
         _validate_label(self.fingerprint, "Text route fingerprint")
 
     @property
@@ -634,7 +662,12 @@ class ProviderSettingsResolver:
 
     def _retry_policy(self, provider: str) -> TransportRetryPolicy:
         prefix = provider.upper().replace("-", "_")
-        attempts = self._int(f"{prefix}_TRANSPORT_MAX_ATTEMPTS", 1, 1, 10)
+        attempts = self._int(
+            f"{prefix}_TRANSPORT_MAX_ATTEMPTS",
+            3 if provider == "openrouter" else 1,
+            1,
+            10,
+        )
         retry_on = frozenset(
             cast(
                 set[FailureClassName],
@@ -784,6 +817,7 @@ class ProviderSettingsResolver:
         name: str,
         maximum_model_attempts: int,
         model_override: str = "",
+        retry_on: frozenset[FailureClassName] | None = None,
     ) -> TextModelCandidate:
         model = model_override or self._task_model(provider, task, graphiti=graphiti)
         _validate_label(model, "Text model")
@@ -841,6 +875,7 @@ class ProviderSettingsResolver:
             "temperature": temperature,
             "capabilities": sorted(capabilities),
             "maximum_model_attempts": maximum_model_attempts,
+            "retry_on": sorted(retry_on or {"transport", "rate_limit", "resource_exhaustion"}),
             "protocol": "openai-chat-completions" if provider != "ollama" else "ollama-chat",
             "routing": routing.as_request_body() if routing else None,
         }
@@ -853,7 +888,7 @@ class ProviderSettingsResolver:
             temperature=temperature,
             capabilities=capabilities,
             maximum_model_attempts=maximum_model_attempts,
-            retry_on=frozenset({"transport", "rate_limit", "resource_exhaustion"}),
+            retry_on=retry_on or frozenset({"transport", "rate_limit", "resource_exhaustion"}),
             fingerprint=_canonical_fingerprint("candidate", payload),
             routing=routing,
             revision=revision,
@@ -890,17 +925,27 @@ class ProviderSettingsResolver:
                 name=f"application:{task}:primary",
                 maximum_model_attempts=1,
             )
-            routes[task] = self._route(task, (candidate,), frozenset(), 1)
+            routes[task] = self._route(
+                task,
+                (candidate,),
+                frozenset(),
+                candidate.maximum_model_attempts
+                * candidate.connection.transport_retry.maximum_attempts,
+            )
         return MappingProxyType(routes)
 
     def _graphiti_route(self, provider: ProviderName) -> TextRouteProfile:
         primary_attempts = self._int("GRAPHITI_EXTRACTION_PRIMARY_ATTEMPTS", 2, 1, 100)
+        generation_retry_on = frozenset({"transport", "rate_limit", "resource_exhaustion"}).union(
+            _GRAPH_FALLBACK_FAILURES
+        )
         primary = self._candidate(
             provider,
             "extraction",
             graphiti=True,
             name="graphiti:extraction:primary",
             maximum_model_attempts=primary_attempts,
+            retry_on=cast(frozenset[FailureClassName], generation_retry_on),
         )
         candidates = [primary]
         fallback_provider_raw = self._value("GRAPHITI_EXTRACTION_FALLBACK_PROVIDER").lower()
@@ -919,6 +964,7 @@ class ProviderSettingsResolver:
                     "GRAPHITI_EXTRACTION_FALLBACK_ATTEMPTS", 1, 1, 100
                 ),
                 model_override=fallback_model,
+                retry_on=cast(frozenset[FailureClassName], generation_retry_on),
             )
             if fallback.fingerprint == primary.fingerprint:
                 raise ValueError("Graphiti extraction fallback must differ from the primary")
@@ -939,8 +985,6 @@ class ProviderSettingsResolver:
             raise ValueError(
                 "GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS and GRAPH_SYNC_MAX_PROVIDER_CALLS must match"
             )
-        if route_limit < primary_attempts:
-            raise ValueError("Graphiti provider-call limit cannot undercut primary attempts")
         fallback_on = cast(
             frozenset[FailureClassName],
             _GRAPH_FALLBACK_FAILURES if len(candidates) > 1 else frozenset(),

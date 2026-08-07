@@ -190,10 +190,16 @@ services:
       GRAPH_SYNC_MAX_PROVIDER_CALLS: ${GRAPH_SYNC_MAX_PROVIDER_CALLS:-3}
       OPENROUTER_GRAPHITI_MODEL: ${OPENROUTER_GRAPHITI_MODEL:-}
       OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-${OPENROUTER_KEY:-}}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_API_KEY_FILE: ${OPENROUTER_API_KEY_FILE:-}
+      OPENROUTER_KEY: ${OPENROUTER_KEY:-}
       OPENROUTER_SITE_URL: ${OPENROUTER_SITE_URL:-}
       OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-Luminari Sage}
+      OPENROUTER_REQUEST_TIMEOUT: ${OPENROUTER_REQUEST_TIMEOUT:-120}
+      OPENROUTER_TRANSPORT_MAX_ATTEMPTS: ${OPENROUTER_TRANSPORT_MAX_ATTEMPTS:-3}
+      OPENROUTER_TRANSPORT_RETRY_ON: ${OPENROUTER_TRANSPORT_RETRY_ON:-transport,rate_limit}
+      OPENROUTER_RETRY_BASE_SECONDS: ${OPENROUTER_RETRY_BASE_SECONDS:-0.5}
+      OPENROUTER_RETRY_MAX_SECONDS: ${OPENROUTER_RETRY_MAX_SECONDS:-8}
       OPENROUTER_CHAT_MODEL: ${OPENROUTER_CHAT_MODEL:-}
       OPENROUTER_CREATIVE_MODEL: ${OPENROUTER_CREATIVE_MODEL:-}
       OPENROUTER_REASONING_MODEL: ${OPENROUTER_REASONING_MODEL:-}
@@ -243,6 +249,10 @@ services:
       - ./pytest.ini:/app/pytest.ini:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./.env.example:/app/.env.example:ro
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
+      - ./docker-compose.prod.yml:/app/docker-compose.prod.yml:ro
+      - ./docker-compose.openai.yml:/app/docker-compose.openai.yml:ro
+      - ./docker-compose.openrouter.yml:/app/docker-compose.openrouter.yml:ro
       - ./scripts:/app/scripts:ro
       - ./schemas:/app/schemas:ro
       - ./lore_docs:/app/lore_docs:ro # Mount the lore documentation directory

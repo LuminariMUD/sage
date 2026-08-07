@@ -76,7 +76,9 @@ def get_chat_model(
             "base_url": candidate.connection.base_url,
             "default_headers": candidate.connection.default_headers,
             "timeout": candidate.connection.timeout_seconds,
-            "max_retries": candidate.connection.transport_retry.maximum_attempts - 1,
+            # Keep SDK calls observable. Bounded retries belong to the explicit
+            # provider adapter/route executor, not a framework-internal loop.
+            "max_retries": 0,
             "use_responses_api": False,
         }
         if provider == "openrouter":

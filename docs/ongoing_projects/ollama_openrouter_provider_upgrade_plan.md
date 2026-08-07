@@ -3,7 +3,7 @@
 | Field                 | Value                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | Status                | Active phased implementation                                                                           |
-| Implementation        | Phase 1 runtime implemented; provider refactor slices implemented offline and not activated            |
+| Implementation        | Phase 1 runtime plus bounded route/deployment slices implemented offline; provider activation frozen    |
 | Last updated          | 2026-08-07                                                                                             |
 | Scope                 | Text generation, embeddings, Graphiti, configuration, storage migrations, deployment, and tests        |
 | Compatibility target  | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
@@ -129,7 +129,21 @@ The first non-activating slices from Phases 2, 4, 5, and 6 are implemented. They
 
 The complete offline fast suite passes 185 tests with 6 skips and 109 intentionally deselected tests. Ruff formatting/linting, Python compilation, ShellCheck, Compose validation, environment/secret contract tests, and `git diff --check` pass. No OpenRouter or Ollama inference request was made, and the graph worker remains stopped.
 
-Still open before activation: explicit OpenRouter model selection and capability verification, the privacy/ZDR decision, bounded `Retry-After` transport retries, executable extraction-route fallback/degraded-success orchestration, live structured-output and streaming tests, embedding shadow/index migration, production/CI secret transport, and any graph profile transition or ingest authorization.
+Still open before activation: explicit OpenRouter model selection and capability verification, the privacy/ZDR decision, integration of the executable route into Graphiti and framework call sites, live structured-output and streaming tests, embedding shadow/index migration, conditional Ollama warmup, and any graph profile transition or ingest authorization.
+
+### Bounded retry, route, and deployment checkpoint - implemented offline
+
+The next non-activating slices from Phases 2, 4, 5, and 8 are implemented without selecting a billed model or running ingestion:
+
+- Added stable provider-failure classification and finite, bounded transport policy. Direct OpenRouter text and embedding requests disable OpenAI SDK retries, retry only configured pre-response failure classes, respect both `Retry-After` forms, and cap exponential backoff. In-band stream failures are never replayed after partial output.
+- Added a provider-neutral text-route executor above single-call adapters. It owns actual transport-call accounting, separates transport retries from same-candidate model retries and candidate fallback, enforces the declared request ceiling, rejects authentication/configuration fallback, and returns a prompt-free attempt chain. Successful fallback is explicitly marked degraded.
+- Added mocked coverage for non-streaming and streaming creation, usage, routing, bounded rate-limit/timeout retries, mid-stream errors, untrusted-error redaction, schema retry, ordered fallback, authentication refusal, deterministic embedding ordering, invalid vectors, and same-profile embedding retry with no cross-model fallback.
+- Split production cloud credentials into `docker-compose.openai.yml` and `docker-compose.openrouter.yml`. The base production Compose file mounts neither key; the remote deploy selects overrides from the effective application, embedding, Graphiti, and fallback providers, removes stale unused cloud-key files, and requires an explicit external Ollama URL when production selects Ollama.
+- Extended the manual deployment workflow with conditional provider/model validation and optional OpenRouter secret transport. NUL-delimited deployment inputs remain shell-local rather than being exported to child processes, and only selected provider secrets are written as owner-only files.
+
+The full offline fast gate passes 203 tests with 6 skips and 109 intentionally deselected tests. A separate production Compose matrix renders all-Ollama, direct-OpenAI, OpenRouter, and mixed OpenRouter/OpenAI profiles. Bash syntax, ShellCheck, Actionlint, Black, isort, Ruff, secret-file permissions, child-environment isolation, and diff checks pass. No provider request, graph claim, or ingestion occurred.
+
+The route executor is currently available to direct application call sites but is not yet wired into Graphiti, LangChain, or PydanticAI execution. Those framework SDK clients retain `max_retries=0`; Graphiti retains its existing durable request reservation and explicit internal-attempt accounting. Therefore Phase 3 extraction fallback remains unchecked and no live fallback behavior is claimed. The local `OPENROUTER_KEY` alias was recognized without printing or committing its value, and the worker remains stopped by operator request.
 
 ---
 
@@ -471,7 +485,7 @@ Never reinterpret legacy `LLM_PROVIDER=openai` as OpenRouter: the endpoints, cre
 - [x] Remove or deprecate `embed()` on `BaseLLMProvider`.
 - [x] Make `BaseEmbedder` the only application embedding interface.
 - [x] Ensure direct providers, LangChain, PydanticAI, and Graphiti consume the same validated candidates and routes.
-- [ ] Keep provider adapters responsible for one model call; keep candidate fallback and durable job retry in higher-level orchestration.
+- [x] Keep provider adapters responsible for one model call; keep candidate fallback and durable job retry in higher-level orchestration.
 - [x] Key singleton caches by profile fingerprint, or maintain separate caches per capability and profile.
 - [x] Provide one test-only reset function that clears all relevant caches.
 
@@ -494,7 +508,7 @@ Never reinterpret legacy `LLM_PROVIDER=openai` as OpenRouter: the endpoints, cre
 - [x] Use Chat Completions as the common first-release protocol for LangChain and Graphiti compatibility.
 - [x] Support streaming, non-streaming, tool calls, response formats, token limits, and usage metadata.
 - [x] Handle OpenRouter's normalized error envelope and mid-stream SSE errors.
-- [ ] Retry only retryable pre-response failures, respect `Retry-After`, and cap exponential backoff.
+- [x] Retry only retryable pre-response failures, respect `Retry-After`, and cap exponential backoff.
 - [x] Require model/task capability compatibility. Tool and structured-output tasks must request providers that support all supplied parameters.
 - [x] Make provider routing explicit. Any OpenRouter model/provider fallback must be compatible with the declared text route and recorded in provenance.
 - [x] Record the actual model and upstream provider returned by OpenRouter when available.
@@ -770,7 +784,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Validate URLs, dimensions, timeouts, retry/fallback budgets, model capabilities, and selected-provider credentials.
 - [x] Split text and embedding interfaces; deprecate embedding methods on text providers.
 - [x] Make caches profile-aware.
-- [ ] Keep fallback orchestration outside single-call provider adapters.
+- [x] Keep fallback orchestration outside single-call provider adapters.
 - [x] Add unit tests for precedence, candidate order, failure-class routing, maximum calls, and all four primary provider combinations.
 - [ ] Deploy this phase with current Ollama defaults and confirm no provider-selection or output-quality regression beyond the Phase 1 safety contract.
 
@@ -793,7 +807,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 ### Phase 4 — OpenRouter text generation
 
 - [x] Add the OpenRouter text adapter.
-- [ ] Add non-streaming, streaming, usage, error, retry, and redaction tests using mocked HTTP responses.
+- [x] Add non-streaming, streaming, usage, error, retry, and redaction tests using mocked HTTP responses.
 - [x] Add LangChain OpenRouter construction.
 - [x] Add PydanticAI provider-neutral construction and compatibility wrappers.
 - [x] Update provider-specific checks in reflection, direct answers, classifiers, workflows, and legacy agents.
@@ -811,7 +825,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Upgrade the Ollama embedder to batch-capable modern endpoints and the same validation contract.
 - [ ] Add embedding profile fingerprinting and startup guards.
 - [x] Store or expose provider/model/dimensions in sanitized health and pipeline output.
-- [ ] Add deterministic ordering, cardinality, invalid-vector, retry, and no-fallback tests.
+- [x] Add deterministic ordering, cardinality, invalid-vector, retry, and no-fallback tests.
 - [ ] Build a shadow embedding evaluation path that does not overwrite active Nomic vectors.
 
 **Exit criteria:** Both embedding providers produce valid vectors through one interface, and a profile mismatch reliably blocks reads and writes.
@@ -848,8 +862,8 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 
 - [x] Add OpenRouter variables to `.env.example` with empty secret values.
 - [x] Add `OPENROUTER_API_KEY_FILE` support to the container entrypoint.
-- [ ] Add OpenRouter secret transport to development Compose, production Compose, deployment scripts, and CI/CD.
-- [ ] Ensure all-Ollama deployments do not mount or require an OpenRouter secret.
+- [x] Add OpenRouter secret transport to development Compose, production Compose, deployment scripts, and CI/CD.
+- [x] Ensure all-Ollama deployments do not mount or require an OpenRouter secret.
 - [ ] Make Ollama model initialization and warmup conditional on selected capabilities.
 - [ ] Add provider-neutral Make targets for configuration checks, model probes, embedding probes, and Graphiti benchmarks.
 - [ ] Add Make targets for graph-sync status, safe retries, `graph-audit`, and the complete release gate.

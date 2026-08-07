@@ -85,7 +85,34 @@ async def test_non_streaming_request_preserves_tools_format_routing_and_usage(
         "upstream_provider": "Test Upstream",
         "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
         "candidate_fingerprint": provider.candidate.fingerprint,
+        "transport_attempts": 1,
     }
+
+
+@pytest.mark.asyncio
+async def test_pre_response_rate_limit_retries_are_bounded(openrouter_environment, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_TRANSPORT_MAX_ATTEMPTS", "2")
+    monkeypatch.setenv("OPENROUTER_RETRY_BASE_SECONDS", "0")
+    monkeypatch.setenv("OPENROUTER_RETRY_MAX_SECONDS", "0")
+    provider = OpenRouterProvider()
+    calls = 0
+
+    class RateLimitError(RuntimeError):
+        status_code = 429
+        response = SimpleNamespace(headers={"Retry-After": "0"})
+
+    async def fake_create(**kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RateLimitError("redacted upstream detail")
+        return _completion()
+
+    provider.client.chat.completions.create = fake_create
+
+    assert await provider.generate("hello") == "answer"
+    assert calls == 2
+    assert provider.last_transport_attempts == 2
 
 
 @pytest.mark.asyncio
@@ -143,6 +170,54 @@ async def test_stream_surfaces_in_band_error_after_partial_content(openrouter_en
         await anext(stream)
     assert raised.value.error_type == "rate_limit_exceeded"
     assert "offline-unit-test-secret" not in str(raised.value)
+
+
+@pytest.mark.asyncio
+async def test_stream_creation_retry_is_bounded_before_first_chunk(
+    openrouter_environment, monkeypatch
+):
+    monkeypatch.setenv("OPENROUTER_TRANSPORT_MAX_ATTEMPTS", "2")
+    monkeypatch.setenv("OPENROUTER_RETRY_BASE_SECONDS", "0")
+    monkeypatch.setenv("OPENROUTER_RETRY_MAX_SECONDS", "0")
+    provider = OpenRouterProvider()
+    calls = 0
+    chunks = [
+        SimpleNamespace(
+            choices=[SimpleNamespace(delta=SimpleNamespace(content="answer"))],
+            model="qwen/qwen-test",
+            provider="Test Upstream",
+            model_extra={},
+        )
+    ]
+
+    class FakeStream:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            if not chunks:
+                raise StopAsyncIteration
+            return chunks.pop(0)
+
+    async def fake_create(**kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise TimeoutError("offline detail")
+        return FakeStream()
+
+    provider.client.chat.completions.create = fake_create
+
+    assert [part async for part in provider.stream("hello")] == ["answer"]
+    assert calls == 2
+    assert provider.last_transport_attempts == 2
+
+
+def test_stream_error_type_does_not_echo_untrusted_upstream_detail():
+    error = OpenRouterStreamError("credential-like-untrusted-detail")
+
+    assert error.error_type == "stream_error"
+    assert "credential-like-untrusted-detail" not in str(error)
 
 
 def test_transport_and_factory_cache_are_profile_aware(openrouter_environment, monkeypatch):

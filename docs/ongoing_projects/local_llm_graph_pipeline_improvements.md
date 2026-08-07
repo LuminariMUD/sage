@@ -122,6 +122,18 @@ The complete offline fast suite passes 185 tests with 6 skips and 109 deselected
 
 This checkpoint does not approve an OpenRouter model, change the active Nomic vector space, execute the declared 3B-to-7B extraction fallback, or authorize a graph profile transition. The operator's stop instruction remains authoritative: the durable worker stays stopped until the operator explicitly requests activation.
 
+### 2026-08-07 - Bounded provider route and deployment checkpoint, no activation
+
+- Added classified, finite, bounded OpenRouter transport retries with `Retry-After` support and OpenAI SDK retries disabled at the direct adapter boundary. Stream creation may retry before the first chunk; a mid-stream failure is surfaced without replaying partial output.
+- Added a higher-level text-route executor that distinguishes actual transport calls, same-candidate model retries, and ordered candidate fallback under one hard request count. Authentication and invalid configuration never fall back; successful fallback is recorded as degraded, and attempt provenance contains no prompt or exception detail.
+- Added same-profile OpenRouter embedding retry without any cross-model fallback, plus deterministic response-index ordering and strict vector validation coverage.
+- Added provider-selected production secret overrides and conditional CI/remote deployment transport. An all-Ollama deployment writes and mounts no OpenAI or OpenRouter key; mixed profiles mount only their selected cloud credentials. Deployment inputs are not inherited by Docker or health-check child processes.
+- Accepted the ignored local `OPENROUTER_KEY` compatibility alias without reading it into tracked files, printing it, or making a live provider request.
+
+The complete offline fast suite passes 203 tests with 6 skips and 109 deselected tests. The focused route/provider/deployment suite passes 60 tests, and production Compose renders all-Ollama, direct-OpenAI, OpenRouter-only, and mixed cloud profiles. Formatting, linting, Bash/ShellCheck/Actionlint, environment contracts, secret isolation, and diff checks pass.
+
+This checkpoint does not wire the new route executor into Graphiti extraction. The existing durable Graphiti wrapper still owns provider reservations and disables opaque client retries; the proposed 3B-to-7B fallback remains declarative and unexecuted. No graph job was claimed, no provider call was made, and the operator's stop instruction remains authoritative.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.

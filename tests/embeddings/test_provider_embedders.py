@@ -175,3 +175,32 @@ async def test_openrouter_embedding_rejects_model_or_index_drift():
     embedder.client.embeddings.create = wrong_indices
     with pytest.raises(EmbeddingValidationError, match="indices"):
         await embedder.embed_batch(["first", "second"])
+
+
+@pytest.mark.asyncio
+async def test_openrouter_embedding_retries_same_profile_without_fallback():
+    environment = _openrouter_embedding_environment() | {
+        "OPENROUTER_TRANSPORT_MAX_ATTEMPTS": "2",
+        "OPENROUTER_RETRY_BASE_SECONDS": "0",
+        "OPENROUTER_RETRY_MAX_SECONDS": "0",
+    }
+    profile = resolve_provider_settings(environment).embedding_profile
+    embedder = OpenRouterEmbedder(profile)
+    calls = 0
+
+    async def fake_create(**kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise TimeoutError("offline timeout")
+        return SimpleNamespace(
+            model="perplexity/pplx-embed-test",
+            data=[SimpleNamespace(index=0, embedding=[1.0, 0.1])],
+            usage=None,
+        )
+
+    embedder.client.embeddings.create = fake_create
+
+    assert await embedder.embed_batch(["first"]) == [[1.0, 0.1]]
+    assert calls == 2
+    assert embedder.last_transport_attempts == 2
