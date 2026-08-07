@@ -16,14 +16,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import textwrap
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 
-from src.llm.config import get_llm_provider_config
+from src.llm.config import text_profile_is_ready
 from src.llm.langchain_helpers import get_chat_model
 
 logger = logging.getLogger(__name__)
@@ -78,7 +77,7 @@ class _FallbackChunk:
 
 
 class _FallbackChatModel:
-    """Minimal stand-in used when no OPENAI_API_KEY is configured."""
+    """Minimal stand-in used when the selected text profile is not ready."""
 
     def __init__(self, label: str = "fallback"):
         self.label = label
@@ -91,7 +90,7 @@ class _FallbackChatModel:
         else:
             content = getattr(last_message, "content", "")
         return _FallbackChunk(
-            f"(No OPENAI_API_KEY configured) Unable to call model '{self.label}'. "
+            f"(Text provider unavailable) Unable to call model '{self.label}'. "
             f"Returning placeholder content based on provided input.\n\n{content}"
         )
 
@@ -225,14 +224,7 @@ class DirectAnswerChain(Runnable):
         self.model_name = model_name
         self.temperature = temperature
 
-        # Get provider config to determine if we should use real LLM or fallback
-        config = get_llm_provider_config()
-        provider = config["provider"]
-
-        # Ollama always available (local), OpenAI needs API key
-        use_real_llm = (provider == "ollama") or (
-            provider == "openai" and os.getenv("OPENAI_API_KEY")
-        )
+        use_real_llm = text_profile_is_ready("reasoning")
 
         if use_real_llm:
             try:

@@ -21,6 +21,7 @@ from src.auth.host_validation import get_allowed_hosts
 from src.db import close_neo4j_db, close_postgres_db, get_neo4j_db, get_postgres_db
 from src.graphiti.edge_types import EDGE_TYPES
 from src.graphiti.entity_types import ENTITY_TYPES
+from src.llm.config import get_provider_settings, text_profile_is_ready
 from src.llm.context_utils import count_tokens, select_texts_within_budget, truncate_text
 from src.llm.embeddings.factory import get_embedder
 from src.security import (
@@ -65,12 +66,44 @@ logger = logging.getLogger(__name__)
 embedder = None
 
 
+def _provider_health_summary() -> dict[str, Any]:
+    """Return provider/model identities without endpoints, credentials, or prompts."""
+    settings = get_provider_settings()
+    return {
+        "application_text": {
+            "provider": settings.text_provider,
+            "routes": {
+                task: {
+                    "model": route.primary.model,
+                    "fingerprint": route.fingerprint,
+                }
+                for task, route in settings.text_routes.items()
+            },
+        },
+        "application_embedding": settings.embedding_profile.sanitized_summary(),
+        "graphiti_text": {
+            "provider": settings.graphiti_text_provider,
+            "models": [candidate.model for candidate in settings.graphiti_text_route.candidates],
+            "fingerprint": settings.graphiti_text_route.fingerprint,
+        },
+        "graphiti_embedding": settings.graphiti_embedding_profile.sanitized_summary(),
+    }
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
     global embedder
 
     logger.info("🚀 Starting Luminari Sage API...")
+
+    try:
+        logger.info(
+            "Resolved provider profiles: %s",
+            json.dumps(_provider_health_summary(), sort_keys=True),
+        )
+    except Exception as error:
+        logger.error("Provider configuration is invalid (%s)", type(error).__name__)
 
     # Initialize embedder
     try:
@@ -173,6 +206,7 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     services: dict[str, str]
+    providers: dict[str, Any]
 
 
 class EntitySearchRequest(BaseModel):
@@ -460,12 +494,20 @@ async def health_check():
     # Check embedder
     services["embedder"] = "healthy" if embedder else "not loaded"
 
+    try:
+        providers = _provider_health_summary()
+        services["provider_config"] = "healthy"
+    except Exception:
+        providers = {"status": "invalid"}
+        services["provider_config"] = "unhealthy"
+
     overall_status = "healthy" if all(s == "healthy" for s in services.values()) else "degraded"
 
     return HealthResponse(
         status=overall_status,
         version="0.1.0",
         services=services,
+        providers=providers,
     )
 
 
@@ -1568,16 +1610,14 @@ async def validate_lore(request: ValidationRequest):
 async def validate_relationships(request: RelationshipValidationRequest):
     """Validate entity relationships in the knowledge graph."""
     try:
-        # Get OpenAI API key
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if not openai_api_key:
-            raise HTTPException(status_code=500, detail="OpenAI API key not configured")
+        if request.enable_llm_analysis and not text_profile_is_ready("extraction"):
+            raise HTTPException(status_code=500, detail="Text provider is not ready")
 
         # Import here to avoid circular import
         from src.agents.relationship_validator import RelationshipValidator
 
         # Create validator
-        validator = RelationshipValidator(openai_api_key=openai_api_key)
+        validator = RelationshipValidator()
 
         # Run validation with optional corrections
         report = await validator.validate(
@@ -2041,11 +2081,12 @@ async def send_chat_message(request: ChatMessageRequest):
         if not request.message or not request.message.strip():
             raise HTTPException(status_code=400, detail="Message cannot be empty")
 
-        stage = "check_openai_key"
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if requested_engine not in ("langchain", None) and not openai_api_key:
-            # Legacy engine requires key
-            raise HTTPException(status_code=500, detail="OPENAI_API_KEY missing for legacy engine")
+        stage = "check_text_profile"
+        if requested_engine not in ("langchain", None) and not text_profile_is_ready("tools"):
+            raise HTTPException(
+                status_code=500,
+                detail="Text provider is not ready for legacy engine",
+            )
 
         stage = "imports"
         # Lazy imports (avoid cost if failing earlier)
@@ -2161,8 +2202,6 @@ async def chat_stream(
 
     async def event_stream():
         try:
-            openai_api_key = os.getenv("OPENAI_API_KEY")
-
             storage_service = ConversationStorageService()
 
             # Get stream session
@@ -2291,17 +2330,15 @@ async def chat_stream(
                             )
                     yield f"data: {json.dumps(event)}\n\n"
             else:
-                if not openai_api_key:
-                    yield f"data: {json.dumps({'type': 'error', 'content': 'OpenAI API key not configured'})}\n\n"
+                if not text_profile_is_ready("tools"):
+                    yield f"data: {json.dumps({'type': 'error', 'content': 'Text provider is not ready'})}\n\n"
                     return
                 # Legacy streaming agent path
                 # Create streaming chat agent with proper pydantic-ai streaming
                 # Use localhost:8003 since we're inside the container
                 from src.agents.lore_chat_agent_streaming import StreamingLoreChatAgent
 
-                chat_agent = StreamingLoreChatAgent(
-                    openai_api_key, api_base_url="http://localhost:8003"
-                )
+                chat_agent = StreamingLoreChatAgent(api_base_url="http://localhost:8003")
                 async for event in chat_agent.stream_chat(user_message.content):
                     yield f"data: {json.dumps(event)}\n\n"
 

@@ -7,7 +7,6 @@ Performs bidirectional consistency checks, mutual exclusivity validation,
 and hierarchy rule enforcement.
 """
 
-import os
 import time
 import uuid
 from typing import Literal
@@ -85,7 +84,7 @@ class RelationshipValidator(BaseValidator):
     and logical contradictions.
     """
 
-    def __init__(self, openai_api_key: str):
+    def __init__(self, openai_api_key: str | None = None):
         """Initialize the relationship validator."""
         super().__init__(agent_id="relationship_validator_v1_llm", openai_api_key=openai_api_key)
 
@@ -214,10 +213,7 @@ class RelationshipValidator(BaseValidator):
 
             if auto_correct:
                 correction_batch_id = str(uuid.uuid4())
-                openai_api_key = os.getenv("OPENAI_API_KEY")
-                if not openai_api_key:
-                    raise RuntimeError("OpenAI API key is not configured")
-                corrector = RelationshipCorrector(openai_api_key=openai_api_key)
+                corrector = RelationshipCorrector()
 
                 try:
                     corrections_applied = await corrector.apply_corrections(

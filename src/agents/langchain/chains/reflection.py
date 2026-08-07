@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
 
-from src.llm.config import get_llm_provider_config
+from src.llm.config import text_profile_is_ready
 from src.llm.langchain_helpers import get_chat_model
 
 logger = logging.getLogger(__name__)
@@ -131,14 +130,7 @@ class ReflectionChain(Runnable):
         """Initialize with low temperature for consistent evaluation."""
         self.llm = None
 
-        # Get provider config to determine if we should use real LLM
-        config = get_llm_provider_config()
-        provider = config["provider"]
-
-        # Ollama always available (local), OpenAI needs API key
-        use_real_llm = (provider == "ollama") or (
-            provider == "openai" and os.getenv("OPENAI_API_KEY")
-        )
+        use_real_llm = text_profile_is_ready("reasoning")
 
         if use_real_llm:
             try:

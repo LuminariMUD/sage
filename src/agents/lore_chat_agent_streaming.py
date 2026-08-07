@@ -15,7 +15,7 @@ import aiohttp
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 
-from src.llm.pydantic_ai_factory import create_openai_chat_model
+from src.llm.pydantic_ai_factory import create_text_model
 from src.security import public_error_message
 
 logger = logging.getLogger(__name__)
@@ -104,7 +104,11 @@ class StreamingLoreChatAgent:
     - Tool call transparency during streaming
     """
 
-    def __init__(self, openai_api_key: str, api_base_url: str = "http://localhost:8003"):
+    def __init__(
+        self,
+        openai_api_key: str | None = None,
+        api_base_url: str = "http://localhost:8003",
+    ):
         self.api_base_url = api_base_url
 
         # Get backend API key for internal calls
@@ -122,7 +126,7 @@ class StreamingLoreChatAgent:
 
         # Create agent with simpler output for streaming
         self.agent = Agent(
-            create_openai_chat_model(openai_api_key),
+            create_text_model("tools", legacy_openai_api_key=openai_api_key),
             deps_type=AgentDependencies,
             output_type=str,  # Simple string output for easier streaming
             system_prompt=self._create_system_prompt(),

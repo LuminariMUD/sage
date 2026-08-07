@@ -14,7 +14,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 
-from src.llm.pydantic_ai_factory import create_openai_chat_model
+from src.llm.pydantic_ai_factory import create_text_model
 
 
 class ValidationSeverity(str, Enum):
@@ -227,15 +227,17 @@ class BaseValidator:
     audit trails, confidence scoring, and human review capabilities.
     """
 
-    def __init__(self, agent_id: str, openai_api_key: str):
+    def __init__(self, agent_id: str, openai_api_key: str | None = None):
         """Initialize the base validator."""
         self.agent_id = agent_id
-        if not openai_api_key:
-            raise ValueError("OpenAI API key is required")
 
         # Create the PydanticAI agent
         self.agent = Agent(
-            create_openai_chat_model(openai_api_key, "gpt-4o-mini"),
+            create_text_model(
+                "extraction",
+                legacy_openai_api_key=openai_api_key,
+                legacy_openai_model="gpt-4o-mini",
+            ),
             system_prompt=self._get_system_prompt(),
         )
 

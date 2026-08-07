@@ -111,6 +111,17 @@ The first operational attempt proved the failure path: Neo4j's login shell omitt
 
 The replacement reference `backups/provider-upgrade-20260806T222200Z` is verified and was recorded by the applied migration. Its PostgreSQL scratch restore proved 611 episodes, 305 synchronized episodes, and 12 public tables. Both Neo4j archives passed metadata inspection and full consistency checks. The verifier confirmed all three SHA-256 digests and private permissions; cleanup left no scratch database or dump directory. All services returned healthy, the graph audit remained clean with 305 distinct stable IDs, and the worker remained stopped. Retain this backup through the rollout and rollback bake period.
 
+### 2026-08-07 - Provider-neutral construction checkpoint, no activation
+
+- Added validated capability-level text and embedding settings for Ollama and OpenRouter, including independent Graphiti overrides, bounded extraction-route declarations, model/profile fingerprints, selected-provider-only credential checks, and fail-closed OpenRouter routing/privacy defaults.
+- Added the OpenRouter text and embedding adapters, modern batch Ollama embeddings, shared vector validation, provider-neutral LangChain/PydanticAI construction, optional legacy agent credentials, model-family prompt selection, and sanitized API startup/health identities.
+- Replaced the Graphiti provider coupling with independent text and embedding clients. Offline construction covers all four Ollama/OpenRouter combinations without provider I/O.
+- Added `OPENROUTER_API_KEY_FILE` container loading and a deprecated `OPENROUTER_KEY` compatibility alias. Local secret values remain ignored and were not logged or copied into tracked files.
+
+The complete offline fast suite passes 185 tests with 6 skips and 109 deselected tests. Formatting, linting, compilation, ShellCheck, Compose validation, secret/environment contracts, and diff checks pass. No provider request, graph claim, or ingestion occurred.
+
+This checkpoint does not approve an OpenRouter model, change the active Nomic vector space, execute the declared 3B-to-7B extraction fallback, or authorize a graph profile transition. The operator's stop instruction remains authoritative: the durable worker stays stopped until the operator explicitly requests activation.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.

@@ -32,6 +32,7 @@ for secret_name in \
     POSTGRES_PASSWORD \
     NEO4J_PASSWORD \
     OPENAI_API_KEY \
+    OPENROUTER_API_KEY \
     LANGSMITH_API_KEY \
     SAGE_API_KEY \
     SAGE_MCP_KEY \

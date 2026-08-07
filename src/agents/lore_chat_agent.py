@@ -17,7 +17,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 
-from src.llm.pydantic_ai_factory import create_openai_chat_model
+from src.llm.pydantic_ai_factory import create_text_model
 
 from ..mcp.server import LuminariLoreClient
 from ..security import public_error_message
@@ -287,7 +287,7 @@ class LoreChatAgent:
     streaming responses, and context awareness.
     """
 
-    def __init__(self, openai_api_key: str):
+    def __init__(self, openai_api_key: str | None = None):
         """Initialize the lore chat agent."""
         self.storage_service = ConversationStorageService()
         self.lore_client = LuminariLoreClient()
@@ -298,7 +298,10 @@ class LoreChatAgent:
 
         # Initialize pydantic-ai agent for intent classification
         self.intent_agent = Agent(
-            create_openai_chat_model(openai_api_key),
+            create_text_model(
+                "extraction",
+                legacy_openai_api_key=openai_api_key,
+            ),
             output_type=IntentClassification,
             system_prompt="""You are an expert at analyzing user queries about fantasy world lore.
 
@@ -323,7 +326,10 @@ Be precise and concise in your analysis.""",
 
         # Initialize main conversation agent
         self.conversation_agent = Agent(
-            create_openai_chat_model(openai_api_key),
+            create_text_model(
+                "chat",
+                legacy_openai_api_key=openai_api_key,
+            ),
             output_type=str,
             system_prompt="""You are the Luminari Lore Sage, an expert guide to the rich fantasy world of Luminari MUD.
 

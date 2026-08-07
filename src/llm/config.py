@@ -1,159 +1,132 @@
-"""Configuration management for LLM providers."""
+"""Compatibility accessors over the typed provider configuration boundary."""
+
+from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 
-# Task-specific temperature settings
-TEMPERATURE_CONFIG = {
-    "ollama": {
-        "extraction": 0.2,  # Very deterministic
-        "factual": 0.5,  # Focused
-        "qa": 0.5,  # Focused for question answering
-        "chat": 0.7,  # Balanced
-        "reasoning": 0.5,  # Focused reasoning
-        "tools": 0.5,  # Focused tool selection
-        "creative": 0.85,  # Creative but coherent
-        "brainstorm": 1.0,  # Diverse ideas
-    },
-    "openai": {
-        "extraction": 0.3,
-        "factual": 0.6,
-        "qa": 0.6,
-        "chat": 0.7,
-        "reasoning": 0.6,
-        "tools": 0.6,
-        "creative": 0.9,
-        "brainstorm": 1.1,
-    },
+from src.llm.provider_config import (
+    EmbeddingProfile,
+    ProviderSettings,
+    TextRouteProfile,
+    TextTask,
+    is_text_profile_ready,
+    resolve_provider_settings,
+)
+
+_TASK_ALIASES: dict[str, TextTask] = {
+    "chat": "chat",
+    "qa": "chat",
+    "factual": "chat",
+    "creative": "creative",
+    "brainstorm": "creative",
+    "reasoning": "reasoning",
+    "extraction": "extraction",
+    "tools": "tools",
 }
 
 
-# Optimal batch sizes based on benchmarking
-OPTIMAL_BATCH_SIZES = {
-    "embeddings": {
-        "ollama": 32,  # Sweet spot for nomic-embed-text
-        "openai": 100,  # OpenAI handles larger batches
-    },
-    "extraction": {
-        "ollama": 1,  # Process episodes sequentially
-        "openai": 5,  # Can batch more
-    },
-}
+def _text_task(task: str) -> TextTask:
+    try:
+        return _TASK_ALIASES[task.lower()]
+    except KeyError as error:
+        raise ValueError(f"Unknown text task: {task}") from error
+
+
+def get_provider_settings() -> ProviderSettings:
+    """Resolve the complete immutable provider configuration."""
+    return resolve_provider_settings()
+
+
+def get_text_route(task: str = "chat") -> TextRouteProfile:
+    """Return the active ordered route for one application text task."""
+    return get_provider_settings().text_route(_text_task(task))
+
+
+def get_embedding_profile() -> EmbeddingProfile:
+    """Return the active application embedding profile."""
+    return get_provider_settings().embedding_profile
+
+
+def get_graphiti_text_route() -> TextRouteProfile:
+    """Return Graphiti's independently resolved extraction route."""
+    return get_provider_settings().graphiti_text_route
+
+
+def get_graphiti_embedding_profile() -> EmbeddingProfile:
+    """Return Graphiti's independently resolved embedding profile."""
+    return get_provider_settings().graphiti_embedding_profile
 
 
 def get_llm_provider_config() -> dict[str, Any]:
-    """
-    Get LLM provider configuration from environment variables.
-
-    Returns:
-        Configuration dictionary
-    """
-    provider = os.getenv("LLM_PROVIDER", "openai").lower()
-
-    if provider == "ollama":
-        return {
-            "provider": "ollama",
-            "base_url": os.getenv("OLLAMA_BASE_URL", "http://ollama:11434"),
-            "chat_model": os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:7b"),
-            "creative_model": os.getenv("OLLAMA_CREATIVE_MODEL", "qwen2.5:7b"),
-            "reasoning_model": os.getenv("OLLAMA_REASONING_MODEL", "qwen2.5:3b"),
-            # Agents that bind tools need a tool-calling model. Pure reasoning models
-            # (e.g. deepseek-r1) emit chain-of-thought that Ollama's grammar-constrained
-            # tool parser rejects outright, so they cannot be used here.
-            "tools_model": os.getenv(
-                "OLLAMA_TOOLS_MODEL", os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:7b")
-            ),
-            "embedding_model": os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
-            "temperature": float(os.getenv("OLLAMA_CHAT_TEMPERATURE", "0.7")),
-            "max_context_tokens": int(os.getenv("OLLAMA_MAX_CONTEXT_TOKENS", "12288")),
-            "timeout": int(os.getenv("OLLAMA_REQUEST_TIMEOUT", "120")),
-        }
-    elif provider == "openai":
-        return {
-            "provider": "openai",
-            "api_key": os.getenv("OPENAI_API_KEY"),
-            "chat_model": os.getenv("LLM_MODEL", "gpt-4o-mini"),
-            "embedding_model": os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
-            "temperature": 0.7,
-            "max_tokens": None,
-        }
+    """Return the deprecated dictionary view used by transitional call sites."""
+    settings = get_provider_settings()
+    routes = settings.text_routes
+    chat = routes["chat"].primary
+    secret = chat.connection.api_key
+    if settings.text_provider == "ollama":
+        legacy_embedding_model = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+    elif settings.text_provider == "openrouter":
+        legacy_embedding_model = os.getenv("OPENROUTER_EMBEDDING_MODEL", "")
     else:
-        raise ValueError(f"Unknown LLM provider: {provider}")
+        legacy_embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    return {
+        "provider": settings.text_provider,
+        "base_url": chat.connection.base_url,
+        "api_key": secret.get_secret_value() if secret else None,
+        "chat_model": routes["chat"].primary.model,
+        "creative_model": routes["creative"].primary.model,
+        "reasoning_model": routes["reasoning"].primary.model,
+        "extraction_model": routes["extraction"].primary.model,
+        "tools_model": routes["tools"].primary.model,
+        "embedding_model": legacy_embedding_model,
+        "temperature": chat.temperature,
+        "max_context_tokens": chat.context_limit,
+        "timeout": chat.connection.timeout_seconds,
+        "max_tokens": None,
+        "candidate_fingerprint": chat.fingerprint,
+    }
 
 
 def get_embedding_config() -> dict[str, Any]:
-    """
-    Get embedding model configuration.
-
-    Returns:
-        Configuration dictionary
-    """
-    use_local = os.getenv("USE_LOCAL_EMBEDDINGS", "false").lower() == "true"
-
-    if use_local:
-        provider = os.getenv("LLM_PROVIDER", "ollama").lower()
-        if provider == "ollama":
-            return {
-                "provider": "ollama",
-                "model": os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"),
-                "base_url": os.getenv("OLLAMA_BASE_URL", "http://ollama:11434"),
-                "batch_size": int(os.getenv("OLLAMA_EMBEDDING_BATCH_SIZE", "32")),
-                "dimension": 768,  # nomic-embed-text dimension
-            }
-        else:
-            return {
-                "provider": "sentence-transformers",
-                "model": "sentence-transformers/all-MiniLM-L6-v2",
-                "dimension": 384,
-            }
-    else:
-        return {
-            "provider": "openai",
-            "model": os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
-            "api_key": os.getenv("OPENAI_API_KEY"),
-            "dimension": 1536,
-        }
+    """Return the deprecated dictionary view of the embedding profile."""
+    profile = get_embedding_profile()
+    secret = profile.connection.api_key
+    return {
+        "provider": profile.connection.provider,
+        "model": profile.model,
+        "base_url": profile.connection.base_url,
+        "api_key": secret.get_secret_value() if secret else None,
+        "batch_size": profile.batch_size,
+        "dimension": profile.dimensions,
+        "dimensions": profile.dimensions,
+        "encoding_format": profile.encoding_format,
+        "revision": profile.revision,
+        "fingerprint": profile.fingerprint,
+    }
 
 
 def get_model_for_task(task: str) -> str:
-    """
-    Get the appropriate model for a specific task.
-
-    Args:
-        task: Task type (chat, creative, reasoning, tools, embedding)
-
-    Returns:
-        Model name for the task
-    """
-    config = get_llm_provider_config()
-    provider = config["provider"]
-
-    if provider == "ollama":
-        task_models = {
-            "chat": config["chat_model"],
-            "creative": config["creative_model"],
-            "reasoning": config["reasoning_model"],
-            "tools": config["tools_model"],
-            "embedding": config["embedding_model"],
-        }
-        return task_models.get(task, config["chat_model"])
-    else:
-        # OpenAI uses same model for most tasks
-        return config["chat_model"]
+    """Return the active model for a text task or the embedding capability."""
+    if task.lower() == "embedding":
+        return get_embedding_profile().model
+    return get_text_route(task).primary.model
 
 
 def get_temperature_for_task(task: str) -> float:
-    """
-    Get optimal temperature for task and model.
+    """Return the active candidate temperature for a legacy or canonical task."""
+    return get_text_route(task).primary.temperature
 
-    Args:
-        task: Task type (extraction, factual, qa, chat, reasoning, creative, brainstorm)
 
-    Returns:
-        Optimal temperature value for the task
-    """
-    config = get_llm_provider_config()
-    provider = config["provider"]
+def get_prompt_profile_for_task(task: str) -> str:
+    """Return model-family prompt selection independent of transport provider."""
+    return get_text_route(task).primary.prompt_profile
 
-    temps = TEMPERATURE_CONFIG.get(provider, TEMPERATURE_CONFIG["ollama"])
-    return temps.get(task, 0.7)
+
+def text_profile_is_ready(task: str = "chat") -> bool:
+    """Compatibility wrapper for shared provider readiness checks."""
+    try:
+        normalized = _text_task(task)
+    except ValueError:
+        return False
+    return is_text_profile_ready(cast(TextTask, normalized))

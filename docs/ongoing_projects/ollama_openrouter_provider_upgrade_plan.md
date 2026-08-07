@@ -3,7 +3,7 @@
 | Field                 | Value                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | Status                | Active phased implementation                                                                           |
-| Implementation        | Phase 1 in progress; durable worker integrated and held stopped, live activation pending               |
+| Implementation        | Phase 1 runtime implemented; provider refactor slices implemented offline and not activated            |
 | Last updated          | 2026-08-07                                                                                             |
 | Scope                 | Text generation, embeddings, Graphiti, configuration, storage migrations, deployment, and tests        |
 | Compatibility target  | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
@@ -115,6 +115,21 @@ The replacement backup `backups/provider-upgrade-20260806T222200Z`, created at `
 - The legacy worker remained stopped throughout.
 
 The additive migration consumed this backup gate and is verified current. Retain the backup through the rollout and rollback bake period.
+
+### Provider-neutral configuration and adapter checkpoint - implemented offline
+
+The first non-activating slices from Phases 2, 4, 5, and 6 are implemented. They change configuration and construction paths only; they do not select OpenRouter models, migrate a vector space, claim a graph job, or make a provider request.
+
+- Added immutable provider connections, task candidates/routes, embedding profiles, graph policy settings, selector precedence, selected-provider validation, secret-free fingerprints, and profile-aware caches. Direct OpenAI remains a compatibility-only provider and is never reinterpreted as OpenRouter.
+- Added `OPENROUTER_API_KEY` and file-backed secret support plus a one-window `OPENROUTER_KEY` compatibility alias. The alias emits a warning without logging its value. OpenRouter defaults disable provider fallback, require parameter support, deny data collection, and leave ZDR opt-in pending the Phase 0 privacy decision.
+- Added OpenRouter Chat Completions, streaming, tool/response-format, usage, returned-model/upstream, and in-band stream-error handling through the existing OpenAI SDK. LangChain and PydanticAI now construct from the same validated candidates, and legacy agent constructors can use Ollama or OpenRouter without a direct OpenAI key.
+- Split text and embedding construction. OpenRouter embeddings use batch input, explicit float encoding, dimensions, response-index ordering, usage capture, and strict vector validation. Ollama now uses the batch-capable `/api/embed` endpoint and the same cardinality, dimension, finite-value, and non-zero-norm contract.
+- Replaced Graphiti's coupled provider builder with independent text and embedding profiles while retaining `ollama_config.py` as a deprecation shim. Offline construction tests cover Ollama/Ollama, Ollama/OpenRouter, OpenRouter/Ollama, and OpenRouter/OpenRouter.
+- Added sanitized provider/model/fingerprint/dimension startup and health output, expanded the public environment contract, and added OpenRouter secret-file loading to the container entrypoint. The user's `OPENROUTER_KEY` remains only in ignored local configuration and was never printed.
+
+The complete offline fast suite passes 185 tests with 6 skips and 109 intentionally deselected tests. Ruff formatting/linting, Python compilation, ShellCheck, Compose validation, environment/secret contract tests, and `git diff --check` pass. No OpenRouter or Ollama inference request was made, and the graph worker remains stopped.
+
+Still open before activation: explicit OpenRouter model selection and capability verification, the privacy/ZDR decision, bounded `Retry-After` transport retries, executable extraction-route fallback/degraded-success orchestration, live structured-output and streaming tests, embedding shadow/index migration, production/CI secret transport, and any graph profile transition or ingest authorization.
 
 ---
 
@@ -453,12 +468,12 @@ Never reinterpret legacy `LLM_PROVIDER=openai` as OpenRouter: the endpoints, cre
 
 ### 6.1 Separate text generation from embeddings
 
-- [ ] Remove or deprecate `embed()` on `BaseLLMProvider`.
-- [ ] Make `BaseEmbedder` the only application embedding interface.
-- [ ] Ensure direct providers, LangChain, PydanticAI, and Graphiti consume the same validated candidates and routes.
+- [x] Remove or deprecate `embed()` on `BaseLLMProvider`.
+- [x] Make `BaseEmbedder` the only application embedding interface.
+- [x] Ensure direct providers, LangChain, PydanticAI, and Graphiti consume the same validated candidates and routes.
 - [ ] Keep provider adapters responsible for one model call; keep candidate fallback and durable job retry in higher-level orchestration.
-- [ ] Key singleton caches by profile fingerprint, or maintain separate caches per capability and profile.
-- [ ] Provide one test-only reset function that clears all relevant caches.
+- [x] Key singleton caches by profile fingerprint, or maintain separate caches per capability and profile.
+- [x] Provide one test-only reset function that clears all relevant caches.
 
 ### 6.2 Ollama text adapter
 
@@ -469,61 +484,61 @@ Never reinterpret legacy `LLM_PROVIDER=openai` as OpenRouter: the endpoints, cre
 - [ ] Use schema-constrained output for extraction when the installed Ollama version and selected model demonstrably support it.
 - [ ] Preserve streaming behavior and model keep-alive controls.
 - [ ] Expose queue depth, model residency, load latency, and resource-exhaustion outcomes without exposing prompt content.
-- [ ] Do not require an API key for the local endpoint.
+- [x] Do not require an API key for the local endpoint.
 
 ### 6.3 OpenRouter text adapter
 
-- [ ] Use the existing OpenAI-compatible libraries rather than introducing an unnecessary OpenRouter SDK dependency.
-- [ ] Configure `base_url=https://openrouter.ai/api/v1` and `OPENROUTER_API_KEY` explicitly.
-- [ ] Add optional `HTTP-Referer` and application-title headers without logging credentials.
-- [ ] Use Chat Completions as the common first-release protocol for LangChain and Graphiti compatibility.
-- [ ] Support streaming, non-streaming, tool calls, response formats, token limits, and usage metadata.
-- [ ] Handle OpenRouter's normalized error envelope and mid-stream SSE errors.
+- [x] Use the existing OpenAI-compatible libraries rather than introducing an unnecessary OpenRouter SDK dependency.
+- [x] Configure `base_url=https://openrouter.ai/api/v1` and `OPENROUTER_API_KEY` explicitly.
+- [x] Add optional `HTTP-Referer` and application-title headers without logging credentials.
+- [x] Use Chat Completions as the common first-release protocol for LangChain and Graphiti compatibility.
+- [x] Support streaming, non-streaming, tool calls, response formats, token limits, and usage metadata.
+- [x] Handle OpenRouter's normalized error envelope and mid-stream SSE errors.
 - [ ] Retry only retryable pre-response failures, respect `Retry-After`, and cap exponential backoff.
-- [ ] Require model/task capability compatibility. Tool and structured-output tasks must request providers that support all supplied parameters.
-- [ ] Make provider routing explicit. Any OpenRouter model/provider fallback must be compatible with the declared text route and recorded in provenance.
-- [ ] Record the actual model and upstream provider returned by OpenRouter when available.
+- [x] Require model/task capability compatibility. Tool and structured-output tasks must request providers that support all supplied parameters.
+- [x] Make provider routing explicit. Any OpenRouter model/provider fallback must be compatible with the declared text route and recorded in provenance.
+- [x] Record the actual model and upstream provider returned by OpenRouter when available.
 
 ### 6.4 Ollama embedding adapter
 
-- [ ] Move from one-request-per-text legacy `/api/embeddings` behavior to a batch-capable endpoint (`/api/embed` or `/v1/embeddings`).
-- [ ] Support an explicit dimensions request where the selected model supports it.
-- [ ] Validate response count, numeric type, finite values, non-zero norm, and exact dimensions.
+- [x] Move from one-request-per-text legacy `/api/embeddings` behavior to a batch-capable endpoint (`/api/embed` or `/v1/embeddings`).
+- [x] Support an explicit dimensions request where the selected model supports it.
+- [x] Validate response count, numeric type, finite values, non-zero norm, and exact dimensions.
 - [ ] Retain local queue/concurrency controls separately from text-generation concurrency.
-- [ ] Fail the whole batch or return explicit per-item failures; never silently drop or reorder embeddings.
+- [x] Fail the whole batch or return explicit per-item failures; never silently drop or reorder embeddings.
 
 ### 6.5 OpenRouter embedding adapter
 
-- [ ] Call `POST /api/v1/embeddings` with the configured OpenRouter model slug.
-- [ ] Send batches through `input` and preserve response ordering by response index.
-- [ ] Explicitly request `encoding_format=float` for compatibility with the existing Python and Graphiti clients.
-- [ ] Pass `dimensions` when a reduced Matryoshka dimension is configured.
-- [ ] Validate response count, dimensions, finite values, and non-zero norm.
-- [ ] Use cosine similarity for unnormalized models such as `pplx-embed-v1`.
-- [ ] Disable cross-model fallback. If routing between implementations of the same model is allowed, treat a changed implementation as a new embedding fingerprint unless equivalence is proven.
+- [x] Call `POST /api/v1/embeddings` with the configured OpenRouter model slug.
+- [x] Send batches through `input` and preserve response ordering by response index.
+- [x] Explicitly request `encoding_format=float` for compatibility with the existing Python and Graphiti clients.
+- [x] Pass `dimensions` when a reduced Matryoshka dimension is configured.
+- [x] Validate response count, dimensions, finite values, and non-zero norm.
+- [x] Use cosine similarity for unnormalized models such as `pplx-embed-v1`.
+- [x] Disable cross-model fallback. If routing between implementations of the same model is allowed, treat a changed implementation as a new embedding fingerprint unless equivalence is proven.
 - [ ] Capture token usage and estimated cost without recording source text.
 
 ### 6.6 Framework adapters
 
 #### LangChain
 
-- [ ] Keep `ChatOllama` for local-specific behavior.
-- [ ] Construct `ChatOpenAI` with the OpenRouter base URL, API key, and headers when OpenRouter is selected.
+- [x] Keep `ChatOllama` for local-specific behavior.
+- [x] Construct `ChatOpenAI` with the OpenRouter base URL, API key, and headers when OpenRouter is selected.
 - [ ] Ensure tool schemas, streaming chunks, structured responses, and max-token fields work with both branches.
-- [ ] Replace provider-specific availability checks in reflection and direct-answer chains with a shared `is_text_profile_ready()` check.
+- [x] Replace provider-specific availability checks in reflection and direct-answer chains with a shared `is_text_profile_ready()` check.
 
 #### PydanticAI
 
-- [ ] Replace `create_openai_chat_model()` with a provider-neutral text-model factory.
-- [ ] Configure PydanticAI's OpenAI-compatible provider with the selected base URL and key.
-- [ ] Refactor legacy agent constructors so they no longer require an argument named `openai_api_key` when Ollama or OpenRouter is selected.
-- [ ] Preserve a temporary compatibility wrapper for existing imports.
+- [x] Replace `create_openai_chat_model()` with a provider-neutral text-model factory.
+- [x] Configure PydanticAI's OpenAI-compatible provider with the selected base URL and key.
+- [x] Refactor legacy agent constructors so they no longer require an argument named `openai_api_key` when Ollama or OpenRouter is selected.
+- [x] Preserve a temporary compatibility wrapper for existing imports.
 
 #### Prompt selection
 
-- [ ] Select prompt adaptations from the configured model family or explicit prompt profile, not from the transport provider.
-- [ ] Treat an OpenRouter-hosted Qwen model as Qwen and an OpenRouter-hosted Claude model as Claude.
-- [ ] Provide a generic prompt profile for unknown model families.
+- [x] Select prompt adaptations from the configured model family or explicit prompt profile, not from the transport provider.
+- [x] Treat an OpenRouter-hosted Qwen model as Qwen and an OpenRouter-hosted Claude model as Claude.
+- [x] Provide a generic prompt profile for unknown model families.
 
 ---
 
@@ -531,14 +546,14 @@ Never reinterpret legacy `LLM_PROVIDER=openai` as OpenRouter: the endpoints, cre
 
 Graphiti must no longer use one provider variable for two independent capabilities. It must also stop treating a provider call, an episode synchronization attempt, and cross-store verification as one opaque operation.
 
-- [ ] Rename or replace `src/graphiti/ollama_config.py` with a provider-neutral module; retain an import shim during the deprecation window.
-- [ ] Build each Graphiti LLM client from the active candidate in the extraction route.
-- [ ] Build the Graphiti embedder from `GRAPHITI_EMBEDDING_PROVIDER` or the inherited embedding profile.
-- [ ] Use an OpenAI-compatible generic chat client for Ollama and OpenRouter unless a model has been verified with Graphiti's Responses-based client.
-- [ ] Pass OpenRouter base URL, key, headers, model, retry settings, and output limits explicitly.
-- [ ] Pass the selected embedding dimension from configuration rather than hard-coding 768 or 1536.
-- [ ] Preserve the existing Graphiti maximum-output-token guard.
-- [ ] Add a startup summary that reports sanitized text provider/model and embedding provider/model/dimensions separately.
+- [x] Rename or replace `src/graphiti/ollama_config.py` with a provider-neutral module; retain an import shim during the deprecation window.
+- [x] Build each Graphiti LLM client from the active candidate in the extraction route.
+- [x] Build the Graphiti embedder from `GRAPHITI_EMBEDDING_PROVIDER` or the inherited embedding profile.
+- [x] Use an OpenAI-compatible generic chat client for Ollama and OpenRouter unless a model has been verified with Graphiti's Responses-based client.
+- [x] Pass OpenRouter base URL, key, headers, model, retry settings, and output limits explicitly.
+- [x] Pass the selected embedding dimension from configuration rather than hard-coding 768 or 1536.
+- [x] Preserve the existing Graphiti maximum-output-token guard.
+- [x] Add a startup summary that reports sanitized text provider/model and embedding provider/model/dimensions separately.
 - [ ] Verify structured JSON extraction, entity deduplication, edge extraction, and Graphiti search for every supported provider combination.
 
 Embedding migration affects Graphiti entity names, facts, summaries, and episodic vectors. A full graph rebuild is the safest default when changing the Graphiti embedding profile. Re-embedding existing graph properties in place may be considered later only if Graphiti exposes a complete, tested migration API.
@@ -748,15 +763,15 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 
 ### Phase 2 — Configuration and interface refactor
 
-- [ ] Add typed provider connections, text candidates/routes, embedding profiles, and graph-sync policies.
-- [ ] Add `TEXT_PROVIDER`, `EMBEDDING_PROVIDER`, and both Graphiti override variables.
-- [ ] Add the explicit Graphiti extraction fallback and bounded-attempt settings.
-- [ ] Implement legacy-variable precedence and deprecation warnings.
-- [ ] Validate URLs, dimensions, timeouts, retry/fallback budgets, model capabilities, and selected-provider credentials.
-- [ ] Split text and embedding interfaces; deprecate embedding methods on text providers.
-- [ ] Make caches profile-aware.
+- [x] Add typed provider connections, text candidates/routes, embedding profiles, and graph-sync policies.
+- [x] Add `TEXT_PROVIDER`, `EMBEDDING_PROVIDER`, and both Graphiti override variables.
+- [x] Add the explicit Graphiti extraction fallback and bounded-attempt settings.
+- [x] Implement legacy-variable precedence and deprecation warnings.
+- [x] Validate URLs, dimensions, timeouts, retry/fallback budgets, model capabilities, and selected-provider credentials.
+- [x] Split text and embedding interfaces; deprecate embedding methods on text providers.
+- [x] Make caches profile-aware.
 - [ ] Keep fallback orchestration outside single-call provider adapters.
-- [ ] Add unit tests for precedence, candidate order, failure-class routing, maximum calls, and all four primary provider combinations.
+- [x] Add unit tests for precedence, candidate order, failure-class routing, maximum calls, and all four primary provider combinations.
 - [ ] Deploy this phase with current Ollama defaults and confirm no provider-selection or output-quality regression beyond the Phase 1 safety contract.
 
 **Exit criteria:** The existing all-Ollama deployment passes through the new settings and orchestration path with no OpenRouter key present, no regression against the Phase 0 baseline, and all Phase 1 safety invariants intact.
@@ -777,25 +792,25 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 
 ### Phase 4 — OpenRouter text generation
 
-- [ ] Add the OpenRouter text adapter.
+- [x] Add the OpenRouter text adapter.
 - [ ] Add non-streaming, streaming, usage, error, retry, and redaction tests using mocked HTTP responses.
-- [ ] Add LangChain OpenRouter construction.
-- [ ] Add PydanticAI provider-neutral construction and compatibility wrappers.
-- [ ] Update provider-specific checks in reflection, direct answers, classifiers, workflows, and legacy agents.
-- [ ] Make prompt profiles model-family-aware.
-- [ ] Add task-capability validation for tools and structured extraction.
-- [ ] Record requested candidate, actual returned model/upstream, and route outcome.
+- [x] Add LangChain OpenRouter construction.
+- [x] Add PydanticAI provider-neutral construction and compatibility wrappers.
+- [x] Update provider-specific checks in reflection, direct answers, classifiers, workflows, and legacy agents.
+- [x] Make prompt profiles model-family-aware.
+- [x] Add task-capability validation for tools and structured extraction.
+- [x] Record requested candidate, actual returned model/upstream, and route outcome.
 - [ ] Add an opt-in live integration test with a strict token/cost ceiling.
 
 **Exit criteria:** Chat, creative, reasoning, tool use, structured output, extraction fallback, and streaming pass against selected OpenRouter routes while embeddings remain on Ollama.
 
 ### Phase 5 — OpenRouter embeddings
 
-- [ ] Add the OpenRouter embedding adapter and explicit float output.
-- [ ] Add configurable dimensions and response validation.
-- [ ] Upgrade the Ollama embedder to batch-capable modern endpoints and the same validation contract.
+- [x] Add the OpenRouter embedding adapter and explicit float output.
+- [x] Add configurable dimensions and response validation.
+- [x] Upgrade the Ollama embedder to batch-capable modern endpoints and the same validation contract.
 - [ ] Add embedding profile fingerprinting and startup guards.
-- [ ] Store or expose provider/model/dimensions in sanitized health and pipeline output.
+- [x] Store or expose provider/model/dimensions in sanitized health and pipeline output.
 - [ ] Add deterministic ordering, cardinality, invalid-vector, retry, and no-fallback tests.
 - [ ] Build a shadow embedding evaluation path that does not overwrite active Nomic vectors.
 
@@ -803,10 +818,10 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 
 ### Phase 6 — Graphiti provider separation
 
-- [ ] Replace the coupled Graphiti provider switch with an extraction route and an independent embedding profile.
-- [ ] Add Ollama/Ollama, Ollama/OpenRouter, OpenRouter/Ollama, and OpenRouter/OpenRouter Graphiti configuration tests.
+- [x] Replace the coupled Graphiti provider switch with an extraction route and an independent embedding profile.
+- [x] Add Ollama/Ollama, Ollama/OpenRouter, OpenRouter/Ollama, and OpenRouter/OpenRouter Graphiti configuration tests.
 - [ ] Verify Graphiti structured extraction with the selected OpenRouter text model.
-- [ ] Verify vector dimensions and cosine configuration before Graphiti initialization.
+- [x] Verify vector dimensions and cosine configuration before Graphiti initialization.
 - [ ] Update Graphiti benchmark scripts and summaries.
 - [ ] Add a graph rebuild command that records the active sync and embedding profiles.
 - [ ] Require graph rebuild jobs to use the durable lifecycle, attempt ledger, and audit contract.
@@ -831,8 +846,8 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 
 ### Phase 8 — Deployment, secrets, and operations
 
-- [ ] Add OpenRouter variables to `.env.example` with empty secret values.
-- [ ] Add `OPENROUTER_API_KEY_FILE` support to the container entrypoint.
+- [x] Add OpenRouter variables to `.env.example` with empty secret values.
+- [x] Add `OPENROUTER_API_KEY_FILE` support to the container entrypoint.
 - [ ] Add OpenRouter secret transport to development Compose, production Compose, deployment scripts, and CI/CD.
 - [ ] Ensure all-Ollama deployments do not mount or require an OpenRouter secret.
 - [ ] Make Ollama model initialization and warmup conditional on selected capabilities.

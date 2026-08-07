@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.messages import ToolCallPart, ToolReturnPart
 
-from src.llm.pydantic_ai_factory import create_openai_chat_model
+from src.llm.pydantic_ai_factory import create_text_model
 from src.security import public_error_message
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,11 @@ class EnhancedLoreChatAgent:
     - How the answer is constructed
     """
 
-    def __init__(self, openai_api_key: str, api_base_url: str = "http://localhost:8003"):
+    def __init__(
+        self,
+        openai_api_key: str | None = None,
+        api_base_url: str = "http://localhost:8003",
+    ):
         self.api_base_url = api_base_url
 
         # Track conversation context
@@ -77,7 +81,7 @@ class EnhancedLoreChatAgent:
 
         # Create agent with enhanced prompt
         self.agent = Agent(
-            create_openai_chat_model(openai_api_key),
+            create_text_model("tools", legacy_openai_api_key=openai_api_key),
             output_type=str,
             system_prompt=self._create_enhanced_prompt(),
             deps_type=EnhancedLoreChatAgent,
@@ -326,7 +330,9 @@ Remember: You're not just a search engine - you're a sage who understands the de
 
 
 # Factory function
-async def create_enhanced_agent(openai_api_key: str) -> EnhancedLoreChatAgent:
+async def create_enhanced_agent(
+    openai_api_key: str | None = None,
+) -> EnhancedLoreChatAgent:
     """Create and initialize an enhanced lore chat agent."""
     return EnhancedLoreChatAgent(openai_api_key)
 
@@ -334,14 +340,7 @@ async def create_enhanced_agent(openai_api_key: str) -> EnhancedLoreChatAgent:
 # Test function
 async def test_enhanced_agent():
     """Test the enhanced agent."""
-    import os
-
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        print("❌ OPENAI_API_KEY not set")
-        return
-
-    agent = await create_enhanced_agent(api_key)
+    agent = await create_enhanced_agent()
 
     # Test regular chat
     print("\n🔍 Testing: What are the ages of Luminari?")

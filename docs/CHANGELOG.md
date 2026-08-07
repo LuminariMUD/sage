@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Provider-Neutral Ollama/OpenRouter Profiles (0.7.10)**
+  - Added typed, immutable text routes, embedding profiles, Graphiti overrides, bounded policy settings, selected-provider validation, secret-free fingerprints, and profile-aware caches.
+  - Added OpenRouter text and embedding adapters through existing OpenAI-compatible libraries, with explicit privacy/routing policy, streaming and structured request support, usage/model provenance, indexed embedding ordering, and strict vector validation.
+  - Upgraded Ollama embeddings to the batch `/api/embed` contract and separated application text providers from embedding providers.
+  - Added provider-neutral LangChain, PydanticAI, legacy-agent, and Graphiti construction, including all four Ollama/OpenRouter Graphiti configuration combinations.
+  - Added sanitized provider/model/dimension health output, blank OpenRouter environment fields, secret-file entrypoint support, and a deprecated `OPENROUTER_KEY` alias that never logs its value.
+  - Verified 185 offline fast tests with 6 skips; no provider request or graph ingestion was executed, and the operator-requested worker freeze remains active.
+
 - **Durable Graph Sync Runtime (0.7.5-0.7.9)**
   - Added atomic PostgreSQL job claims, expiring token-fenced leases, deterministic retry generations, bounded attempts, quarantine, run-level systemic pause, and exact stable-ID/source/profile success verification.
   - Added immutable provider-call/result ledger guards, safe upgrade backfill, sanitized operator status/retry/attempt commands, and isolated concurrency, recovery, redaction, and migration tests.

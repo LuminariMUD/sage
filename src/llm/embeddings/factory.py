@@ -1,37 +1,60 @@
-"""Factory for embedding model selection."""
+"""Profile-aware embedding adapter factory."""
 
-from src.llm.config import get_embedding_config
+from __future__ import annotations
+
+from src.llm.cache import embedder_cache
+from src.llm.config import get_embedding_profile
 from src.llm.embeddings.base import BaseEmbedder
-from src.llm.embeddings.ollama_embedder import OllamaEmbedder
-from src.llm.embeddings.openai_embedder import OpenAIEmbedder
-from src.llm.embeddings.sentence_transformers_embedder import SentenceTransformersEmbedder
-
-_embedder_cache: BaseEmbedder | None = None
+from src.llm.provider_config import EmbeddingProfile
 
 
-def get_embedder(force_refresh: bool = False) -> BaseEmbedder:
-    """
-    Get configured embedder (singleton pattern).
+def create_embedder(
+    profile: EmbeddingProfile,
+    *,
+    transport_max_retries: int | None = None,
+) -> BaseEmbedder:
+    """Construct one embedding adapter from a validated profile."""
+    provider = profile.connection.provider
+    if provider == "ollama":
+        from src.llm.embeddings.ollama_embedder import OllamaEmbedder
 
-    Args:
-        force_refresh: Recreate embedder instance
+        if transport_max_retries not in {None, 0}:
+            raise ValueError("Ollama native embedder owns no hidden transport retries")
+        return OllamaEmbedder(profile)
+    if provider == "openrouter":
+        from src.llm.embeddings.openrouter_embedder import OpenRouterEmbedder
 
-    Returns:
-        Configured embedder
-    """
-    global _embedder_cache
+        return OpenRouterEmbedder(profile, transport_max_retries=transport_max_retries)
+    if provider == "openai":
+        from src.llm.embeddings.openai_embedder import OpenAIEmbedder
 
-    if _embedder_cache is None or force_refresh:
-        config = get_embedding_config()
-        provider = config["provider"]
+        return OpenAIEmbedder(profile, transport_max_retries=transport_max_retries)
+    if provider == "sentence-transformers":
+        from src.llm.embeddings.sentence_transformers_embedder import (
+            SentenceTransformersEmbedder,
+        )
 
-        if provider == "ollama":
-            _embedder_cache = OllamaEmbedder()
-        elif provider == "openai":
-            _embedder_cache = OpenAIEmbedder()
-        elif provider == "sentence-transformers":
-            _embedder_cache = SentenceTransformersEmbedder()
-        else:
-            raise ValueError(f"Unknown embedding provider: {provider}")
+        if transport_max_retries is not None:
+            raise ValueError("Sentence Transformers has no HTTP transport retries")
+        return SentenceTransformersEmbedder(profile)
+    raise ValueError(f"Unknown embedding provider: {provider}")
 
-    return _embedder_cache
+
+def get_embedder(
+    force_refresh: bool = False,
+    *,
+    profile: EmbeddingProfile | None = None,
+) -> BaseEmbedder:
+    """Return an embedder cached by vector profile and credential identity."""
+    selected = profile or get_embedding_profile()
+    cache_key = (selected.fingerprint, selected.connection.cache_identity())
+    if force_refresh:
+        embedder_cache.pop(cache_key, None)
+    if cache_key not in embedder_cache:
+        embedder_cache[cache_key] = create_embedder(selected)
+    return embedder_cache[cache_key]
+
+
+def reset_embedder_cache() -> None:
+    """Clear all cached embedding profiles."""
+    embedder_cache.clear()

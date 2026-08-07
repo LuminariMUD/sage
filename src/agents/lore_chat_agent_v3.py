@@ -18,7 +18,7 @@ import aiohttp
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext
 
-from src.llm.pydantic_ai_factory import create_openai_chat_model
+from src.llm.pydantic_ai_factory import create_text_model
 from src.security import public_error_message
 
 logger = logging.getLogger(__name__)
@@ -55,7 +55,11 @@ class LuminariLoreChatAgent:
     - Streaming support
     """
 
-    def __init__(self, openai_api_key: str, api_base_url: str = "http://localhost:8003"):
+    def __init__(
+        self,
+        openai_api_key: str | None = None,
+        api_base_url: str = "http://localhost:8003",
+    ):
         # Initialize dependencies
         self.deps = AgentDependencies(
             api_base_url=api_base_url, api_key=os.getenv("SAGE_API_KEY", "")
@@ -63,7 +67,7 @@ class LuminariLoreChatAgent:
 
         # Create agent with proper configuration
         self.agent = Agent(
-            create_openai_chat_model(openai_api_key),
+            create_text_model("tools", legacy_openai_api_key=openai_api_key),
             deps_type=AgentDependencies,
             output_type=str,  # We want string responses
             system_prompt=self._create_system_prompt(),
@@ -270,12 +274,7 @@ Remember: You're a sage who loves this world and wants to share its wonders with
 # Test function
 async def test_agent():
     """Test the agent."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        print("❌ OPENAI_API_KEY not set")
-        return
-
-    agent = LuminariLoreChatAgent(api_key)
+    agent = LuminariLoreChatAgent()
 
     print("\n🔍 Testing: What are the ages of Luminari?")
     print("─" * 50)

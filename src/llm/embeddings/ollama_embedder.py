@@ -1,86 +1,67 @@
-"""Ollama embedding model implementation."""
+"""Batch-capable Ollama embedding adapter using the modern native endpoint."""
+
+from __future__ import annotations
+
+from typing import Any
 
 import aiohttp
 
-from src.llm.config import get_embedding_config
+from src.llm.config import get_embedding_profile
 from src.llm.embeddings.base import BaseEmbedder
+from src.llm.embeddings.validation import EmbeddingValidationError, validate_embedding_batch
+from src.llm.provider_config import EmbeddingProfile
 
 
 class OllamaEmbedder(BaseEmbedder):
-    """Ollama local embedding model."""
+    """Validated Ollama `/api/embed` client."""
 
-    def __init__(self):
-        """Initialize Ollama embedder."""
-        self.config = get_embedding_config()
-        self.base_url = self.config["base_url"]
-        self.model = self.config["model"]  # nomic-embed-text
-        self.dimension = self.config["dimension"]  # 768 for nomic-embed-text
-        self.batch_size = self.config.get("batch_size", 32)
-        self.timeout = aiohttp.ClientTimeout(total=60)
+    def __init__(self, profile: EmbeddingProfile | None = None):
+        self.profile = profile or get_embedding_profile()
+        if self.profile.connection.provider != "ollama":
+            raise ValueError("OllamaEmbedder requires an Ollama embedding profile")
+        self.base_url = self.profile.connection.base_url
+        self.model = self.profile.model
+        self.dimension = self.profile.dimensions
+        self.batch_size = self.profile.batch_size
+        self.timeout = aiohttp.ClientTimeout(total=self.profile.connection.timeout_seconds)
+
+    async def _request_batch(
+        self, session: aiohttp.ClientSession, texts: list[str]
+    ) -> list[list[float]]:
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "input": texts,
+            "dimensions": self.dimension,
+            "truncate": False,
+        }
+        async with session.post(f"{self.base_url}/api/embed", json=payload) as response:
+            if response.status != 200:
+                raise RuntimeError(f"Ollama embedding request failed with status {response.status}")
+            result = await response.json()
+        if not isinstance(result, dict) or not isinstance(result.get("embeddings"), list):
+            raise EmbeddingValidationError("Ollama embedding response is malformed")
+        return validate_embedding_batch(
+            result["embeddings"],
+            expected_count=len(texts),
+            dimensions=self.dimension,
+        )
 
     async def embed_text(self, text: str) -> list[float]:
-        """
-        Generate embedding for single text.
-
-        Args:
-            text: Text to embed
-
-        Returns:
-            Embedding vector as list of floats
-        """
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
-            async with session.post(
-                f"{self.base_url}/api/embeddings", json={"model": self.model, "prompt": text}
-            ) as response:
-                if response.status != 200:
-                    raise RuntimeError(
-                        f"Ollama embedding request failed with status {response.status}"
-                    )
-
-                result = await response.json()
-                return result["embedding"]
+        """Generate and validate one embedding."""
+        return (await self.embed_batch([text]))[0]
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """
-        Generate embeddings for multiple texts efficiently.
-
-        Args:
-            texts: List of texts to embed
-
-        Returns:
-            List of embedding vectors
-        """
-        embeddings = []
-
-        # Process in batches to avoid overwhelming Ollama
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i : i + self.batch_size]
-
-            async with aiohttp.ClientSession(timeout=self.timeout) as session:
-                # Process batch items
-                batch_embeddings = []
-                for text in batch:
-                    async with session.post(
-                        f"{self.base_url}/api/embeddings",
-                        json={"model": self.model, "prompt": text},
-                    ) as response:
-                        if response.status != 200:
-                            raise RuntimeError(
-                                f"Ollama embedding request failed with status {response.status}"
-                            )
-
-                        result = await response.json()
-                        batch_embeddings.append(result["embedding"])
-
-                embeddings.extend(batch_embeddings)
-
+        """Send true batches without dropping or reordering any input."""
+        if not texts:
+            return []
+        if any(not isinstance(text, str) or not text for text in texts):
+            raise ValueError("Embedding inputs must be non-empty strings")
+        embeddings: list[list[float]] = []
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            for start in range(0, len(texts), self.batch_size):
+                batch = texts[start : start + self.batch_size]
+                embeddings.extend(await self._request_batch(session, batch))
         return embeddings
 
     def get_dimension(self) -> int:
-        """
-        Get embedding dimension.
-
-        Returns:
-            Dimension of embedding vectors
-        """
         return self.dimension

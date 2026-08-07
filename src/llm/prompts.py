@@ -1,6 +1,6 @@
-"""Optimized prompts for different models."""
+"""Prompt profiles selected by model family, independent of transport."""
 
-from src.llm.config import get_llm_provider_config
+from src.llm.config import get_prompt_profile_for_task
 
 
 def get_optimized_prompt(task: str, context: str = "", question: str = "") -> str:
@@ -15,22 +15,16 @@ def get_optimized_prompt(task: str, context: str = "", question: str = "") -> st
     Returns:
         Optimized prompt string
     """
-    config = get_llm_provider_config()
-    provider = config["provider"]
-
-    if provider == "ollama":
-        model = config.get("chat_model", "")
-
-        if "qwen" in model.lower():
-            return get_qwen_prompt(task, context, question)
-        elif "deepseek" in model.lower():
-            return get_deepseek_prompt(task, context, question)
-        elif "llama" in model.lower():
-            return get_llama_prompt(task, context, question)
-        else:
-            return get_generic_ollama_prompt(task, context, question)
-    else:
+    profile = get_prompt_profile_for_task(task)
+    if profile == "qwen":
+        return get_qwen_prompt(task, context, question)
+    if profile == "deepseek":
+        return get_deepseek_prompt(task, context, question)
+    if profile == "llama":
+        return get_llama_prompt(task, context, question)
+    if profile == "openai":
         return get_openai_prompt(task, context, question)
+    return get_generic_prompt(task, context, question)
 
 
 def get_qwen_prompt(task: str, context: str, question: str) -> str:
@@ -216,8 +210,8 @@ You are a helpful assistant.
 """
 
 
-def get_generic_ollama_prompt(task: str, context: str, question: str) -> str:
-    """Generic prompt for unknown Ollama models."""
+def get_generic_prompt(task: str, context: str, question: str) -> str:
+    """Provider-neutral prompt for an unknown model family."""
     if not context:
         return question
 
@@ -227,6 +221,9 @@ def get_generic_ollama_prompt(task: str, context: str, question: str) -> str:
 Question: {question}
 
 Answer:"""
+
+
+get_generic_ollama_prompt = get_generic_prompt
 
 
 def get_openai_prompt(task: str, context: str, question: str) -> str:

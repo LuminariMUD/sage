@@ -1,41 +1,49 @@
-"""Provider factory for LLM provider selection."""
+"""Profile-aware factory for single-candidate text adapters."""
+
+from __future__ import annotations
 
 from src.llm.base import BaseLLMProvider
-from src.llm.config import get_llm_provider_config
+from src.llm.cache import reset_provider_caches, text_provider_cache
+from src.llm.config import get_text_route
+from src.llm.provider_config import TextModelCandidate, TextTask
 from src.llm.providers.ollama_provider import OllamaProvider
 from src.llm.providers.openai_provider import OpenAIProvider
-
-# Singleton instance cache
-_provider_cache: BaseLLMProvider | None = None
+from src.llm.providers.openrouter_provider import OpenRouterProvider
 
 
-def get_llm_provider(force_refresh: bool = False) -> BaseLLMProvider:
-    """
-    Get configured LLM provider (singleton pattern).
-
-    Args:
-        force_refresh: If True, recreate provider instance
-
-    Returns:
-        Configured LLM provider instance
-    """
-    global _provider_cache
-
-    if _provider_cache is None or force_refresh:
-        config = get_llm_provider_config()
-        provider_type = config["provider"]
-
-        if provider_type == "ollama":
-            _provider_cache = OllamaProvider()
-        elif provider_type == "openai":
-            _provider_cache = OpenAIProvider()
-        else:
-            raise ValueError(f"Unknown provider: {provider_type}")
-
-    return _provider_cache
+def create_text_provider(candidate: TextModelCandidate) -> BaseLLMProvider:
+    """Construct exactly one single-call adapter from a validated candidate."""
+    provider_type = candidate.connection.provider
+    if provider_type == "ollama":
+        return OllamaProvider(candidate)
+    if provider_type == "openrouter":
+        return OpenRouterProvider(candidate)
+    if provider_type == "openai":
+        return OpenAIProvider(candidate)
+    raise ValueError(f"Unknown text provider: {provider_type}")
 
 
-def reset_provider_cache():
-    """Reset the provider cache (useful for testing)."""
-    global _provider_cache
-    _provider_cache = None
+def get_llm_provider(
+    force_refresh: bool = False,
+    *,
+    task: TextTask = "chat",
+    candidate: TextModelCandidate | None = None,
+) -> BaseLLMProvider:
+    """Return a provider cached by secret-free profile and credential identity."""
+    selected = candidate or get_text_route(task).primary
+    cache_key = (selected.fingerprint, selected.connection.cache_identity())
+    if force_refresh:
+        text_provider_cache.pop(cache_key, None)
+    if cache_key not in text_provider_cache:
+        text_provider_cache[cache_key] = create_text_provider(selected)
+    return text_provider_cache[cache_key]
+
+
+def get_text_provider(task: TextTask = "chat", *, force_refresh: bool = False) -> BaseLLMProvider:
+    """Provider-neutral name for the legacy get_llm_provider entrypoint."""
+    return get_llm_provider(force_refresh=force_refresh, task=task)
+
+
+def reset_provider_cache() -> None:
+    """Clear every provider capability cache for deterministic tests/reloads."""
+    reset_provider_caches()

@@ -26,17 +26,10 @@ from src.graphiti.sync_models import GraphSyncPolicy, sanitize_summary
 from src.graphiti.sync_profile import GraphSyncExecutionProfile
 from src.graphiti.sync_state import GraphSyncRepository
 from src.graphiti.sync_worker import GraphSyncWorker
+from src.llm.provider_config import resolve_provider_settings
 from src.security import install_sensitive_logging
 
 RUN_CONFIRMATION = "RUN_DURABLE_GRAPH_SYNC"
-
-
-def _environment_int(name: str, default: int) -> int:
-    value = os.getenv(name, str(default))
-    try:
-        return int(value)
-    except ValueError as error:
-        raise ValueError(f"{name} must be an integer") from error
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -63,13 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def policy_from_environment() -> GraphSyncPolicy:
-    return GraphSyncPolicy(
-        lease_seconds=_environment_int("GRAPH_SYNC_LEASE_SECONDS", 900),
-        max_job_attempts=_environment_int("GRAPH_SYNC_MAX_JOB_ATTEMPTS", 3),
-        retry_base_seconds=_environment_int("GRAPH_SYNC_RETRY_BASE_SECONDS", 60),
-        retry_max_seconds=_environment_int("GRAPH_SYNC_RETRY_MAX_SECONDS", 3600),
-        max_provider_calls=_environment_int("GRAPH_SYNC_MAX_PROVIDER_CALLS", 3),
-    )
+    return GraphSyncPolicy(**resolve_provider_settings().graph_sync_policy.as_kwargs())
 
 
 async def _status() -> int:

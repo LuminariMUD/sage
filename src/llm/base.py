@@ -1,5 +1,6 @@
 """Abstract base classes for LLM providers and embedders."""
 
+import warnings
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -48,18 +49,21 @@ class BaseLLMProvider(ABC):
             Text tokens as they're generated
         """
 
-    @abstractmethod
     async def embed(self, text: str | list[str], **kwargs) -> list[float] | list[list[float]]:
-        """
-        Generate embeddings for text.
+        """Deprecated compatibility shim delegated to the embedding factory."""
+        warnings.warn(
+            "Embedding through a text provider is deprecated; use get_embedder()",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if kwargs:
+            raise TypeError("Text-provider embedding compatibility does not accept options")
+        from src.llm.embeddings.factory import get_embedder
 
-        Args:
-            text: Single text or list of texts
-            **kwargs: Additional provider-specific parameters
-
-        Returns:
-            Single embedding vector or list of embedding vectors
-        """
+        embedder = get_embedder()
+        if isinstance(text, list):
+            return await embedder.embed_batch(text)
+        return await embedder.embed_text(text)
 
     @abstractmethod
     def get_model_info(self) -> dict[str, Any]:

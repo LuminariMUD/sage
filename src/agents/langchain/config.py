@@ -2,6 +2,8 @@
 
 import os
 
+from src.llm.config import text_profile_is_ready
+
 
 def get_reflection_config() -> dict:
     """Get reflection configuration from environment variables.
@@ -27,16 +29,13 @@ def should_enable_reflection() -> bool:
     """Check if reflection should be enabled based on environment.
 
     Reflection requires:
-    - a local Ollama provider, or an OpenAI API key for the OpenAI provider
+    - a ready reasoning text profile
     - LANGCHAIN_ENABLE_REFLECTION not set to false
 
     Returns:
         True if reflection should be enabled
     """
-    provider = os.getenv("LLM_PROVIDER", "openai").lower()
-    provider_available = provider == "ollama" or (
-        provider == "openai" and bool(os.getenv("OPENAI_API_KEY"))
-    )
+    provider_available = text_profile_is_ready("reasoning")
     reflection_enabled = os.getenv("LANGCHAIN_ENABLE_REFLECTION", "true").lower() != "false"
 
     return provider_available and reflection_enabled

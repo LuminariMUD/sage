@@ -17,7 +17,7 @@ import aiohttp
 from pydantic import BaseModel
 from pydantic_ai import Agent, RunContext
 
-from src.llm.pydantic_ai_factory import create_openai_chat_model
+from src.llm.pydantic_ai_factory import create_text_model
 from src.security import public_error_message
 
 logger = logging.getLogger(__name__)
@@ -42,12 +42,16 @@ class SimpleLoreChatAgent:
     - Focus on synthesis and accuracy
     """
 
-    def __init__(self, openai_api_key: str, api_base_url: str = "http://localhost:8003"):
+    def __init__(
+        self,
+        openai_api_key: str | None = None,
+        api_base_url: str = "http://localhost:8003",
+    ):
         self.api_base_url = api_base_url
 
         # Create the pydantic-ai agent with GPT-4
         self.agent = Agent(
-            create_openai_chat_model(openai_api_key),
+            create_text_model("tools", legacy_openai_api_key=openai_api_key),
             output_type=str,  # Expect string responses
             system_prompt=self._create_system_prompt(),
             deps_type=SimpleLoreChatAgent,
@@ -170,7 +174,7 @@ Remember: You're not just searching - you're a knowledgeable guide helping users
 
 
 # Factory function for easy initialization
-async def create_simple_agent(openai_api_key: str) -> SimpleLoreChatAgent:
+async def create_simple_agent(openai_api_key: str | None = None) -> SimpleLoreChatAgent:
     """Create and initialize a simple lore chat agent."""
     return SimpleLoreChatAgent(openai_api_key)
 
@@ -178,14 +182,7 @@ async def create_simple_agent(openai_api_key: str) -> SimpleLoreChatAgent:
 # Test the agent
 async def test_simple_agent():
     """Test function to verify the agent works."""
-    import os
-
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        print("❌ OPENAI_API_KEY not set")
-        return
-
-    agent = await create_simple_agent(api_key)
+    agent = await create_simple_agent()
 
     test_queries = [
         "What are the ages of Luminari?",

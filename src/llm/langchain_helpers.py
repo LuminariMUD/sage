@@ -10,7 +10,7 @@ from typing import Any
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
-from src.llm.config import get_llm_provider_config, get_model_for_task, get_temperature_for_task
+from src.llm.config import get_text_route
 
 
 def get_chat_model(
@@ -45,34 +45,46 @@ def get_chat_model(
         >>> llm = get_chat_model(task="creative", temperature=0.9)
         >>> response = llm.invoke("Tell me a story about crystal dwarves")
     """
-    config = get_llm_provider_config()
-    provider = config["provider"]
+    route = get_text_route(task)
+    candidate = route.primary
+    provider = candidate.connection.provider
 
     # Use optimal temperature for task if not specified
     if temperature is None:
-        temperature = get_temperature_for_task(task)
+        temperature = candidate.temperature
 
     if provider == "ollama":
-        model = get_model_for_task(task)
         # langchain-ollama's ChatOllama has no `streaming` field (it would be silently
         # dropped); streaming is expressed via `disable_streaming` on BaseChatModel.
         return ChatOllama(
-            model=model,
-            base_url=config["base_url"],
+            model=candidate.model,
+            base_url=candidate.connection.base_url,
             temperature=temperature,
-            num_ctx=config.get("max_context_tokens", 4096),
+            num_ctx=candidate.context_limit,
             disable_streaming=not streaming,
             **kwargs,
         )
-    elif provider == "openai":
-        # For OpenAI, use the configured chat model
-        # OpenAI typically uses the same model for different tasks
-        model = config["chat_model"]
-        model_kwargs = {
-            "model": model,
+    elif provider in {"openrouter", "openai"}:
+        secret = candidate.connection.api_key
+        if secret is None:  # Protected by ProviderConnection validation.
+            raise ValueError(f"{provider.title()} API credentials are required")
+        model_kwargs: dict[str, Any] = {
+            "model": candidate.model,
             "temperature": temperature,
             "streaming": streaming,
+            "api_key": secret,
+            "base_url": candidate.connection.base_url,
+            "default_headers": candidate.connection.default_headers,
+            "timeout": candidate.connection.timeout_seconds,
+            "max_retries": candidate.connection.transport_retry.maximum_attempts - 1,
+            "use_responses_api": False,
         }
+        if provider == "openrouter":
+            configured_body = candidate.provider_request_body()
+            supplied_body = kwargs.pop("extra_body", None)
+            if supplied_body is not None and supplied_body != configured_body:
+                raise ValueError("OpenRouter routing cannot override the configured policy")
+            model_kwargs["extra_body"] = configured_body
         if max_tokens is not None:
             model_kwargs["max_tokens"] = max_tokens
         model_kwargs.update(kwargs)

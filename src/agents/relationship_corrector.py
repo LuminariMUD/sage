@@ -40,7 +40,7 @@ class RelationshipCorrector(BaseValidator):
     4. Never modifies MENTIONS relationships
     """
 
-    def __init__(self, openai_api_key: str):
+    def __init__(self, openai_api_key: str | None = None):
         """Initialize the relationship corrector."""
         super().__init__(agent_id="relationship_corrector_v1", openai_api_key=openai_api_key)
 

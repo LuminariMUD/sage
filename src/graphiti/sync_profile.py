@@ -10,6 +10,7 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 from src.graphiti.sync_models import validate_label
+from src.llm.provider_config import resolve_provider_settings
 
 SYNC_IMPLEMENTATION_VERSION = "sage-graph-sync:v1"
 EXTRACTION_INSTRUCTIONS_VERSION = "lore-extraction:v1"
@@ -94,57 +95,13 @@ class GraphSyncExecutionProfile:
     @classmethod
     def from_environment(cls) -> GraphSyncExecutionProfile:
         """Resolve a deterministic, secret-free profile from current settings."""
-        provider = _environment_value(
-            "GRAPHITI_TEXT_PROVIDER",
-            "GRAPHITI_PROVIDER",
-            "TEXT_PROVIDER",
-            "LLM_PROVIDER",
-            default="ollama",
-        ).lower()
-        if provider not in {"ollama", "openrouter", "openai"}:
-            raise ValueError("Graphiti text provider is unsupported")
-
-        if provider == "ollama":
-            default_model = _environment_value("OLLAMA_REASONING_MODEL", default="qwen2.5:3b")
-        elif provider == "openrouter":
-            default_model = _environment_value(
-                "OPENROUTER_GRAPHITI_MODEL",
-                "OPENROUTER_REASONING_MODEL",
-            )
-        else:
-            default_model = _environment_value("GRAPHITI_LLM_MODEL", default="gpt-4o-mini")
-        model = _environment_value("GRAPHITI_TEXT_MODEL", default=default_model)
-        validate_label(model, "Graphiti text model")
-
-        embedding_provider = _environment_value(
-            "GRAPHITI_EMBEDDING_PROVIDER",
-            "EMBEDDING_PROVIDER",
-            "GRAPHITI_PROVIDER",
-            default=provider,
-        ).lower()
-        if embedding_provider not in {"ollama", "openrouter", "openai"}:
-            raise ValueError("Graphiti embedding provider is unsupported")
-        if embedding_provider == "ollama":
-            embedding_model = _environment_value(
-                "OLLAMA_EMBEDDING_MODEL", default="nomic-embed-text"
-            )
-            default_dimensions = "768"
-        elif embedding_provider == "openrouter":
-            embedding_model = _environment_value("OPENROUTER_EMBEDDING_MODEL")
-            default_dimensions = "1024"
-        else:
-            embedding_model = _environment_value(
-                "EMBEDDING_MODEL", default="text-embedding-3-small"
-            )
-            default_dimensions = "1536"
-        validate_label(embedding_model, "Graphiti embedding model")
-        embedding_dimensions = _positive_int(
-            _environment_value("GRAPHITI_EMBEDDING_DIMENSIONS", default=default_dimensions),
-            "Graphiti embedding dimensions",
-        )
-
-        model_revision = _environment_value("GRAPHITI_TEXT_MODEL_REVISION") or None
-        embedding_revision = _environment_value("GRAPHITI_EMBEDDING_MODEL_REVISION") or None
+        settings = resolve_provider_settings()
+        route = settings.graphiti_text_route
+        candidate = route.primary
+        embedding_profile = settings.graphiti_embedding_profile
+        provider = candidate.connection.provider
+        model = candidate.model
+        model_revision = candidate.revision
         prompt_version = _environment_value(
             "GRAPH_SYNC_PROMPT_VERSION", default=EXTRACTION_INSTRUCTIONS_VERSION
         )
@@ -160,27 +117,9 @@ class GraphSyncExecutionProfile:
             "Maximum relationships per episode",
         )
 
-        embedding_payload = {
-            "provider": embedding_provider,
-            "implementation": "openai-compatible",
-            "model": embedding_model,
-            "revision": embedding_revision,
-            "dimensions": embedding_dimensions,
-            "encoding": "float",
-            "distance": "cosine",
-        }
-        embedding_fingerprint = canonical_fingerprint("embedding", embedding_payload)
-        candidate_payload = {
-            "provider": provider,
-            "model": model,
-            "revision": model_revision,
-            "protocol": "openai-chat-completions",
-        }
-        candidate_fingerprint = canonical_fingerprint("candidate", candidate_payload)
-        route_fingerprint = canonical_fingerprint(
-            "route",
-            {"candidates": [candidate_fingerprint], "fallback_policy": "none:v1"},
-        )
+        embedding_fingerprint = embedding_profile.fingerprint
+        candidate_fingerprint = candidate.fingerprint
+        route_fingerprint = route.fingerprint
 
         from src.graphiti.edge_types import EDGE_TYPES
         from src.graphiti.entity_types import ENTITY_TYPES

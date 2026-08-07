@@ -7,6 +7,8 @@ import logging
 import os
 from typing import Any
 
+from src.llm.config import text_profile_is_ready
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,11 +38,10 @@ def get_chat_service(force_legacy: bool = False, enable_react: bool | None = Non
     # Get model configuration
     model = os.getenv("LANGCHAIN_MODEL", "gpt-4o-mini")
 
-    provider = os.getenv("LLM_PROVIDER", "openai").lower()
-    if provider == "openai" and not os.getenv("OPENAI_API_KEY"):
+    if not text_profile_is_ready("tools"):
         from .legacy_service import LangChainChatService as LegacyLangChainService
 
-        logger.warning("No OpenAI API key found, falling back to legacy service")
+        logger.warning("Text tool profile is not ready; falling back to legacy service")
         return LegacyLangChainService()
 
     try:

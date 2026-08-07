@@ -1,24 +1,28 @@
 """Sentence Transformers embedding model implementation."""
 
 import asyncio
-import os
 
 from sentence_transformers import SentenceTransformer
 
-from src.llm.config import get_embedding_config
+from src.llm.config import get_embedding_profile
 from src.llm.embeddings.base import BaseEmbedder
+from src.llm.embeddings.validation import validate_embedding_batch
+from src.llm.provider_config import EmbeddingProfile
 
 
 class SentenceTransformersEmbedder(BaseEmbedder):
     """Local sentence-transformers embedding model."""
 
-    def __init__(self):
+    def __init__(self, profile: EmbeddingProfile | None = None):
         """Initialize Sentence Transformers embedder."""
-        self.config = get_embedding_config()
-        self.model_name = self.config["model"]
-        self.dimension = self.config["dimension"]
-        revision = os.getenv("SAGE_SENTENCE_TRANSFORMERS_REVISION")
-        self.model = SentenceTransformer(self.model_name, revision=revision)
+        self.profile = profile or get_embedding_profile()
+        if self.profile.connection.provider != "sentence-transformers":
+            raise ValueError(
+                "SentenceTransformersEmbedder requires a Sentence Transformers profile"
+            )
+        self.model_name = self.profile.model
+        self.dimension = self.profile.dimensions
+        self.model = SentenceTransformer(self.model_name, revision=self.profile.revision)
 
     async def embed_text(self, text: str) -> list[float]:
         """
@@ -35,7 +39,9 @@ class SentenceTransformersEmbedder(BaseEmbedder):
         embedding = await loop.run_in_executor(
             None, lambda: self.model.encode(text, show_progress_bar=False)
         )
-        return embedding.tolist()
+        return validate_embedding_batch(
+            [embedding.tolist()], expected_count=1, dimensions=self.dimension
+        )[0]
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """
@@ -52,7 +58,9 @@ class SentenceTransformersEmbedder(BaseEmbedder):
         embeddings = await loop.run_in_executor(
             None, lambda: self.model.encode(texts, show_progress_bar=False)
         )
-        return embeddings.tolist()
+        return validate_embedding_batch(
+            embeddings.tolist(), expected_count=len(texts), dimensions=self.dimension
+        )
 
     def get_dimension(self) -> int:
         """

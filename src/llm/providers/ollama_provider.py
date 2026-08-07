@@ -7,20 +7,23 @@ from typing import Any
 import aiohttp
 
 from src.llm.base import BaseLLMProvider
-from src.llm.config import get_llm_provider_config
+from src.llm.config import get_provider_settings, get_text_route
 from src.llm.monitoring import monitor_performance
+from src.llm.provider_config import TextModelCandidate
 from src.llm.request_queue import queued_ollama_request
 
 
 class OllamaProvider(BaseLLMProvider):
     """Ollama local LLM provider."""
 
-    def __init__(self):
+    def __init__(self, candidate: TextModelCandidate | None = None):
         """Initialize Ollama provider."""
-        self.config = get_llm_provider_config()
-        self.base_url = self.config["base_url"]
-        self.timeout = aiohttp.ClientTimeout(total=self.config["timeout"])
-        self.default_model = self.config["chat_model"]
+        self.candidate = candidate or get_text_route("chat").primary
+        if self.candidate.connection.provider != "ollama":
+            raise ValueError("OllamaProvider requires an Ollama text candidate")
+        self.base_url = self.candidate.connection.base_url
+        self.timeout = aiohttp.ClientTimeout(total=self.candidate.connection.timeout_seconds)
+        self.default_model = self.candidate.model
 
     async def generate(
         self,
@@ -98,45 +101,16 @@ class OllamaProvider(BaseLLMProvider):
                         except json.JSONDecodeError:
                             continue
 
-    async def embed(self, text: str | list[str], **kwargs) -> list[float] | list[list[float]]:
-        """Generate embeddings using Ollama."""
-        model = self.config["embedding_model"]
-        is_batch = isinstance(text, list)
-
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
-            if is_batch:
-                # Batch processing
-                embeddings = []
-                for t in text:
-                    async with session.post(
-                        f"{self.base_url}/api/embeddings", json={"model": model, "prompt": t}
-                    ) as response:
-                        if response.status != 200:
-                            raise RuntimeError(
-                                f"Ollama embedding request failed with status {response.status}"
-                            )
-                        result = await response.json()
-                        embeddings.append(result["embedding"])
-                return embeddings
-            else:
-                async with session.post(
-                    f"{self.base_url}/api/embeddings", json={"model": model, "prompt": text}
-                ) as response:
-                    if response.status != 200:
-                        raise RuntimeError(
-                            f"Ollama embedding request failed with status {response.status}"
-                        )
-                    result = await response.json()
-                    return result["embedding"]
-
     def get_model_info(self) -> dict[str, Any]:
         """Get current model configuration."""
+        settings = get_provider_settings()
         return {
             "provider": "ollama",
-            "chat_model": self.config["chat_model"],
-            "creative_model": self.config["creative_model"],
-            "reasoning_model": self.config["reasoning_model"],
-            "embedding_model": self.config["embedding_model"],
+            "chat_model": settings.text_route("chat").primary.model,
+            "creative_model": settings.text_route("creative").primary.model,
+            "reasoning_model": settings.text_route("reasoning").primary.model,
+            "embedding_model": settings.embedding_profile.model,
             "base_url": self.base_url,
-            "max_context_tokens": self.config["max_context_tokens"],
+            "max_context_tokens": self.candidate.context_limit,
+            "candidate_fingerprint": self.candidate.fingerprint,
         }
