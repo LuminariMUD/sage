@@ -108,33 +108,43 @@ def render_run_summary(summary: dict[str, Any]) -> str:
         if progress["approximate_eta_seconds"] is not None
         else f"unavailable ({progress['eta_status']})"
     )
-    return "\n".join(
-        [
-            "Graph sync run summary",
-            f"Run: {run['id']}",
-            f"State: {run['state']}",
-            f"Profile: {run['sync_profile_fingerprint']}",
-            "Completion: "
-            f"{progress['synced_jobs']}/{progress['total_jobs']} "
-            f"({float(progress['completion_percent']):.3f}%)",
-            f"Remaining jobs: {progress['remaining_jobs']}",
-            f"Eligible now: {progress['eligible_now']}",
-            f"Expired leases: {progress['expired_leases']}",
-            "Rolling verified throughput: "
-            f"{float(progress['rolling_verified_per_minute']):.3f} episodes/min "
-            f"over {float(progress['rolling_window_seconds']):.3f} seconds",
-            f"Approximate ETA: {eta}",
-            f"Attempts: {attempts['completed_attempts']}/{attempts['attempts']} completed",
-            "Attempt outcomes: "
-            + ", ".join(f"{name}={count}" for name, count in attempts["outcomes"].items()),
-            "Attempt failure classes: "
-            + (", ".join(attempt_failures) if attempt_failures else "none"),
-            "Provider calls: "
-            f"{provider_calls['completed']}/{provider_calls['reserved']} completed",
-            "Provider failure classes: "
-            + (", ".join(provider_failures) if provider_failures else "none"),
+    lines = [
+        "Graph sync run summary",
+        f"Run: {run['id']}",
+        f"State: {run['state']}",
+        f"Profile: {run['sync_profile_fingerprint']}",
+        "Completion: "
+        f"{progress['synced_jobs']}/{progress['total_jobs']} "
+        f"({float(progress['completion_percent']):.3f}%)",
+        f"Remaining jobs: {progress['remaining_jobs']}",
+        f"Eligible now: {progress['eligible_now']}",
+        f"Expired leases: {progress['expired_leases']}",
+        "Rolling verified throughput: "
+        f"{float(progress['rolling_verified_per_minute']):.3f} episodes/min "
+        f"over {float(progress['rolling_window_seconds']):.3f} seconds",
+        f"Approximate ETA: {eta}",
+        f"Attempts: {attempts['completed_attempts']}/{attempts['attempts']} completed",
+        "Attempt outcomes: "
+        + ", ".join(f"{name}={count}" for name, count in attempts["outcomes"].items()),
+        "Attempt failure classes: " + (", ".join(attempt_failures) if attempt_failures else "none"),
+        f"Provider calls: {provider_calls['completed']}/{provider_calls['reserved']} completed",
+        "Provider failure classes: "
+        + (", ".join(provider_failures) if provider_failures else "none"),
+    ]
+    for candidate in provider_calls.get("candidates", []):
+        failures = [
+            f"{name}={count}" for name, count in candidate["failure_classes"].items() if count
         ]
-    )
+        latency = candidate["latency_ms"]
+        lines.append(
+            "Provider candidate: "
+            f"{candidate['provider']}/{candidate['model']} "
+            f"({candidate['completed']}/{candidate['reserved']} completed, "
+            f"p95={latency['p95'] if latency['p95'] is not None else 'unavailable'} ms, "
+            f"failures={','.join(failures) if failures else 'none'}, "
+            f"fingerprint={candidate['candidate_fingerprint']})"
+        )
+    return "\n".join(lines)
 
 
 def render_quality_report(report: dict[str, Any]) -> str:

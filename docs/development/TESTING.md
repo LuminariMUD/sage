@@ -1,6 +1,6 @@
 # Testing Guide
 
-**Version**: 0.7.25
+**Version**: 0.7.26
 **Status**: Production Ready
 **Last Updated**: 2026-08-07
 
@@ -15,6 +15,7 @@ Comprehensive guide for testing Luminari Sage, covering unit tests, integration 
 - [Running Tests](#running-tests)
 - [Episode Retrieval Benchmark](#episode-retrieval-benchmark)
 - [Relationship Quality Evidence](#relationship-quality-evidence)
+- [Operational Readiness](#operational-readiness)
 - [Controlled Graph Rebuild](#controlled-graph-rebuild)
 - [Graphiti Extraction Benchmark](#graphiti-extraction-benchmark)
 - [Test Markers](#test-markers)
@@ -340,6 +341,28 @@ invalidated relationship counts plus stable rejection reasons. It explicitly
 reports missing evidence for successful crash-recovery attempts. These extraction
 and maintenance indicators are separate from synchronization completeness and do
 not replace reviewed-corpus precision/recall gates.
+
+## Operational Readiness
+
+The aggregate readiness command is strictly read-only and makes no provider call:
+
+```bash
+make operational-readiness
+make operational-readiness-json
+make operational-readiness-json READINESS_BASELINE=artifacts/prior-readiness.json
+```
+
+It combines sanitized provider/profile identity, graph queue and lease counts, the
+latest durable run, candidate-specific provider calls/failures/latency/usage,
+relationship-quality evidence, aggregate graph-audit drift, and embedding-profile
+preflight. Per-episode audit records, source text, prompts, responses, vectors,
+credentials, worker identity, and free-form failure summaries are excluded.
+
+Exit `0` means ready, `1` means deterministic warning or critical alerts require
+attention, and `2` means collection was incomplete. The optional prior JSON report
+enables quarantined-job growth detection. Retry-storm and sustained-provider-failure
+thresholds are explicit provisional operational defaults in every report; they are
+not substitutes for the separately approved release-quality thresholds.
 
 ## Controlled Graph Rebuild
 

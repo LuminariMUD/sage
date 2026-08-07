@@ -711,6 +711,16 @@ async def test_run_summary_reconstructs_progress_throughput_and_failures_from_le
     assert summary["provider_calls"]["completed"] == 1
     assert summary["provider_calls"]["usage"]["total_tokens"] is None
     assert summary["provider_calls"]["usage_reported_calls"]["total_tokens"] == 0
+    assert len(summary["provider_calls"]["candidates"]) == 1
+    candidate = summary["provider_calls"]["candidates"][0]
+    assert candidate["provider"] == "ollama"
+    assert candidate["model"] == "qwen2.5:3b"
+    assert candidate["candidate_fingerprint"] == "candidate:test"
+    assert candidate["reserved"] == 1
+    assert candidate["completed"] == 1
+    assert candidate["outcomes"]["success"] == 1
+    assert candidate["latency_ms"] == {"average": 0.0, "p95": 0.0, "maximum": 0}
+    assert candidate["failure_classes"]["malformed_json"] == 0
     assert "Episode 0" not in repr(summary)
 
     status = await repository.status_snapshot()

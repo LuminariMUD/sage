@@ -1453,12 +1453,137 @@ class GraphSyncRepository:
             """,
             run["id"],
         )
+        provider_candidate_rows = await connection.fetch(
+            """
+            SELECT intent.provider,
+                   intent.model,
+                   intent.model_revision,
+                   intent.candidate_fingerprint,
+                   count(intent.id) AS reserved,
+                   count(provider_call.id) AS completed,
+                   count(*) FILTER (
+                       WHERE provider_call.outcome = 'success'
+                   ) AS success,
+                   count(*) FILTER (
+                       WHERE provider_call.outcome = 'failure'
+                   ) AS failure,
+                   count(*) FILTER (
+                       WHERE provider_call.outcome = 'cancelled'
+                   ) AS cancelled,
+                   avg(provider_call.latency_ms)::double precision AS average_latency_ms,
+                   percentile_cont(0.95) WITHIN GROUP (
+                       ORDER BY provider_call.latency_ms
+                   ) FILTER (
+                       WHERE provider_call.id IS NOT NULL
+                   ) AS p95_latency_ms,
+                   max(provider_call.latency_ms) AS maximum_latency_ms,
+                   sum(provider_call.prompt_tokens) AS prompt_tokens,
+                   sum(provider_call.completion_tokens) AS completion_tokens,
+                   sum(provider_call.total_tokens) AS total_tokens,
+                   count(provider_call.prompt_tokens) AS prompt_tokens_reported_calls,
+                   count(provider_call.completion_tokens)
+                       AS completion_tokens_reported_calls,
+                   count(provider_call.total_tokens) AS total_tokens_reported_calls
+            FROM graph_sync_attempts AS attempt
+            JOIN graph_sync_provider_call_intents AS intent
+              ON intent.attempt_id = attempt.id
+            LEFT JOIN graph_sync_provider_calls AS provider_call
+              ON provider_call.attempt_id = intent.attempt_id
+             AND provider_call.call_number = intent.call_number
+            WHERE attempt.run_id = $1
+            GROUP BY intent.provider,
+                     intent.model,
+                     intent.model_revision,
+                     intent.candidate_fingerprint
+            ORDER BY intent.candidate_fingerprint
+            """,
+            run["id"],
+        )
+        provider_candidate_failure_rows = await connection.fetch(
+            """
+            SELECT intent.candidate_fingerprint,
+                   provider_call.failure_class,
+                   count(*) AS count
+            FROM graph_sync_attempts AS attempt
+            JOIN graph_sync_provider_call_intents AS intent
+              ON intent.attempt_id = attempt.id
+            JOIN graph_sync_provider_calls AS provider_call
+              ON provider_call.attempt_id = intent.attempt_id
+             AND provider_call.call_number = intent.call_number
+            WHERE attempt.run_id = $1
+              AND provider_call.failure_class IS NOT NULL
+            GROUP BY intent.candidate_fingerprint, provider_call.failure_class
+            ORDER BY intent.candidate_fingerprint, provider_call.failure_class
+            """,
+            run["id"],
+        )
         failure_counts = {
             scope: {failure.value: 0 for failure in FailureClass}
             for scope in ("attempt", "provider")
         }
         for row in failure_rows:
             failure_counts[row["scope"]][row["failure_class"]] = int(row["count"])
+        provider_candidate_failure_counts: dict[str, dict[str, int]] = {}
+        for row in provider_candidate_failure_rows:
+            candidate_failures = provider_candidate_failure_counts.setdefault(
+                row["candidate_fingerprint"],
+                {failure.value: 0 for failure in FailureClass},
+            )
+            candidate_failures[row["failure_class"]] = int(row["count"])
+
+        provider_candidates = []
+        for row in provider_candidate_rows:
+            candidate_fingerprint = row["candidate_fingerprint"]
+            provider_candidates.append(
+                {
+                    "provider": row["provider"],
+                    "model": row["model"],
+                    "model_revision": row["model_revision"],
+                    "candidate_fingerprint": candidate_fingerprint,
+                    "reserved": int(row["reserved"]),
+                    "completed": int(row["completed"]),
+                    "outcomes": {
+                        outcome.value: int(row[outcome.value]) for outcome in ProviderCallOutcome
+                    },
+                    "failure_classes": provider_candidate_failure_counts.get(
+                        candidate_fingerprint,
+                        {failure.value: 0 for failure in FailureClass},
+                    ),
+                    "latency_ms": {
+                        "average": (
+                            round(float(row["average_latency_ms"]), 3)
+                            if row["average_latency_ms"] is not None
+                            else None
+                        ),
+                        "p95": (
+                            round(float(row["p95_latency_ms"]), 3)
+                            if row["p95_latency_ms"] is not None
+                            else None
+                        ),
+                        "maximum": (
+                            int(row["maximum_latency_ms"])
+                            if row["maximum_latency_ms"] is not None
+                            else None
+                        ),
+                    },
+                    "usage": {
+                        name: int(row[name]) if row[name] is not None else None
+                        for name in (
+                            "prompt_tokens",
+                            "completion_tokens",
+                            "total_tokens",
+                        )
+                    },
+                    "usage_reported_calls": {
+                        name: int(row[f"{name}_reported_calls"])
+                        for name in (
+                            "prompt_tokens",
+                            "completion_tokens",
+                            "total_tokens",
+                        )
+                    },
+                }
+            )
 
         generated_at = run["generated_at"]
         measured_at = run["stopped_at"] or generated_at
@@ -1572,6 +1697,7 @@ class GraphSyncRepository:
                         "total_tokens",
                     )
                 },
+                "candidates": provider_candidates,
             },
         }
 

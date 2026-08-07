@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-quality-report graph-quality-report-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined graph-rebuild-status graph-rebuild-plan graph-rebuild-prepare graph-rebuild-finalize backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate embedding-shadow-status embedding-shadow-status-json embedding-shadow-register embedding-shadow-backfill embedding-shadow-recover-run embedding-shadow-build-index retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-shadow-retrieval benchmark-shadow-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-quality-report graph-quality-report-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined graph-rebuild-status graph-rebuild-plan graph-rebuild-prepare graph-rebuild-finalize backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate embedding-shadow-status embedding-shadow-status-json embedding-shadow-register embedding-shadow-backfill embedding-shadow-recover-run embedding-shadow-build-index retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-shadow-retrieval benchmark-shadow-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe operational-readiness operational-readiness-json
 
 # Capability-aware host launcher. It reuses the model-profile resolver and
 # applies the no-Ollama override only when every selected capability is cloud.
@@ -80,6 +80,8 @@ help:
 	@echo "  make benchmark-shadow-retrieval SHADOW_EMBEDDING_PROVIDER=... CONFIRM_RETRIEVAL_BENCHMARK=... - Candidate quality benchmark"
 	@echo "  make provider-config-check    - Validate and show sanitized provider profiles"
 	@echo "  make provider-config-check-json - Emit sanitized provider profiles as JSON"
+	@echo "  make operational-readiness     - Aggregate read-only health, metrics, and alerts"
+	@echo "  make operational-readiness-json - Emit aggregate operational readiness as JSON"
 	@echo "  make provider-stack-plan      - Show whether local Ollama services are required"
 	@echo "  make provider-text-probe CONFIRM_PROVIDER_PROBE=RUN_PROVIDER_PROBE - One bounded text call"
 	@echo "  make provider-embedding-probe CONFIRM_PROVIDER_PROBE=RUN_PROVIDER_PROBE - One bounded embedding call"
@@ -587,6 +589,18 @@ provider-config-check:
 provider-config-check-json:
 	@docker compose run --rm --no-deps api \
 		python src/scripts/provider_ops.py --json check
+
+.PHONY: operational-readiness
+operational-readiness:
+	@docker compose run --rm --no-deps api \
+		python src/scripts/operational_readiness.py \
+		$(if $(strip $(READINESS_BASELINE)),--baseline-report "$(READINESS_BASELINE)",)
+
+.PHONY: operational-readiness-json
+operational-readiness-json:
+	@docker compose run --rm --no-deps api \
+		python src/scripts/operational_readiness.py --json \
+		$(if $(strip $(READINESS_BASELINE)),--baseline-report "$(READINESS_BASELINE)",)
 
 .PHONY: provider-text-probe
 provider-text-probe:

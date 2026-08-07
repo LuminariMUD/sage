@@ -28,6 +28,16 @@ This workstream must not introduce a local-only shortcut that weakens the provid
 
 ## Implementation progress
 
+### 2026-08-07 - Aggregate operational readiness checkpoint, read-only
+
+- Extended durable run summaries with candidate-specific provider/model/fingerprint reservations, completions, outcomes, failure classes, average/p95/maximum latency, token usage, and explicit usage coverage.
+- Added `make operational-readiness` and `make operational-readiness-json`. The command combines sanitized provider/profile identity, queue and expired-lease state, latest-run metrics, relationship-quality evidence, aggregate graph-audit results, and embedding preflight through read-only PostgreSQL and Neo4j clients.
+- Added deterministic alerts for quarantined presence and baseline-relative growth, expired leases, audit drift, sync/embedding profile mismatch, systemic pause, retry storms, sustained candidate failures, and missing or mixed relationship-quality evidence. Provisional retry/provider thresholds are explicit report fields and remain separate from owner-approved release thresholds.
+- Removed episode-level drift records, source text, prompts, responses, vectors, credentials, worker identity, and free-form failure summaries from the aggregate report. Exit codes are `0` for ready, `1` for attention required, and `2` for incomplete collection.
+- Verified 21 focused unit/CLI tests, the candidate aggregation query in a rollback-isolated PostgreSQL schema, and the complete fresh-container fast gate: 371 passed, 8 skipped, and 116 intentionally deselected.
+
+No provider request, graph claim, migration, graph/vector write, service restart, or profile activation occurred. The complete browser/ingest/restart release gate and live threshold evidence remain separate, explicitly authorized work.
+
 ### 2026-08-07 - L1 read-only graph audit checkpoint
 
 - Added `src/scripts/graph_audit.py` and pure reconciliation logic in `src/graphiti/audit.py`.

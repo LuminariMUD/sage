@@ -48,6 +48,17 @@ def _run_summary(run_id: UUID) -> dict[str, object]:
             "reserved": 7,
             "completed": 7,
             "failure_classes": {"malformed_json": 1, "authentication": 0},
+            "candidates": [
+                {
+                    "provider": "ollama",
+                    "model": "qwen2.5:3b",
+                    "candidate_fingerprint": "candidate:test",
+                    "reserved": 7,
+                    "completed": 7,
+                    "failure_classes": {"malformed_json": 1, "authentication": 0},
+                    "latency_ms": {"average": 10.0, "p95": 15.0, "maximum": 20},
+                }
+            ],
         },
     }
 
@@ -166,6 +177,8 @@ def test_run_summary_renderer_exposes_only_bounded_operational_aggregates():
     assert "Approximate ETA: 120 seconds" in rendered
     assert "Attempt failure classes: malformed_json=1" in rendered
     assert "Provider calls: 7/7 completed" in rendered
+    assert "Provider candidate: ollama/qwen2.5:3b" in rendered
+    assert "p95=15.0 ms" in rendered
 
 
 async def test_run_summary_dispatches_window_and_optional_identity():

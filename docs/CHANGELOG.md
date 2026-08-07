@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Aggregate Operational Readiness and Candidate Metrics (0.7.26)**
+  - Added candidate-specific provider reservations, completions, outcomes, failure classes, average/p95/maximum latency, token usage, and coverage to durable run summaries.
+  - Added read-only human/JSON operational readiness commands combining sanitized provider/profile identity, queue and expired-lease state, latest-run metrics, relationship-quality evidence, aggregate graph-audit results, and embedding preflight.
+  - Added deterministic alerts for quarantined presence/growth, expired leases, audit drift, sync/embedding profile mismatch, systemic pause, retry storms, sustained candidate failures, and missing/mixed relationship evidence. Growth comparison accepts only a bounded prior v1 report.
+  - Reports strip per-episode audit records, worker identity, free-form failure summaries, source/model content, vectors, credentials, and arbitrary errors. Exit codes distinguish ready (`0`), attention required (`1`), and incomplete (`2`).
+  - Verified 21 focused unit/CLI tests, candidate SQL in an isolated PostgreSQL schema, and the complete fresh-container fast gate (371 passed, 8 skipped, 116 intentionally deselected). No provider request, migration, worker, graph/vector write, service restart, or profile activation occurred.
+
 - **Policy-Aligned Graphiti Extraction Benchmark (0.7.25)**
   - Added `luminari-graphiti-extraction:v2` with explicit parse/schema expectations and canonical directed relationship contracts while retaining v1 as historical input.
   - Replaced the benchmark's combined extraction helper with the same staged entity-then-relationship boundary used by production and applied the canonical relationship policy before scoring.

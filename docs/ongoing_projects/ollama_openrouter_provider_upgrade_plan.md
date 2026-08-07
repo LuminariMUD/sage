@@ -18,6 +18,17 @@
 
 ## Implementation checkpoint - 2026-08-07
 
+The Phase 8 operational-readiness slice is implemented without activation:
+
+- Durable summaries now group request reservations, completions, outcomes, failure classes, latency, usage, and usage coverage by bounded provider/model/candidate identity.
+- `make operational-readiness` and its JSON form aggregate sanitized configuration, graph queue/lease and latest-run state, relationship-quality evidence, count-only graph-audit drift, and embedding preflight through read-only clients.
+- Deterministic alerts cover quarantined presence and optional prior-report growth, expired leases, audit drift, active sync/embedding profile mismatch, systemic pause, retry storms, sustained provider-candidate failures, and incomplete/mixed relationship-quality evidence. The report records its provisional alert thresholds; approved release-quality thresholds remain open decisions.
+- The aggregate contract excludes episode-level audit records, source/model content, vectors, credentials, worker identity, and free-form failure summaries. Stable exits distinguish ready (`0`), attention required (`1`), and incomplete (`2`).
+
+Verification passes 21 focused unit/CLI tests, the candidate aggregation query in a rollback-isolated PostgreSQL schema, and the complete fresh-container fast gate (371 passed, 8 skipped, 116 intentionally deselected). No provider request, migration, worker, graph/vector write, service restart, or profile activation occurred. This checkpoint does not claim the complete browser/ingest/preserved-volume release gate.
+
+### Earlier Phase 1 reconciliation checkpoint
+
 The first additive Phase 1 checkpoint delivers the provider-neutral reconciliation boundary without changing the active all-Ollama provider path:
 
 - `src/scripts/graph_audit.py` reads PostgreSQL and Neo4j through explicitly read-only clients.
@@ -1271,8 +1282,8 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
   - [x] Expose read-only status/run summaries, confirmation-gated retries, and human/JSON graph audit commands.
   - [ ] Add the complete local release-gate target after its component contract is implemented.
 - [x] Update secret scanners and environment contract tests.
-- [ ] Add sanitized health/readiness, queue/lease state, provider-level metrics, and graph-quality summaries.
-- [ ] Alert on quarantined growth, stale leases, audit drift, profile mismatch, retry storms, and sustained provider failure.
+- [x] Add sanitized health/readiness, queue/lease state, provider-level metrics, and graph-quality summaries.
+- [x] Alert on quarantined growth, stale leases, audit drift, profile mismatch, retry storms, and sustained provider failure.
 - [ ] Document cost, privacy, ZDR, data-collection routing, and outage behavior.
 
 **Exit criteria:** Every deployment mode starts with only its required dependencies and secrets, and logs contain no credentials or prompt content.
