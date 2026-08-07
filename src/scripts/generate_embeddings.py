@@ -14,22 +14,42 @@ from dotenv import load_dotenv
 sys.path.insert(0, "/app")
 
 from src.db import get_postgres_db
+from src.db.embedding_profiles import (
+    EPISODE_EMBEDDING_SPACE,
+    EmbeddingSpaceError,
+    preflight_embedding_space,
+    require_embedding_space,
+)
+from src.llm.config import get_embedding_profile
 from src.llm.embeddings.factory import get_embedder
 
 load_dotenv()
 
 
-async def generate_embeddings():
+async def generate_embeddings(
+    *,
+    database_getter=get_postgres_db,
+    profile_resolver=get_embedding_profile,
+    embedder_factory=get_embedder,
+):
     """Generate embeddings for all episodes without embeddings."""
     print("🔢 Starting embedding generation...")
 
-    # Get embedder
-    embedder = get_embedder()
+    # Prove the configured profile matches the active physical vector space before
+    # constructing an adapter or sending source text to any provider.
+    profile = profile_resolver()
+    db = await database_getter()
+    preflight = await preflight_embedding_space(
+        db,
+        EPISODE_EMBEDDING_SPACE,
+        configured_profile=profile,
+        require_active=True,
+    )
+    require_embedding_space(preflight)
+
+    embedder = embedder_factory(profile=profile)
     print(f"Using embedder: {embedder.__class__.__name__}")
     print(f"Embedding dimension: {embedder.get_dimension()}")
-
-    # Connect to database
-    db = await get_postgres_db()
 
     # Fetch episodes without embeddings
     episodes = await db.fetch("""
@@ -78,5 +98,17 @@ async def generate_embeddings():
     print(f"\n🎉 Embedding generation complete! Processed {total_processed} episodes")
 
 
+def main() -> int:
+    try:
+        asyncio.run(generate_embeddings())
+    except EmbeddingSpaceError as error:
+        print(f"❌ {error}", file=sys.stderr)
+        return 2
+    except Exception as error:
+        print(f"❌ Embedding generation failed ({type(error).__name__})", file=sys.stderr)
+        return 1
+    return 0
+
+
 if __name__ == "__main__":
-    asyncio.run(generate_embeddings())
+    raise SystemExit(main())

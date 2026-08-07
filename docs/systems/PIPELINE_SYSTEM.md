@@ -1,6 +1,6 @@
 # Pipeline System
 
-**Version**: 0.7.16
+**Version**: 0.7.17
 **Status**: Production Ready
 **Last Updated**: 2025-11-12
 
@@ -162,9 +162,12 @@ Documents are automatically categorized by directory:
 
 ### 3. Embedding Generation
 
-- **Input**: Document content and extracted entities
-- **Process**: OpenAI embeddings via `text-embedding-3-small`
-- **Output**: Vector embeddings stored in PostgreSQL with pgvector
+- **Input**: Episode text missing an embedding
+- **Process**: The explicitly configured application embedding profile after a
+  clean profile/dimension/index preflight
+- **Output**: 768-dimensional vectors in the active PostgreSQL episode space
+- **Safety**: A configured/stored/physical profile mismatch blocks before adapter
+  construction or any provider request
 
 ### 4. RAG Integration
 
@@ -584,8 +587,13 @@ Reset just embeddings:
 
 ```bash
 make reset-embeddings
+make embedding-preflight
 make generate-embeddings
 ```
+
+Clearing vectors does not change the active profile identity. Switching provider,
+model, revision, implementation, or dimensions requires a shadow space and the
+documented migration/cutover workflow; do not overwrite the active space.
 
 ### Regular Maintenance
 

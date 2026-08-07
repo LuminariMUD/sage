@@ -232,3 +232,25 @@ def test_repository_migration_contains_required_durable_contract():
         "successful attempt has incomplete provider calls",
     ):
         assert required_fragment in provider_intent_sql
+
+    embedding_profile_sql = migrations[3].sql
+    for required_fragment in (
+        "episodes.embedding must be vector(768)",
+        "CREATE TABLE IF NOT EXISTS embedding_profiles",
+        "CREATE TABLE IF NOT EXISTS embedding_index_states",
+        "embedding_index_states_one_active",
+        "embedding_profiles_immutable",
+        "embedding_index_state_validate",
+        "'unverified'",
+        "idx_episodes_embedding",
+        "USING hnsw",
+        "ef_construction = 64",
+        "legacy_chunks",
+    ):
+        assert required_fragment in embedding_profile_sql
+
+    retired_helper = (
+        migrate_database.DEFAULT_MIGRATION_DIRECTORY.parent / "add_episode_uuid.sql"
+    ).read_text(encoding="ascii")
+    assert "DROP TABLE" not in retired_helper
+    assert "is retired; use the versioned migration runner" in retired_helper

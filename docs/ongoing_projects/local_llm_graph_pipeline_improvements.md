@@ -191,6 +191,47 @@ Thirty-one focused offline unit/CLI tests pass. The complete fast suite passes 2
 
 Thirty focused configuration/scanner tests and the complete network-isolated fast suite pass: 254 passed, 6 service-dependent skips, and 110 intentional deselections. The real `.env` remained ignored and unstaged, repository-history scanning reported no leak, and no provider/model request, graph claim, ingestion, or live data mutation occurred. The worker remains stopped by operator request.
 
+### 2026-08-07 - Embedding storage guard checkpoint, no activation
+
+- Added backup-gated migration `0004_embedding_index_profiles` for immutable,
+  secret-free embedding profiles and authoritative physical index states. It checks
+  the live-compatible 768-dimensional episode typmod, builds the missing episode
+  HNSW cosine index when applied, and marks the legacy 384-dimensional chunk and
+  search-query spaces retired.
+- Retired the destructive `schemas/add_episode_uuid.sql` helper. It now raises a
+  migration-runner error instead of dropping `episodes` and recreating a conflicting
+  1536-dimensional table.
+- Corrected the fresh-database schema from 384 to 768 episode dimensions while
+  preserving the legacy 384-dimensional columns for read-only transition evidence.
+- Added `make embedding-preflight` and `make embedding-preflight-json`. These use a
+  read-only PostgreSQL session and report only catalog metadata, sanitized profile
+  identity, index state, and aggregate row coverage—never lore text or vectors.
+- Added explicit empty-space activation and populated-space adoption tokens.
+  Activation writes metadata only; populated adoption is an operator attestation
+  of vector provenance and is not implied by a matching dimension.
+- Added startup and per-operation guards for application vector reads/writes before
+  embedder construction or inference. `/api/v1/validate` now retrieves from the
+  supported episode space instead of querying 384-dimensional chunks with the
+  768-dimensional application embedder.
+- Added offline unit/API/CLI coverage plus rollback-only PostgreSQL upgrade and
+  baseline-schema tests. The embedding tests prove mismatch rejection occurs before
+  adapter construction/provider calls, and the durable graph integration fixtures
+  continue to pass unchanged.
+
+Twenty-five focused tests, all 13 relevant isolated PostgreSQL tests, and the full
+offline fast gate pass: 264 passed, 6 skipped, and 112 intentionally deselected.
+The read-only live inventory reports 611/611 768-dimensional episode vectors, the
+known missing episode index, no embedding metadata tables, and zero vectors in both
+legacy 384-dimensional indexed spaces. This is the expected pre-migration blocked
+state.
+
+Migration `0004` was not applied and no populated profile was adopted, because both
+actions require a fresh verified-backup reference and explicit operator provenance
+approval. The ignored `.env` was not inspected or displayed, and its newly added
+`OPENROUTER_KEY` was not logged or used for a provider request. No provider/model
+request, graph claim, ingestion, or live data mutation occurred. The worker remains
+stopped by operator request.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.
@@ -209,6 +250,8 @@ The intended processing model is idempotent at-least-once delivery; this workstr
 - Mark an episode `synced` only after stable-ID verification.
 - Bind each claim and successful verification to a deterministic source-content fingerprint; requeue a source revision detected mid-flight.
 - Report fallback success as degraded success.
+- Require a clean embedding-profile/physical-index preflight before application
+  vector reads or writes; never infer provenance from dimensions alone.
 - Run the read-only `graph-audit` after imports, preserved-volume restarts, cutovers, and rollbacks.
 - Keep synchronization completeness separate from graph-quality acceptance.
 

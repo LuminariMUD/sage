@@ -1,7 +1,7 @@
 # Correction System Documentation
 
-**Version**: 0.7.16
-**Status**: Production Ready  
+**Version**: 0.7.17
+**Status**: Production Ready
 **Last Updated**: 2025-11-12
 
 ## Table of Contents
@@ -214,27 +214,27 @@ class CorrectionStorageService:
         relationship_data: Dict[str, Any],
         ...
     ) -> bool
-    
+
     @staticmethod
     async def get_correction(correction_id: str) -> Optional[Dict[str, Any]]
-    
+
     @staticmethod
     async def get_corrections_for_batch(batch_id: str) -> List[Dict[str, Any]]
-    
+
     @staticmethod
     async def rollback_correction(
         correction_id: str,
         rollback_by: str,
         rollback_reason: str
     ) -> bool
-    
+
     @staticmethod
     async def rollback_batch(
         correction_batch_id: str,
         rollback_by: str,
         rollback_reason: str
     ) -> Dict[str, int]
-    
+
     @staticmethod
     async def can_rollback_correction(correction_id: str) -> bool
 ```
@@ -246,13 +246,13 @@ CREATE TABLE relationship_corrections (
     correction_id UUID PRIMARY KEY,
     validation_report_id UUID REFERENCES validation_reports(report_id),
     correction_batch_id UUID NOT NULL,
-    
+
     -- Correction details
     correction_type VARCHAR(50) NOT NULL,  -- 'DEDUPLICATION' or 'SEMANTIC_STANDARDIZATION'
     action VARCHAR(20) NOT NULL,           -- 'DELETE' or 'UPDATE'
     confidence_score FLOAT NOT NULL,
     agent_reasoning TEXT NOT NULL,
-    
+
     -- Relationship backup data
     relationship_id TEXT NOT NULL,         -- Neo4j element ID
     relationship_type VARCHAR(50) NOT NULL,
@@ -264,24 +264,24 @@ CREATE TABLE relationship_corrections (
     target_node_labels TEXT[],
     original_properties JSONB NOT NULL,    -- Complete backup
     new_properties JSONB,                  -- For UPDATE actions
-    
+
     -- Semantic standardization details
     original_semantic_type TEXT,
     new_semantic_type TEXT,
-    
+
     -- Deduplication details
     duplicate_count INTEGER,
-    
+
     -- Rollback tracking
     applied_at TIMESTAMPTZ DEFAULT NOW(),
     rolled_back BOOLEAN DEFAULT FALSE,
     rollback_at TIMESTAMPTZ,
     rollback_by VARCHAR(100),
     rollback_reason TEXT,
-    
+
     -- Additional metadata
     metadata JSONB,
-    
+
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -308,19 +308,19 @@ class RollbackManager:
         rollback_by: str,
         rollback_reason: str = "Manual rollback requested"
     ) -> Dict[str, Any]
-    
+
     @staticmethod
     async def rollback_batch(
         correction_batch_id: str,
         rollback_by: str,
         rollback_reason: str = "Batch rollback requested"
     ) -> Dict[str, Any]
-    
+
     @staticmethod
     async def preview_rollback_batch(
         correction_batch_id: str
     ) -> Dict[str, Any]
-    
+
     @staticmethod
     async def get_rollback_statistics(days: int = 30) -> Dict[str, Any]
 ```
@@ -344,8 +344,9 @@ class RollbackManager:
 **Purpose**: Remove duplicate RELATES_TO relationships between the same entities.
 
 **Detection Criteria**:
+
 - Same source node
-- Same target node  
+- Same target node
 - Same semantic type (case-insensitive)
 
 **Selection Algorithm**:
@@ -355,31 +356,31 @@ Scores each duplicate relationship based on:
 ```python
 def score_relationship(rel: Dict) -> int:
     score = 0
-    
+
     # Has embeddings (most important)
     if "fact_embedding" in props: score += 100
     if "name_embedding" in props: score += 100
-    
+
     # Has semantic type
     if "name" in props and props["name"]: score += 50
-    
+
     # Has fact content
     if "fact" in props and props["fact"]: score += 30
-    
+
     # Has episodes list
     episode_count = len(props.get("episodes", []))
     score += min(episode_count * 5, 50)  # Cap at 50
-    
+
     # Has creation timestamp
     if "created_at" in props: score += 10
-    
+
     # Total property count
     score += len(props)
-    
+
     return score
 ```
 
-**Keeps**: Highest-scoring relationship (most complete data)  
+**Keeps**: Highest-scoring relationship (most complete data)
 **Deletes**: All lower-scoring duplicates
 
 **Example**:
@@ -477,14 +478,14 @@ validator = RelationshipValidator(openai_api_key=os.getenv("OPENAI_API_KEY"))
 report = await validator.validate(
     entity_limit=1000,
     relationship_limit=5000,
-    
+
     # Standard validation checks
     check_bidirectional=True,
     check_mutual_exclusivity=True,
     check_hierarchies=True,
     check_semantic_consistency=True,
     enable_llm_analysis=True,
-    
+
     # Autonomous correction parameters
     auto_correct=True,               # Enable corrections
     correct_duplicates=True,         # Remove duplicates
@@ -787,7 +788,7 @@ ORDER BY applied_at ASC;
 **Get unrolled corrections by type**:
 
 ```sql
-SELECT 
+SELECT
     correction_type,
     COUNT(*) as count,
     AVG(confidence_score) as avg_confidence
@@ -799,7 +800,7 @@ GROUP BY correction_type;
 **Get recent rollbacks**:
 
 ```sql
-SELECT 
+SELECT
     correction_id,
     correction_type,
     rollback_by,
@@ -826,16 +827,16 @@ ORDER BY applied_at DESC;
 
 ### Correction Endpoints
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/v1/validate/relationships` | POST | Run validation with optional corrections |
-| `/api/v1/corrections/{correction_id}/rollback` | POST | Rollback single correction |
-| `/api/v1/corrections/batch/{batch_id}/rollback` | POST | Rollback entire batch |
-| `/api/v1/corrections/batch/{batch_id}/preview` | GET | Preview batch rollback |
-| `/api/v1/corrections/history` | GET | Get correction history |
-| `/api/v1/corrections/stats` | GET | Get correction statistics |
-| `/api/v1/corrections/{correction_id}` | GET | Get specific correction |
-| `/api/v1/corrections/batch/{batch_id}/summary` | GET | Get batch summary |
+| Endpoint                                        | Method | Purpose                                  |
+| ----------------------------------------------- | ------ | ---------------------------------------- |
+| `/api/v1/validate/relationships`                | POST   | Run validation with optional corrections |
+| `/api/v1/corrections/{correction_id}/rollback`  | POST   | Rollback single correction               |
+| `/api/v1/corrections/batch/{batch_id}/rollback` | POST   | Rollback entire batch                    |
+| `/api/v1/corrections/batch/{batch_id}/preview`  | GET    | Preview batch rollback                   |
+| `/api/v1/corrections/history`                   | GET    | Get correction history                   |
+| `/api/v1/corrections/stats`                     | GET    | Get correction statistics                |
+| `/api/v1/corrections/{correction_id}`           | GET    | Get specific correction                  |
+| `/api/v1/corrections/batch/{batch_id}/summary`  | GET    | Get batch summary                        |
 
 See [API_REFERENCE.md](API_REFERENCE.md) for complete API documentation.
 
@@ -878,6 +879,7 @@ corrections = await corrector.apply_corrections(
 ```
 
 **Default Confidence Scores**:
+
 - Deduplication: 0.95 (very high confidence)
 - Semantic Standardization: 0.90 (high confidence)
 
@@ -978,6 +980,7 @@ curl "https://luminarimud.com/sage/api/v1/corrections/stats?days=30" \
 ```
 
 High rollback rates may indicate:
+
 - Incorrect duplicate selection logic
 - Too aggressive semantic standardization
 - Confidence threshold too low
@@ -992,14 +995,14 @@ batch_size = 1000
 for offset in range(0, total_relationships, batch_size):
     # Fetch batch
     relationships = await fetch_relationships(offset, batch_size)
-    
+
     # Apply corrections with limit
     corrections = await corrector.apply_corrections(
         relationships=relationships,
         max_corrections=50,  # Limit per batch
         dry_run=False
     )
-    
+
     # Review each batch before continuing
     print(f"Batch {offset//batch_size}: {len(corrections)} corrections")
 ```
@@ -1028,6 +1031,7 @@ await RollbackManager.rollback_correction(
 **Symptom**: Corrections return empty or fail to apply
 
 **Possible Causes**:
+
 - `dry_run=True` (preview mode)
 - Confidence threshold too high
 - No correctable issues found
@@ -1055,6 +1059,7 @@ print(f"Found {len(standardizations)} standardization needs")
 **Symptom**: Rollback returns error or fails
 
 **Possible Causes**:
+
 - Correction already rolled back
 - Correction not found
 - Neo4j nodes no longer exist
@@ -1103,11 +1108,11 @@ If embeddings are in backup but not restored, check Neo4j restore logic.
 def score_relationship(rel: Dict) -> int:
     score = 0
     props = rel.get("props", {})
-    
+
     # Increase embedding importance
     if "fact_embedding" in props: score += 200  # Was 100
     if "name_embedding" in props: score += 200  # Was 100
-    
+
     # Adjust other weights...
 ```
 
@@ -1124,6 +1129,6 @@ Or manually rollback and keep the preferred duplicate.
 
 ---
 
-**Last Updated**: 2025-11-12  
-**Version**: 0.7.16
+**Last Updated**: 2025-11-12
+**Version**: 0.7.17
 **Status**: Production Ready

@@ -74,7 +74,7 @@ async def state_store() -> (
         "password": os.environ["POSTGRES_PASSWORD"],
         "database": os.environ["POSTGRES_DB"],
     }
-    migration_paths = sorted(MIGRATION_DIRECTORY.glob("*.sql"))
+    migration_paths = sorted(MIGRATION_DIRECTORY.glob("000[1-3]_*.sql"))
     if [path.name for path in migration_paths] != [
         "0001_graph_sync_lifecycle.sql",
         "0002_graph_sync_runtime.sql",

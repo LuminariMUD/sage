@@ -1,7 +1,7 @@
 # Validation System Documentation
 
-**Version**: 0.7.16
-**Status**: Production Ready  
+**Version**: 0.7.17
+**Status**: Production Ready
 **Last Updated**: 2025-11-12
 
 ## Table of Contents
@@ -203,6 +203,7 @@ Focus on actionable findings that improve data quality."""
 **Agent ID**: `relationship_validator_v1_llm`
 
 **Capabilities**:
+
 - Bidirectional consistency checking
 - Mutual exclusivity validation
 - Hierarchical relationship verification
@@ -237,22 +238,22 @@ async def validate(
 class ValidationStorageService:
     @staticmethod
     async def store_report(report: ValidationReport) -> bool
-    
+
     @staticmethod
     async def get_report(report_id: str) -> Optional[ValidationReport]
-    
+
     @staticmethod
     async def list_reports(limit: int = 50) -> List[Dict[str, Any]]
-    
+
     @staticmethod
     async def get_findings_for_report(report_id: str) -> List[ValidationFinding]
-    
+
     @staticmethod
     async def get_unreviewed_findings(
         severity: Optional[str] = None,
         category: Optional[str] = None
     ) -> List[ValidationFinding]
-    
+
     @staticmethod
     async def mark_finding_reviewed(
         finding_id: str,
@@ -314,11 +315,13 @@ CREATE TABLE validation_findings (
 **Purpose**: Ensure naturally bidirectional relationships exist in both directions.
 
 **Business Rules**:
+
 - Only applies to RELATES_TO relationships
 - MENTIONS relationships are unidirectional (episode → entity)
 - Focuses on semantic appropriateness, not just missing reverse edges
 
 **Bidirectional Relationship Types**:
+
 ```python
 {
     "allied_with", "opposed_to", "related_to", "connected_to",
@@ -327,9 +330,10 @@ CREATE TABLE validation_findings (
 ```
 
 **Example Finding**:
+
 ```
 Title: Potentially missing bidirectional RELATES_TO: allied_with
-Description: Found RELATES_TO allied_with from Paladine to Kiri-Jolith, 
+Description: Found RELATES_TO allied_with from Paladine to Kiri-Jolith,
              which typically should be bidirectional.
 Severity: INFO
 Confidence: 0.6 (Medium - semantic context matters)
@@ -343,10 +347,12 @@ Suggested Action: Review if reverse allied_with relationship should exist
 **Purpose**: Identify logically contradictory relationships between the same entities.
 
 **Business Rules**:
+
 - Only checks RELATES_TO relationships
 - MENTIONS relationships don't have mutual exclusivity constraints
 
 **Mutually Exclusive Pairs**:
+
 ```python
 {
     ("allied_with", "opposed_to"),
@@ -357,9 +363,10 @@ Suggested Action: Review if reverse allied_with relationship should exist
 ```
 
 **Example Finding**:
+
 ```
 Title: Mutually exclusive RELATES_TO: allied_with vs opposed_to
-Description: Paladine and Takhisis have both allied_with and opposed_to 
+Description: Paladine and Takhisis have both allied_with and opposed_to
              relationships, which are mutually exclusive.
 Severity: ERROR
 Confidence: 0.9 (Very high - logically contradictory)
@@ -374,6 +381,7 @@ Evidence:
 **Purpose**: Validate hierarchical relationships have inverse counterparts.
 
 **Hierarchical Pairs**:
+
 ```python
 {
     "commands": "serves_under",
@@ -385,9 +393,10 @@ Evidence:
 ```
 
 **Example Finding**:
+
 ```
 Title: Missing hierarchical counterpart: commands → serves_under
-Description: Found 'commands' from Astinus to Aesthetics, but missing 
+Description: Found 'commands' from Astinus to Aesthetics, but missing
              'serves_under' in reverse.
 Severity: INFO
 Confidence: 0.7 (High - hierarchical relationships typically paired)
@@ -401,11 +410,13 @@ Suggested Action: Consider adding serves_under from Aesthetics to Astinus
 **Business Rules**:
 
 **For RELATES_TO**:
+
 - MUST have semantic type information (stored in `name` property)
 - Semantic type helps LLMs understand relationship meaning
 - Used for graph traversal and reasoning
 
 **For MENTIONS**:
+
 - Simple episode-to-entity links
 - Should NOT have complex semantic attributes
 - Rich semantics may indicate better fit as RELATES_TO
@@ -415,7 +426,7 @@ Suggested Action: Consider adding serves_under from Aesthetics to Astinus
 ```
 # Missing semantic type
 Title: RELATES_TO lacks semantic clarity for LLM reasoning
-Description: RELATES_TO between Paladine and Solamnia lacks semantic type 
+Description: RELATES_TO between Paladine and Solamnia lacks semantic type
              information needed for hybrid GraphRAG.
 Severity: WARNING
 Confidence: 0.8 (High - LLMs need semantic context)
@@ -423,7 +434,7 @@ Suggested Action: Add semantic type (e.g., 'protects', 'allied_with')
 
 # Rich MENTIONS
 Title: MENTIONS may have rich semantics suitable for RELATES_TO
-Description: MENTIONS between episode and entity has semantic type 'commands'. 
+Description: MENTIONS between episode and entity has semantic type 'commands'.
              This semantic richness might provide more value as RELATES_TO.
 Severity: INFO
 Confidence: 0.6 (Medium - rich semantics may indicate RELATES_TO)
@@ -435,9 +446,10 @@ Suggested Action: Consider converting to RELATES_TO for LLM graph traversal
 **Purpose**: Find entities with no incoming or outgoing relationships.
 
 **Example Finding**:
+
 ```
 Title: Orphaned entity with no relationships
-Description: Entity 'Abandoned Shrine' has no relationships, which may 
+Description: Entity 'Abandoned Shrine' has no relationships, which may
              indicate incomplete data extraction.
 Severity: INFO
 Confidence: 0.4 (Low - some entities may legitimately be isolated)
@@ -451,9 +463,10 @@ Suggested Action: Review entity to determine if relationships are missing
 **Grouping Key**: `(source_id, target_id, semantic_type)`
 
 **Example Finding**:
+
 ```
 Title: Duplicate relationships: allied_with
-Description: Found 3 duplicate 'allied_with' relationships between 
+Description: Found 3 duplicate 'allied_with' relationships between
              Paladine and Kiri-Jolith.
 Severity: WARNING
 Confidence: 0.9 (Very high - identical relationships are duplicates)
@@ -523,6 +536,7 @@ curl -X POST https://luminarimud.com/sage/api/v1/validate/relationships \
 ```
 
 **Response**:
+
 ```json
 {
   "report_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -571,6 +585,7 @@ curl -X POST https://luminarimud.com/sage/api/v1/validate/findings/{finding_id}/
 ```
 
 **Review Actions**:
+
 - `fixed`: Issue has been resolved
 - `false_positive`: Agent was wrong, no issue exists
 - `acknowledged`: Valid finding, will fix later
@@ -583,13 +598,13 @@ curl -X POST https://luminarimud.com/sage/api/v1/validate/findings/{finding_id}/
 
 ### Confidence Scale
 
-| Range | Level | Description | Use Case |
-|-------|-------|-------------|----------|
-| 0.9-1.0 | Very High | Clear logical contradiction, missing required data | Auto-correction candidates |
-| 0.7-0.8 | High | Strong pattern match, multiple supporting evidence | High priority review |
-| 0.5-0.6 | Medium | Possible issue, limited evidence | Medium priority review |
-| 0.3-0.4 | Low | Speculation, unclear patterns | Low priority, context-dependent |
-| 0.1-0.2 | Very Low | Weak signals, requires human judgment | Information only |
+| Range   | Level     | Description                                        | Use Case                        |
+| ------- | --------- | -------------------------------------------------- | ------------------------------- |
+| 0.9-1.0 | Very High | Clear logical contradiction, missing required data | Auto-correction candidates      |
+| 0.7-0.8 | High      | Strong pattern match, multiple supporting evidence | High priority review            |
+| 0.5-0.6 | Medium    | Possible issue, limited evidence                   | Medium priority review          |
+| 0.3-0.4 | Low       | Speculation, unclear patterns                      | Low priority, context-dependent |
+| 0.1-0.2 | Very Low  | Weak signals, requires human judgment              | Information only                |
 
 ### Confidence Explanation Requirements
 
@@ -634,7 +649,7 @@ Every validation creates a complete audit trail:
 **Get validation statistics**:
 
 ```sql
-SELECT 
+SELECT
     agent_id,
     COUNT(*) as total_validations,
     AVG(execution_time_seconds) as avg_execution_time,
@@ -657,7 +672,7 @@ ORDER BY priority ASC, confidence_score DESC;
 **Get review statistics by reviewer**:
 
 ```sql
-SELECT 
+SELECT
     reviewer,
     review_action,
     COUNT(*) as count
@@ -672,14 +687,14 @@ GROUP BY reviewer, review_action;
 
 ### API Endpoints
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/v1/validate/relationships` | POST | Run relationship validation |
-| `/api/v1/validate/history` | GET | List validation reports |
-| `/api/v1/validate/report/{report_id}` | GET | Get specific report |
-| `/api/v1/validate/findings/unreviewed` | GET | Get unreviewed findings |
-| `/api/v1/validate/findings/{finding_id}/review` | POST | Mark finding reviewed |
-| `/api/v1/validate/stats` | GET | Get validation statistics |
+| Endpoint                                        | Method | Purpose                     |
+| ----------------------------------------------- | ------ | --------------------------- |
+| `/api/v1/validate/relationships`                | POST   | Run relationship validation |
+| `/api/v1/validate/history`                      | GET    | List validation reports     |
+| `/api/v1/validate/report/{report_id}`           | GET    | Get specific report         |
+| `/api/v1/validate/findings/unreviewed`          | GET    | Get unreviewed findings     |
+| `/api/v1/validate/findings/{finding_id}/review` | POST   | Mark finding reviewed       |
+| `/api/v1/validate/stats`                        | GET    | Get validation statistics   |
 
 See [API_REFERENCE.md](API_REFERENCE.md) for complete API documentation.
 
@@ -699,7 +714,7 @@ prompt = f"""Analyze these RELATES_TO relationships for semantic appropriateness
 RELATIONSHIPS TO ANALYZE:
 1. Crystal Dwarves --commands--> Mithril Ore
    Relationship ID: 4:abc:123
-   
+
 For each relationship, analyze:
 1. SEMANTIC_APPROPRIATENESS: APPROPRIATE | QUESTIONABLE | INAPPROPRIATE
 2. ENTITY_TYPE_ANALYSIS: What types of entities are these?
@@ -777,6 +792,7 @@ class MentionsAnalysis(BaseModel):
 ### 2. Configuration Guidelines
 
 **Small Datasets** (< 500 entities):
+
 ```python
 entity_limit=500
 relationship_limit=2000
@@ -784,6 +800,7 @@ enable_llm_analysis=True  # LLM analysis manageable
 ```
 
 **Medium Datasets** (500-2000 entities):
+
 ```python
 entity_limit=1000
 relationship_limit=5000
@@ -791,6 +808,7 @@ enable_llm_analysis=True  # May take longer
 ```
 
 **Large Datasets** (> 2000 entities):
+
 ```python
 entity_limit=2000
 relationship_limit=10000
@@ -862,6 +880,7 @@ for category, findings in by_category.items():
 **Symptom**: Validation times out or takes too long
 
 **Solutions**:
+
 - Reduce `entity_limit` and `relationship_limit`
 - Disable `enable_llm_analysis` for faster validation
 - Validate in smaller batches
@@ -881,12 +900,14 @@ report = await validator.validate(
 **Symptom**: Validation returns no findings on known problematic data
 
 **Possible Causes**:
+
 - Database not connected
 - Entity/relationship limits too small
 - Validation checks disabled
 - Data doesn't match validation rules
 
 **Debug**:
+
 ```python
 # Check what's being validated
 print(f"Entities analyzed: {len(entities)}")
@@ -900,6 +921,7 @@ print(f"Relationship types: {set(r.get('type') for r in relationships)}")
 **Symptom**: LLM analysis fails or returns errors
 
 **Solutions**:
+
 - Check OpenAI API key is valid
 - Verify API key has sufficient credits
 - Reduce batch size for LLM analysis
@@ -917,6 +939,7 @@ report = await validator.validate(
 **Symptom**: Validation runs but storage fails
 
 **Solutions**:
+
 - Check PostgreSQL connection
 - Verify database schema is up to date
 - Check disk space
@@ -975,6 +998,6 @@ for i in range(0, len(relationships), batch_size):
 
 ---
 
-**Last Updated**: 2025-11-12  
-**Version**: 0.7.16
+**Last Updated**: 2025-11-12
+**Version**: 0.7.17
 **Status**: Production Ready

@@ -1,6 +1,6 @@
 # API Reference
 
-**Version**: 0.7.16
+**Version**: 0.7.17
 **Last Updated**: 2025-11-12
 
 This document provides complete API reference for Luminari Sage, including all endpoints, request/response formats, authentication, and examples.
@@ -118,10 +118,30 @@ Comprehensive health check for all services.
   "services": {
     "postgresql": "healthy",
     "neo4j": "healthy",
-    "embedding_model": "healthy"
+    "embedder": "healthy",
+    "provider_config": "healthy",
+    "embedding_index": "healthy"
+  },
+  "providers": {
+    "application_embedding": {
+      "provider": "ollama",
+      "model": "nomic-embed-text",
+      "dimensions": 768,
+      "fingerprint": "embedding:sha256:..."
+    }
+  },
+  "embedding_storage": {
+    "semantic_index": "episodes",
+    "status": "ready",
+    "ready": true,
+    "findings": []
   }
 }
 ```
+
+The embedding storage section is secret-free and contains profile/index metadata
+plus aggregate row counts. A profile, dimension, or physical-index mismatch marks
+`embedding_index` unavailable and the overall response degraded.
 
 **Status Values:**
 
@@ -503,7 +523,7 @@ curl -X POST http://localhost:8003/api/v1/rag/query \
 
 - `200`: Success
 - `400`: Invalid request body
-- `503`: Embedding model not loaded
+- `503`: Embedder unavailable or embedding profile/index preflight blocked
 
 ---
 
@@ -511,7 +531,9 @@ curl -X POST http://localhost:8003/api/v1/rag/query \
 
 ### POST /api/v1/validate
 
-Validate content against existing lore knowledge.
+Validate content against existing lore knowledge. Supporting semantic context is
+retrieved from the active episode space; the legacy 384-dimensional chunk-vector
+path is retired.
 
 **Authentication**: Required
 
@@ -576,7 +598,7 @@ curl -X POST http://localhost:8003/api/v1/validate \
 
 - `200`: Success
 - `400`: Invalid request body
-- `503`: Embedding model not loaded
+- `503`: Embedder unavailable or embedding profile/index preflight blocked
 
 ---
 
@@ -1888,5 +1910,5 @@ curl -X GET http://localhost:8003/api/v1/stats \
 ---
 
 **Last Updated**: 2025-11-12
-**Version**: 0.7.16
+**Version**: 0.7.17
 **Status**: Production Ready

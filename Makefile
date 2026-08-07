@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe
 
 # Support for verbose mode
 ifdef VERBOSE
@@ -56,6 +56,9 @@ help:
 	@echo "  make db-migrate-status        - Show immutable PostgreSQL migration status"
 	@echo "  make db-migrate-check         - Fail when PostgreSQL migrations are pending"
 	@echo "  make db-migrate BACKUP_REFERENCE=... - Apply after verified backups"
+	@echo "  make embedding-preflight      - Check vector dimensions, profiles, indexes, and counts"
+	@echo "  make embedding-preflight-json - Emit the read-only embedding preflight as JSON"
+	@echo "  make embedding-profile-activate CONFIRM_EMBEDDING_PROFILE=... - Activate metadata only"
 	@echo "  make provider-config-check    - Validate and show sanitized provider profiles"
 	@echo "  make provider-config-check-json - Emit sanitized provider profiles as JSON"
 	@echo "  make provider-text-probe CONFIRM_PROVIDER_PROBE=RUN_PROVIDER_PROBE - One bounded text call"
@@ -382,6 +385,25 @@ db-migrate:
 		--apply \
 		--backup-reference "$(BACKUP_REFERENCE)" \
 		--application-revision "$(shell git rev-parse --verify HEAD)"
+
+.PHONY: embedding-preflight
+embedding-preflight:
+	@docker compose run --rm --no-deps api \
+		python src/scripts/embedding_preflight.py status --scope all
+
+.PHONY: embedding-preflight-json
+embedding-preflight-json:
+	@docker compose run --rm --no-deps api \
+		python src/scripts/embedding_preflight.py --json status --scope all
+
+.PHONY: embedding-profile-activate
+embedding-profile-activate:
+	@test -n "$(CONFIRM_EMBEDDING_PROFILE)" || \
+		(echo "CONFIRM_EMBEDDING_PROFILE is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api \
+		python src/scripts/embedding_preflight.py activate \
+		$(if $(filter 1 true yes,$(ADOPT_EXISTING)),--adopt-existing,) \
+		--confirm "$(CONFIRM_EMBEDDING_PROFILE)"
 
 .PHONY: provider-config-check
 provider-config-check:

@@ -1,7 +1,7 @@
 # Luminari Sage Quick Start Guide
 
 **Last Updated**: November 12, 2025
-**Version**: 0.7.16
+**Version**: 0.7.17
 **Status**: Production Ready
 
 ## Prerequisites
@@ -10,7 +10,8 @@
 
 - **Docker** and **Docker Compose** v2.0+ (recommended for easiest setup)
 - **Git** for cloning the repository
-- **OpenAI API Key** for embeddings and LLM operations
+- Credentials only for the cloud providers you explicitly select; the default
+  all-Ollama profile requires no OpenAI or OpenRouter key
 
 ### Manual Installation (Alternative)
 
@@ -58,14 +59,22 @@ docker compose logs -f api
 The data pipeline loads and processes lore documents into the knowledge graph:
 
 ```bash
-# Complete pipeline (recommended for first run)
-make semantic-pipeline
+# Inspect/apply backup-gated migrations first (see schemas/migrations/README.md)
+make db-migrate-status
 
-# This runs four steps:
-# 1. Load canonical lore documents into PostgreSQL
-# 2. Create semantic episodes (chunks) from documents
-# 3. Generate vector embeddings for episodes
-# 4. Extract entities and relationships to Neo4j via Graphiti
+# A fresh empty episode space requires explicit metadata activation
+make embedding-profile-activate \
+  CONFIRM_EMBEDDING_PROFILE=ACTIVATE_EMPTY_EMBEDDING_PROFILE
+
+# Preflight must report READY before embedding-dependent reads or writes
+make embedding-preflight
+
+# Run pipeline stages deliberately
+make load-canon
+make create-episodes
+make generate-embeddings
+# Graph ingestion remains separately confirmation-gated:
+# make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 ```
 
 **Note**: The pipeline takes 10-30 minutes depending on hardware and document count. It's resource-intensive and runs separately from API deployment.
@@ -253,6 +262,7 @@ echo "EMBEDDING_BATCH_SIZE=16" >> .env
 docker compose restart api
 
 # Re-run embeddings
+make embedding-preflight
 make generate-embeddings
 ```
 
@@ -289,11 +299,12 @@ make create-episodes
 # Chunks documents into 200-500 token episodes with overlap
 
 # Step 3: Generate embeddings
+make embedding-preflight
 make generate-embeddings
-# Creates vector embeddings using sentence-transformers or OpenAI
+# Creates episode vectors with the explicitly active configured profile
 
 # Step 4: Sync to knowledge graph
-make sync-to-graphiti
+make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 # Extracts entities and relationships to Neo4j via Graphiti
 ```
 

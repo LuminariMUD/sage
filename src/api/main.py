@@ -19,9 +19,15 @@ from pydantic import BaseModel, Field, ValidationError
 from src.auth import AuthMiddleware
 from src.auth.host_validation import get_allowed_hosts
 from src.db import close_neo4j_db, close_postgres_db, get_neo4j_db, get_postgres_db
+from src.db.embedding_profiles import (
+    EPISODE_EMBEDDING_SPACE,
+    EmbeddingSpaceError,
+    preflight_embedding_space,
+    require_embedding_space,
+)
 from src.graphiti.edge_types import EDGE_TYPES
 from src.graphiti.entity_types import ENTITY_TYPES
-from src.llm.config import get_provider_settings, text_profile_is_ready
+from src.llm.config import get_embedding_profile, get_provider_settings, text_profile_is_ready
 from src.llm.context_utils import count_tokens, select_texts_within_budget, truncate_text
 from src.llm.embeddings.factory import get_embedder
 from src.security import (
@@ -64,6 +70,13 @@ logger = logging.getLogger(__name__)
 
 # Global embedder instance
 embedder = None
+embedding_storage_status: dict[str, Any] = {
+    "schema_version": 1,
+    "semantic_index": "episodes",
+    "status": "not_checked",
+    "ready": False,
+    "findings": [],
+}
 
 
 def _provider_health_summary() -> dict[str, Any]:
@@ -90,14 +103,54 @@ def _provider_health_summary() -> dict[str, Any]:
     }
 
 
+async def _episode_embedding_preflight(postgres_db) -> dict[str, Any]:
+    """Refresh the application-space guard without provider or vector reads."""
+    profile = get_embedding_profile()
+    return await preflight_embedding_space(
+        postgres_db,
+        EPISODE_EMBEDDING_SPACE,
+        configured_profile=profile,
+        require_active=True,
+    )
+
+
+async def _require_episode_embedding_space(postgres_db) -> dict[str, Any]:
+    """Fail closed before any provider call when the active space is incompatible."""
+    global embedding_storage_status
+
+    try:
+        report = await _episode_embedding_preflight(postgres_db)
+        embedding_storage_status = report
+        require_embedding_space(report)
+    except EmbeddingSpaceError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Embedding space preflight failed ({type(error).__name__})",
+        ) from error
+
+    configured_fingerprint = (report.get("configured_profile") or {}).get("fingerprint")
+    loaded_profile = getattr(embedder, "profile", None)
+    if embedder is not None and (
+        loaded_profile is None or loaded_profile.fingerprint != configured_fingerprint
+    ):
+        raise HTTPException(
+            status_code=503, detail="Loaded embedder profile does not match storage"
+        )
+    return report
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
-    global embedder
+    global embedder, embedding_storage_status
 
     logger.info("🚀 Starting Luminari Sage API...")
 
+    configured_embedding_profile = None
     try:
+        configured_embedding_profile = get_embedding_profile()
         logger.info(
             "Resolved provider profiles: %s",
             json.dumps(_provider_health_summary(), sort_keys=True),
@@ -105,26 +158,55 @@ async def lifespan(app: FastAPI):
     except Exception as error:
         logger.error("Provider configuration is invalid (%s)", type(error).__name__)
 
-    # Initialize embedder
-    try:
-        embedder = get_embedder()
-        logger.info(f"✅ Embedder loaded: {embedder.__class__.__name__}")
-        logger.info(f"   Embedding dimension: {embedder.get_dimension()}")
-    except Exception as e:
-        logger.error("❌ Failed to load embedder (%s)", type(e).__name__)
-        embedder = None
-
     # Initialize database connections with error handling and timeout
     logger.info("🔌 Initializing database connections...")
 
+    postgres_db = None
     try:
         logger.info("Connecting to PostgreSQL...")
-        await asyncio.wait_for(get_postgres_db(), timeout=30)
+        postgres_db = await asyncio.wait_for(get_postgres_db(), timeout=30)
         logger.info("✅ PostgreSQL connected")
     except TimeoutError:
         logger.error("❌ PostgreSQL connection timed out")
     except Exception as e:
         logger.error("❌ PostgreSQL connection failed (%s)", type(e).__name__)
+
+    # A provider adapter is constructed only after the configured profile is proven
+    # compatible with the active physical vector space. Preflight reads catalogs,
+    # metadata, and aggregate counts only; it performs no inference request.
+    embedder = None
+    if postgres_db is not None and configured_embedding_profile is not None:
+        try:
+            embedding_storage_status = await preflight_embedding_space(
+                postgres_db,
+                EPISODE_EMBEDDING_SPACE,
+                configured_profile=configured_embedding_profile,
+                require_active=True,
+            )
+            require_embedding_space(embedding_storage_status)
+            embedder = get_embedder(profile=configured_embedding_profile)
+            logger.info("✅ Embedder loaded: %s", embedder.__class__.__name__)
+            logger.info("   Embedding dimension: %d", embedder.get_dimension())
+        except Exception as error:
+            logger.error(
+                "❌ Embedding-dependent endpoints unavailable (%s)",
+                type(error).__name__,
+            )
+            embedder = None
+    else:
+        embedding_storage_status = {
+            "schema_version": 1,
+            "semantic_index": "episodes",
+            "status": "blocked",
+            "ready": False,
+            "findings": [
+                {
+                    "code": "startup_dependency_unavailable",
+                    "severity": "error",
+                    "message": "Embedding startup dependencies are unavailable",
+                }
+            ],
+        }
 
     try:
         logger.info("Connecting to Neo4j...")
@@ -207,6 +289,7 @@ class HealthResponse(BaseModel):
     version: str
     services: dict[str, str]
     providers: dict[str, Any]
+    embedding_storage: dict[str, Any]
 
 
 class EntitySearchRequest(BaseModel):
@@ -472,6 +555,8 @@ async def ping():
 @app.get("/api/v1/health", response_model=HealthResponse, tags=["health"])
 async def health_check():
     """Check API health and service status."""
+    global embedding_storage_status
+
     postgres_db = await get_postgres_db()
     neo4j_db = await get_neo4j_db()
 
@@ -501,6 +586,21 @@ async def health_check():
         providers = {"status": "invalid"}
         services["provider_config"] = "unhealthy"
 
+    try:
+        embedding_storage_status = await _episode_embedding_preflight(postgres_db)
+        services["embedding_index"] = (
+            "healthy" if embedding_storage_status["ready"] else "unavailable"
+        )
+    except Exception as error:
+        embedding_storage_status = {
+            "schema_version": 1,
+            "semantic_index": "episodes",
+            "status": "incomplete",
+            "ready": False,
+            "error_type": type(error).__name__,
+        }
+        services["embedding_index"] = "unavailable"
+
     overall_status = "healthy" if all(s == "healthy" for s in services.values()) else "degraded"
 
     return HealthResponse(
@@ -508,6 +608,7 @@ async def health_check():
         version="0.1.0",
         services=services,
         providers=providers,
+        embedding_storage=embedding_storage_status,
     )
 
 
@@ -847,11 +948,13 @@ async def rag_query(request: RAGQueryRequest):
     """
     logger.info("RAG query received (%d characters)", len(request.query))
 
-    # Check embedder is available
+    postgres_db = await get_postgres_db()
+    await _require_episode_embedding_space(postgres_db)
+
+    # Check embedder only after storage preflight so a mismatch cannot reach a
+    # provider call even if an adapter from an old profile remains loaded.
     if not embedder:
         raise HTTPException(status_code=503, detail="Embedder not loaded")
-
-    postgres_db = await get_postgres_db()
 
     # Generate query embedding
     query_embedding = await embedder.embed_text(request.query)
@@ -1488,10 +1591,12 @@ async def rag_query(request: RAGQueryRequest):
 @app.post("/api/v1/validate", response_model=ValidationResponse, tags=["validation"])
 async def validate_lore(request: ValidationRequest):
     """Validate content against existing lore."""
+    postgres_db = await get_postgres_db()
+    await _require_episode_embedding_space(postgres_db)
+
     if not embedder:
         raise HTTPException(status_code=503, detail="Embedder not loaded")
 
-    postgres_db = await get_postgres_db()
     neo4j_db = await get_neo4j_db()
 
     issues = []
@@ -1501,20 +1606,21 @@ async def validate_lore(request: ValidationRequest):
     # Generate embedding for the content
     content_embedding = await embedder.embed_text(request.content)
 
-    # Find similar lore chunks for context
-    similar_chunks = await postgres_db.fetch(
+    # The application embedder belongs to the active 768-dimensional episode
+    # space. The legacy 384-dimensional chunk index is intentionally retired.
+    similar_episodes = await postgres_db.fetch(
         """
         SELECT
-            c.text,
-            c.keywords,
-            c.entity_refs,
-            1 - (c.embedding <=> $1::vector) as similarity,
+            e.text,
+            e.entity_refs,
+            1 - (e.embedding <=> $1::vector) as similarity,
             d.title,
             d.canonical
-        FROM chunks c
-        JOIN lore_documents d ON c.document_id = d.id
-        WHERE 1 - (c.embedding <=> $1::vector) > 0.5
-        ORDER BY c.embedding <=> $1::vector
+        FROM episodes e
+        JOIN lore_documents d ON e.document_id = d.id
+        WHERE e.embedding IS NOT NULL
+          AND 1 - (e.embedding <=> $1::vector) > 0.5
+        ORDER BY e.embedding <=> $1::vector
         LIMIT 10
     """,
         content_embedding,
@@ -1578,10 +1684,10 @@ async def validate_lore(request: ValidationRequest):
                     )
                 )
 
-    # Add supporting lore from similar chunks
-    for chunk in similar_chunks[:3]:
-        if chunk["canonical"]:
-            supporting_lore.append(f"{chunk['title']}: {chunk['text'][:200]}...")
+    # Add supporting lore from similar episodes
+    for episode in similar_episodes[:3]:
+        if episode["canonical"]:
+            supporting_lore.append(f"{episode['title']}: {episode['text'][:200]}...")
 
     # Calculate validation confidence
     confidence = 0.8  # Base confidence

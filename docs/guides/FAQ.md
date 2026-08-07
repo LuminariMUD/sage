@@ -1,6 +1,6 @@
 # Frequently Asked Questions (FAQ)
 
-**Version**: 0.7.16
+**Version**: 0.7.17
 **Status**: Production Ready
 **Last Updated**: 2025-11-12
 
@@ -552,12 +552,14 @@ No, corrections require **explicit approval**. The system:
 1. **Add indexes:**
 
    ```sql
-   CREATE INDEX idx_episodes_embedding ON episodes USING ivfflat (embedding vector_cosine_ops);
+   CREATE INDEX idx_episodes_embedding ON episodes
+   USING hnsw (embedding vector_cosine_ops)
+   WITH (m = 16, ef_construction = 64);
    ```
 
 2. **Tune pgvector:**
-   - Adjust `ivfflat` lists
-   - Use `hnsw` for better accuracy
+   - Tune HNSW search parameters for the active episode index
+   - Keep IVFFlat tuning scoped to legacy indexes that still use it
 
 3. **Reduce query limits:**
    - Fetch fewer results initially
@@ -864,5 +866,5 @@ We're continuously improving documentation based on user feedback!
 ---
 
 **Last Updated**: 2025-11-12
-**Version**: 0.7.16
+**Version**: 0.7.17
 **Status**: Production Ready

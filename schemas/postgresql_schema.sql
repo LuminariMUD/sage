@@ -154,7 +154,7 @@ CREATE TABLE episodes (
     document_id UUID REFERENCES lore_documents(id) ON DELETE CASCADE,
     episode_index INTEGER NOT NULL,
     text TEXT NOT NULL,
-    embedding vector(384),   -- sentence-transformers (change to 1536 for OpenAI)
+    embedding vector(768),   -- Active application space (Nomic); alternatives use shadows
     graphiti_synced BOOLEAN DEFAULT FALSE,
     graphiti_synced_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -167,6 +167,230 @@ CREATE TABLE episodes (
     -- Ensure unique episodes per document
     CONSTRAINT episodes_document_episode_unique UNIQUE(document_id, episode_index)
 );
+
+-- Immutable embedding identities. Profile rows intentionally exclude credentials,
+-- provider headers, source content, and vector values.
+CREATE TABLE embedding_profiles (
+    fingerprint TEXT PRIMARY KEY,
+    provider TEXT NOT NULL,
+    endpoint_class TEXT NOT NULL,
+    implementation TEXT NOT NULL,
+    model TEXT NOT NULL,
+    model_revision TEXT,
+    dimensions INTEGER NOT NULL,
+    output_encoding TEXT NOT NULL,
+    storage_type TEXT NOT NULL,
+    normalize BOOLEAN NOT NULL,
+    distance_metric TEXT NOT NULL,
+    input_type TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+    CONSTRAINT embedding_profiles_fingerprint_check CHECK (
+        length(fingerprint) BETWEEN 1 AND 512
+        AND fingerprint !~ '[[:cntrl:]]'
+    ),
+    CONSTRAINT embedding_profiles_provider_check CHECK (
+        provider IN ('ollama', 'openrouter', 'openai', 'sentence-transformers')
+    ),
+    CONSTRAINT embedding_profiles_endpoint_class_check CHECK (
+        endpoint_class IN (
+            'ollama-http',
+            'openai-compatible-http',
+            'in-process-sentence-transformers'
+        )
+    ),
+    CONSTRAINT embedding_profiles_dimensions_check CHECK (
+        dimensions BETWEEN 1 AND 65536
+    ),
+    CONSTRAINT embedding_profiles_output_encoding_check CHECK (
+        output_encoding IN ('float', 'base64')
+    ),
+    CONSTRAINT embedding_profiles_storage_type_check CHECK (
+        storage_type = 'pgvector-vector-float4'
+    ),
+    CONSTRAINT embedding_profiles_distance_metric_check CHECK (
+        distance_metric = 'cosine'
+    )
+);
+
+-- One current metadata row per physical vector space. The partial unique index
+-- below permits shadow spaces but allows only one active space per semantic index.
+CREATE TABLE embedding_index_states (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    semantic_index TEXT NOT NULL,
+    physical_space TEXT NOT NULL,
+    table_name TEXT NOT NULL,
+    column_name TEXT NOT NULL,
+    expected_dimensions INTEGER NOT NULL,
+    distance_metric TEXT NOT NULL,
+    index_name TEXT NOT NULL,
+    index_method TEXT NOT NULL,
+    operator_class TEXT NOT NULL,
+    state TEXT NOT NULL,
+    profile_fingerprint TEXT REFERENCES embedding_profiles(fingerprint) ON DELETE RESTRICT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+    activated_at TIMESTAMPTZ,
+    retired_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+    CONSTRAINT embedding_index_states_space_unique UNIQUE (semantic_index, physical_space),
+    CONSTRAINT embedding_index_states_column_unique UNIQUE (table_name, column_name),
+    CONSTRAINT embedding_index_states_identifier_check CHECK (
+        semantic_index ~ '^[a-z][a-z0-9_]{0,62}$'
+        AND physical_space ~ '^[a-z][a-z0-9_.]{0,126}$'
+        AND table_name ~ '^[a-z][a-z0-9_]{0,62}$'
+        AND column_name ~ '^[a-z][a-z0-9_]{0,62}$'
+        AND index_name ~ '^[a-z][a-z0-9_]{0,62}$'
+    ),
+    CONSTRAINT embedding_index_states_dimensions_check CHECK (
+        expected_dimensions BETWEEN 1 AND 65536
+    ),
+    CONSTRAINT embedding_index_states_distance_metric_check CHECK (
+        distance_metric = 'cosine'
+    ),
+    CONSTRAINT embedding_index_states_method_check CHECK (
+        index_method IN ('ivfflat', 'hnsw')
+    ),
+    CONSTRAINT embedding_index_states_operator_class_check CHECK (
+        operator_class = 'vector_cosine_ops'
+    ),
+    CONSTRAINT embedding_index_states_state_check CHECK (
+        state IN ('unverified', 'building', 'ready', 'active', 'retired', 'failed')
+    ),
+    CONSTRAINT embedding_index_states_activation_check CHECK (
+        (state = 'active' AND profile_fingerprint IS NOT NULL AND activated_at IS NOT NULL)
+        OR state <> 'active'
+    ),
+    CONSTRAINT embedding_index_states_retirement_check CHECK (
+        (state = 'retired' AND retired_at IS NOT NULL)
+        OR state <> 'retired'
+    ),
+    CONSTRAINT embedding_index_states_timestamp_check CHECK (
+        updated_at >= created_at
+        AND (activated_at IS NULL OR activated_at >= created_at)
+        AND (retired_at IS NULL OR retired_at >= created_at)
+    )
+);
+
+CREATE UNIQUE INDEX embedding_index_states_one_active
+    ON embedding_index_states(semantic_index)
+    WHERE state = 'active';
+
+CREATE INDEX embedding_profiles_model_dimensions
+    ON embedding_profiles(provider, model, dimensions);
+
+CREATE OR REPLACE FUNCTION embedding_profile_reject_mutation()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'embedding profile records are immutable';
+END;
+$$;
+
+CREATE TRIGGER embedding_profiles_immutable
+    BEFORE UPDATE OR DELETE ON embedding_profiles
+    FOR EACH ROW EXECUTE FUNCTION embedding_profile_reject_mutation();
+
+CREATE OR REPLACE FUNCTION embedding_index_state_validate()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    profile_dimensions INTEGER;
+    profile_distance_metric TEXT;
+BEGIN
+    IF NEW.profile_fingerprint IS NOT NULL THEN
+        SELECT dimensions, distance_metric
+        INTO profile_dimensions, profile_distance_metric
+        FROM embedding_profiles
+        WHERE fingerprint = NEW.profile_fingerprint;
+
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'embedding profile does not exist';
+        END IF;
+        IF profile_dimensions IS DISTINCT FROM NEW.expected_dimensions THEN
+            RAISE EXCEPTION 'embedding profile dimension does not match index state';
+        END IF;
+        IF profile_distance_metric IS DISTINCT FROM NEW.distance_metric THEN
+            RAISE EXCEPTION 'embedding profile distance metric does not match index state';
+        END IF;
+    END IF;
+
+    NEW.updated_at := clock_timestamp();
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER embedding_index_states_validate
+    BEFORE INSERT OR UPDATE ON embedding_index_states
+    FOR EACH ROW EXECUTE FUNCTION embedding_index_state_validate();
+
+-- Physical shape is known, but vector provenance is not inferred from dimensions.
+-- An operator must explicitly activate/adopt the application profile after review.
+INSERT INTO embedding_index_states (
+    semantic_index,
+    physical_space,
+    table_name,
+    column_name,
+    expected_dimensions,
+    distance_metric,
+    index_name,
+    index_method,
+    operator_class,
+    state
+)
+VALUES (
+    'episodes',
+    'episodes.embedding',
+    'episodes',
+    'embedding',
+    768,
+    'cosine',
+    'idx_episodes_embedding',
+    'hnsw',
+    'vector_cosine_ops',
+    'unverified'
+);
+
+INSERT INTO embedding_index_states (
+    semantic_index,
+    physical_space,
+    table_name,
+    column_name,
+    expected_dimensions,
+    distance_metric,
+    index_name,
+    index_method,
+    operator_class,
+    state,
+    retired_at
+)
+VALUES
+    (
+        'legacy_chunks',
+        'chunks.embedding',
+        'chunks',
+        'embedding',
+        384,
+        'cosine',
+        'idx_chunks_embedding',
+        'ivfflat',
+        'vector_cosine_ops',
+        'retired',
+        statement_timestamp()
+    ),
+    (
+        'legacy_search_queries',
+        'search_queries.query_embedding',
+        'search_queries',
+        'query_embedding',
+        384,
+        'cosine',
+        'idx_search_embedding',
+        'ivfflat',
+        'vector_cosine_ops',
+        'retired',
+        statement_timestamp()
+    );
 
 -- ============================================
 -- DATA QUALITY CONSTRAINTS
@@ -188,8 +412,8 @@ USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);
 
 CREATE INDEX idx_episodes_embedding ON episodes
-USING ivfflat (embedding vector_cosine_ops)
-WITH (lists = 100);
+USING hnsw (embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 64);
 
 -- Additional indexes for hybrid Graph RAG
 CREATE INDEX idx_episodes_document_id ON episodes(document_id);

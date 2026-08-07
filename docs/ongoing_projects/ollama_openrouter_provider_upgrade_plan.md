@@ -3,7 +3,7 @@
 | Field                 | Value                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | Status                | Active phased implementation                                                                           |
-| Implementation        | Phase 1 runtime plus bounded route/deployment slices implemented offline; provider activation frozen    |
+| Implementation        | Runtime, provider, and embedding-space guard slices implemented; provider/vector activation frozen     |
 | Last updated          | 2026-08-07                                                                                             |
 | Scope                 | Text generation, embeddings, Graphiti, configuration, storage migrations, deployment, and tests        |
 | Compatibility target  | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
@@ -212,6 +212,49 @@ The remaining Phase 8 environment/scanner contract is now implemented without ac
 
 Thirty focused configuration/scanner tests pass. The complete network-isolated fast suite passes 254 tests with 6 skips and 110 intentional deselections; Ruff, Black, isort, Actionlint, the synthetic scanner test, and a 28-commit redacted history scan also pass. The real ignored `.env` was not displayed or staged. No provider/model request, graph claim, ingestion, or live data mutation occurred, and the worker remains stopped by operator request.
 
+### Embedding profile and physical-index guard checkpoint - implemented, not activated
+
+The first Phase 5/7 storage boundary is implemented without changing the live
+vector space or calling an embedding provider:
+
+- Added migration `0004_embedding_index_profiles`. It requires the existing
+  episode column to be exactly `vector(768)`, builds a replacement episode HNSW
+  cosine index, creates immutable secret-free `embedding_profiles`, and
+  creates authoritative `embedding_index_states` with at most one active physical
+  space per semantic index.
+- Corrected the checked-in base schema to 768-dimensional episode vectors and
+  retired the destructive 1536-dimensional `add_episode_uuid.sql` helper. The
+  384-dimensional chunk and search-query spaces remain physically intact but are
+  recorded as retired application paths.
+- Added read-only human/JSON preflight over configured/stored fingerprints,
+  sanitized profile components, vector typmods, index method/operator/options,
+  validity/readiness, and aggregate total/embedded row counts. It reads neither
+  source text nor vector values.
+- Added an explicit metadata-only activation command. Empty spaces and populated
+  spaces require different exact tokens; adopting existing vectors is an operator
+  provenance attestation and cannot be inferred from dimensions.
+- API startup keeps embedding-dependent endpoints unavailable until preflight is
+  ready. `/api/v1/rag/query`, `/api/v1/validate`, and episode embedding generation
+  repeat the guard before any provider request; a stale loaded adapter is also
+  rejected.
+- Moved `/api/v1/validate` from the legacy 384-dimensional chunk query to the
+  supported episode index, eliminating its implicit cross-space embedder reuse.
+
+Twenty-five focused offline tests pass. All 13 relevant rollback-only PostgreSQL
+tests pass together, covering upgrade and fresh-schema DDL, physical index shape,
+explicit adoption, profile immutability, mismatches, and the existing durable graph
+fixtures. The complete fast suite passes 264 tests with 6 skips and 112 intentional
+deselections.
+
+The live preflight was strictly read-only and returned the expected blocked state:
+611/611 episode vectors at 768 dimensions, no episode vector index, no profile/state
+tables, and empty indexed 384-dimensional chunk/search-query spaces. Migration
+`0004` is pending and was not applied; no profile was adopted and no live index was
+created. The ignored `.env` was not inspected or displayed; the new local
+`OPENROUTER_KEY` was not logged or used for a provider request. No provider/model
+call, graph claim, ingestion, or live data mutation occurred, and the worker remains
+stopped by operator request.
+
 ---
 
 ## 1. Executive Summary
@@ -295,16 +338,21 @@ Relevant files include:
 
 ### 4.2 Vector-schema drift
 
-The vector schema is not represented by one authoritative source:
+At the initial inventory, the vector schema was not represented by one authoritative source:
 
-- The checked-in base schema declares `episodes.embedding` as `vector(384)`.
-- `schemas/add_episode_uuid.sql` declares it as `vector(1536)`.
+- The checked-in base schema declared `episodes.embedding` as `vector(384)`; v0.7.17
+  corrects it to the supported `vector(768)` shape.
+- The old `schemas/add_episode_uuid.sql` helper declared `vector(1536)` and dropped
+  `episodes`; v0.7.17 retires it as a fail-closed migration-runner notice.
 - The live database uses `vector(768)` for the 611 populated episode vectors.
 - The live episode table does not currently show the checked-in `idx_episodes_embedding` vector index.
 - `chunks.embedding`, `canonical_content.embedding`, and `search_queries.query_embedding` remain at 384 dimensions.
 - The current `chunks` and `search_queries` tables contain no vectors, while all 611 episodes have vectors.
 
-There is also a current query-space mismatch: `/api/v1/validate` uses the global 768-dimensional Nomic embedder to query the legacy 384-dimensional `chunks.embedding` column. This should be resolved as part of the provider work rather than reproduced in a new abstraction.
+The initial `/api/v1/validate` path also used the global 768-dimensional Nomic
+embedder against legacy `chunks.embedding`. v0.7.17 moves validation retrieval to
+episodes and records the chunk/search-query spaces as retired. Live activation of
+the new metadata and restored episode index remains backup-gated.
 
 ### 4.3 Current active model roles
 
@@ -890,7 +938,7 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [x] Add the OpenRouter embedding adapter and explicit float output.
 - [x] Add configurable dimensions and response validation.
 - [x] Upgrade the Ollama embedder to batch-capable modern endpoints and the same validation contract.
-- [ ] Add embedding profile fingerprinting and startup guards.
+- [x] Add embedding profile fingerprinting and startup guards.
 - [x] Store or expose provider/model/dimensions in sanitized health and pipeline output.
 - [x] Add deterministic ordering, cardinality, invalid-vector, retry, and no-fallback tests.
 - [ ] Build a shadow embedding evaluation path that does not overwrite active Nomic vectors.
@@ -914,15 +962,15 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 ### Phase 7 — Schema reconciliation and vector migration tooling
 
 - [x] Establish a versioned migration directory and migration ledger.
-- [ ] Make the checked-in schema match the actual supported dimensions and indexes.
-- [ ] Add embedding-profile/index-state metadata.
+- [x] Make the checked-in schema match the actual supported dimensions and indexes.
+- [x] Add embedding-profile/index-state metadata.
 - [ ] Restore or replace the missing episode vector index.
-- [ ] Add preflight checks for column dimensions, index dimensions, profile fingerprints, and row counts.
+- [x] Add preflight checks for column dimensions, index dimensions, profile fingerprints, and row counts.
 - [ ] Implement a shadow-column or shadow-table backfill so the active Nomic vectors remain available during evaluation.
 - [ ] Build the replacement vector index before cutover.
 - [ ] Add resumable batching, progress reporting, cost accounting, and idempotency.
 - [ ] Add a controlled graph backup, clear, and rebuild workflow.
-- [ ] Resolve `/api/v1/validate` and the legacy 384-dimensional chunk path.
+- [x] Resolve `/api/v1/validate` and the legacy 384-dimensional chunk path.
 - [ ] Require clean index-profile preflight and `graph-audit` results before activation.
 
 **Exit criteria:** A dry-run migration can build and validate a new embedding space without modifying the active one, and rollback remains possible.
@@ -1070,7 +1118,7 @@ For Graphiti, each row must exercise primary success, eligible fallback success,
 - [ ] An exhausted extraction route leaves an explainable quarantined record and no false synchronization.
 - [ ] The post-import and post-restart `graph-audit` results are clean.
 - [ ] A real browser completes one SSE chat without CORS, console, credential, or responsive-overflow regressions.
-- [ ] A mismatched active embedding profile prevents startup or marks embedding-dependent endpoints unavailable.
+- [x] A mismatched active embedding profile prevents startup or marks embedding-dependent endpoints unavailable.
 - [ ] Text-provider rollback requires only configuration and restart.
 - [ ] Embedding rollback selects the retained previous vector space and graph backup.
 
@@ -1241,24 +1289,25 @@ Old vectors, indexes, and graph backups must not be deleted until the bake perio
 
 ## 16. Open Decisions
 
-| Decision                                              | Recommendation                                                                                                      | Status / decision gate                      |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| First OpenRouter chat/creative/reasoning/tools models | Select per task and verify tools/structured-output support; do not assume one model fits every task                 | Open — owner/date required in Phase 0       |
-| Existing direct-OpenAI adapter                        | Retain for one deprecated compatibility window unless usage audit proves removal is safe                            | Open — decide in Phase 0                    |
-| Initial PPLX embedding dimensions                     | Use native 1024 for the quality pilot                                                                               | Proposed — approve in Phase 0               |
-| Initial local extraction route                        | Evaluate `qwen2.5:3b` primary with `qwen2.5:7b` fallback                                                            | Proposed — decide from Phase 0 corpus       |
-| Cross-provider extraction fallback                    | Keep the first route within Ollama; add OpenRouter fallback only after explicit privacy, cost, and quality approval | Proposed — revisit in Phase 4               |
-| Error classes and nested attempt budgets              | Adopt Section 5.4 taxonomy and one hard provider-call ceiling                                                       | Proposed — approve before Phase 1 exits     |
-| Lease duration and heartbeat                          | Derive from measured p99 extraction duration with recovery headroom                                                 | Open — decide before Phase 1 implementation |
-| Quarantine policy and retention                       | Manual explicit retry; preserve immutable prior attempts under an operational retention policy                      | Open — decide before Phase 1 exits          |
-| Graph-quality and fallback-rate thresholds            | Set against the versioned 3B/7B baseline; never use completeness as a substitute                                    | Open — decide in Phase 0                    |
-| Legacy 384-dimensional chunk index                    | Retire its vector-search use and standardize on episodes                                                            | Proposed — approve in Phase 0               |
-| OpenRouter ZDR                                        | Require if compatible endpoints meet capability and cost needs                                                      | Open — owner/date required in Phase 0       |
-| Embedding provider routing                            | Pin/disable fallbacks for reproducibility                                                                           | Proposed — required before Phase 5 exits    |
-| Migration mechanism                                   | Add versioned SQL migrations and a migration ledger                                                                 | Proposed — required before Phase 1          |
-| Shadow-vector storage                                 | Choose shadow column versus shadow table after migration design review                                              | Open — decide before Phase 7                |
-| Release-gate execution environment                    | Run the local gate on the target WSL2/GPU stack; run cloud/provider tests separately with restricted credentials    | Proposed — approve before Phase 8 exits     |
-| Bake period                                           | Define objective duration and traffic/job thresholds before production cutover                                      | Open — decide before Phase 9                |
+| Decision                                              | Recommendation                                                                                                      | Status / decision gate                            |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| First OpenRouter chat/creative/reasoning/tools models | Select per task and verify tools/structured-output support; do not assume one model fits every task                 | Open — owner/date required in Phase 0             |
+| Existing direct-OpenAI adapter                        | Retain for one deprecated compatibility window unless usage audit proves removal is safe                            | Open — decide in Phase 0                          |
+| Initial PPLX embedding dimensions                     | Use native 1024 for the quality pilot                                                                               | Proposed — approve in Phase 0                     |
+| Initial local extraction route                        | Evaluate `qwen2.5:3b` primary with `qwen2.5:7b` fallback                                                            | Proposed — decide from Phase 0 corpus             |
+| Cross-provider extraction fallback                    | Keep the first route within Ollama; add OpenRouter fallback only after explicit privacy, cost, and quality approval | Proposed — revisit in Phase 4                     |
+| Error classes and nested attempt budgets              | Adopt Section 5.4 taxonomy and one hard provider-call ceiling                                                       | Proposed — approve before Phase 1 exits           |
+| Lease duration and heartbeat                          | Derive from measured p99 extraction duration with recovery headroom                                                 | Open — decide before Phase 1 implementation       |
+| Quarantine policy and retention                       | Manual explicit retry; preserve immutable prior attempts under an operational retention policy                      | Open — decide before Phase 1 exits                |
+| Graph-quality and fallback-rate thresholds            | Set against the versioned 3B/7B baseline; never use completeness as a substitute                                    | Open — decide in Phase 0                          |
+| Legacy 384-dimensional chunk index                    | Retire its vector-search use and standardize on episodes                                                            | Implemented in code; migration activation pending |
+| Active episode vector index                           | HNSW cosine with `m=16` and `ef_construction=64`; do not inherit legacy IVFFlat tuning                              | Implemented in code; migration activation pending |
+| OpenRouter ZDR                                        | Require if compatible endpoints meet capability and cost needs                                                      | Open — owner/date required in Phase 0             |
+| Embedding provider routing                            | Pin/disable fallbacks for reproducibility                                                                           | Proposed — required before Phase 5 exits          |
+| Migration mechanism                                   | Add versioned SQL migrations and a migration ledger                                                                 | Proposed — required before Phase 1                |
+| Shadow-vector storage                                 | Choose shadow column versus shadow table after migration design review                                              | Open — decide before Phase 7                      |
+| Release-gate execution environment                    | Run the local gate on the target WSL2/GPU stack; run cloud/provider tests separately with restricted credentials    | Proposed — approve before Phase 8 exits           |
+| Bake period                                           | Define objective duration and traffic/job thresholds before production cutover                                      | Open — decide before Phase 9                      |
 
 ---
 

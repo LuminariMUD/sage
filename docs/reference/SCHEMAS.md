@@ -1,8 +1,8 @@
 # Database Schemas Reference
 
-**Version**: 0.7.16
-**Status**: Production Ready  
-**Last Updated**: 2025-11-12
+**Version**: 0.7.17
+**Status**: Production Ready
+**Last Updated**: 2026-08-07
 
 Complete reference for PostgreSQL and Neo4j database schemas used in Luminari Sage.
 
@@ -93,16 +93,16 @@ CREATE TABLE lore_documents (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     indexed_at TIMESTAMPTZ,
-    
+
     -- Pipeline processing
     processing_status VARCHAR(20) DEFAULT 'pending',
     processed_at TIMESTAMPTZ,
-    
+
     -- Graphiti processing
     graphiti_status TEXT DEFAULT 'pending',
     graphiti_content_hash TEXT,
     graphiti_processed_at TIMESTAMP,
-    
+
     -- Full-text search vector
     search_vector tsvector GENERATED ALWAYS AS (
         setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
@@ -113,6 +113,7 @@ CREATE TABLE lore_documents (
 ```
 
 **Key Fields**:
+
 - `stable_id`: ULID/KSUID for cross-database references
 - `document_type`: Enum (codex, chronicle, lore_note, etc.)
 - `graphiti_status`: Processing state (pending, processing, completed, failed)
@@ -128,25 +129,48 @@ CREATE TABLE episodes (
     document_id UUID REFERENCES lore_documents(id) ON DELETE CASCADE,
     episode_index INTEGER NOT NULL,
     text TEXT NOT NULL,
-    embedding vector(384),   -- sentence-transformers (change to 1536 for OpenAI)
+    embedding vector(768),   -- Active Nomic application space
     graphiti_synced BOOLEAN DEFAULT FALSE,
     graphiti_synced_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    
+
     -- Metadata
     entity_refs JSONB DEFAULT '[]',
     metadata JSONB DEFAULT '{}',
-    
+
     CONSTRAINT episodes_document_episode_unique UNIQUE(document_id, episode_index)
 );
 ```
 
 **Key Fields**:
+
 - `episode_index`: Position within document
-- `embedding`: 384-dim vector (MiniLM) or 1536-dim (OpenAI)
+- `embedding`: Fixed 768-dimensional vector for the supported active episode space
 - `graphiti_synced`: Whether synced to Neo4j via Graphiti
 - `entity_refs`: JSONB array of entity references
+
+Alternative providers or dimensions must use a shadow column/table. They must not
+overwrite `episodes.embedding` or reuse its active profile identity during evaluation.
+
+#### 2a. embedding_profiles
+
+Immutable, secret-free identities for vector spaces. Each record includes the
+provider, endpoint/implementation class, exact model and optional revision,
+dimensions, output/storage encoding, normalization, cosine metric, optional input
+type, fingerprint, and creation time. Credentials, endpoints, provider headers,
+source text, and vector values are not stored.
+
+#### 2b. embedding_index_states
+
+Authoritative physical-space and activation metadata. It records the semantic
+index, table/column, expected dimensions, index name/method/operator class, state,
+and optional profile fingerprint. A partial unique index permits shadow spaces but
+allows only one `active` record per semantic index. The baseline episode row is
+`unverified`; legacy chunk/search-query vector spaces are `retired`.
+
+`make embedding-preflight` compares this metadata with PostgreSQL catalogs,
+configured profile identity, index validity/options, and aggregate row coverage.
 
 #### 3. validation_reports
 
@@ -158,17 +182,17 @@ CREATE TABLE validation_reports (
     report_id VARCHAR(255) UNIQUE NOT NULL,
     agent_id VARCHAR(255) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    
+
     -- Report details
     validation_type VARCHAR(255) NOT NULL,
     scope_description TEXT NOT NULL,
     total_items_checked INTEGER NOT NULL DEFAULT 0,
-    
+
     -- Summary statistics
     findings_count INTEGER NOT NULL DEFAULT 0,
     severity_counts JSONB NOT NULL DEFAULT '{}',
     category_counts JSONB NOT NULL DEFAULT '{}',
-    
+
     -- Execution details
     execution_time_seconds DECIMAL(10, 3) NOT NULL DEFAULT 0,
     success BOOLEAN NOT NULL DEFAULT TRUE,
@@ -189,33 +213,33 @@ CREATE TABLE validation_findings (
     report_id UUID NOT NULL REFERENCES validation_reports(id) ON DELETE CASCADE,
     agent_id VARCHAR(255) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    
+
     -- Finding classification
     severity VARCHAR(50) NOT NULL CHECK (severity IN ('info', 'warning', 'error', 'critical')),
     category VARCHAR(255) NOT NULL,
     title TEXT NOT NULL,
     description TEXT NOT NULL,
-    
+
     -- Evidence and confidence
     confidence_score DECIMAL(3, 2) NOT NULL CHECK (confidence_score >= 0.0 AND confidence_score <= 1.0),
     confidence_explanation TEXT NOT NULL,
     evidence JSONB NOT NULL DEFAULT '[]',
-    
+
     -- Suggested actions
     suggested_action TEXT NOT NULL,
     priority INTEGER NOT NULL CHECK (priority >= 1 AND priority <= 5),
-    
+
     -- Affected items
     affected_entities JSONB NOT NULL DEFAULT '[]',
     affected_relationships JSONB NOT NULL DEFAULT '[]',
-    
+
     -- Human review tracking
     reviewed BOOLEAN NOT NULL DEFAULT FALSE,
     reviewer VARCHAR(255),
     review_timestamp TIMESTAMP WITH TIME ZONE,
     review_action VARCHAR(255),
     review_notes TEXT,
-    
+
     metadata JSONB DEFAULT '{}'
 );
 ```
@@ -229,13 +253,13 @@ CREATE TABLE relationship_corrections (
     correction_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     validation_report_id UUID REFERENCES validation_reports(id),
     correction_batch_id UUID NOT NULL,
-    
+
     -- Correction metadata
     correction_type TEXT NOT NULL CHECK (correction_type IN ('DEDUPLICATION', 'SEMANTIC_STANDARDIZATION')),
     action TEXT NOT NULL CHECK (action IN ('DELETE', 'UPDATE')),
     confidence_score FLOAT NOT NULL CHECK (confidence_score >= 0.0 AND confidence_score <= 1.0),
     agent_reasoning TEXT NOT NULL,
-    
+
     -- Neo4j relationship identification
     relationship_id TEXT NOT NULL,
     relationship_type TEXT NOT NULL,
@@ -245,25 +269,25 @@ CREATE TABLE relationship_corrections (
     target_node_name TEXT,
     source_node_labels TEXT[],
     target_node_labels TEXT[],
-    
+
     -- Complete relationship backup
     original_properties JSONB NOT NULL,
     new_properties JSONB,
-    
+
     -- Semantic type tracking
     original_semantic_type TEXT,
     new_semantic_type TEXT,
     duplicate_count INTEGER,
-    
+
     -- Audit timestamps
     applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    
+
     -- Rollback tracking
     rolled_back BOOLEAN DEFAULT FALSE,
     rollback_at TIMESTAMP WITH TIME ZONE,
     rollback_by TEXT,
     rollback_reason TEXT,
-    
+
     metadata JSONB DEFAULT '{}'::jsonb
 );
 ```
@@ -303,11 +327,11 @@ CREATE TYPE validation_status AS ENUM (
 ```sql
 -- Vector similarity indexes
 CREATE INDEX idx_episodes_embedding ON episodes
-USING ivfflat (embedding vector_cosine_ops)
-WITH (lists = 100);
+USING hnsw (embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 64);
 
 -- Full-text search
-CREATE INDEX idx_documents_search ON lore_documents 
+CREATE INDEX idx_documents_search ON lore_documents
 USING GIN (search_vector);
 
 -- JSONB indexes
@@ -390,7 +414,7 @@ All entity types inherit from `:Entity`:
 ```cypher
 (:Entity {
   uuid: String!           // Graphiti-generated UUID
-  name: String!           
+  name: String!
   name_embedding: List<Float>  // Name vector embedding
   summary: String
   summary_embedding: List<Float>
@@ -407,7 +431,7 @@ Graphiti creates specialized entity types based on lore content:
 // Divine beings
 (:Deity:Entity)
 
-// Named individuals  
+// Named individuals
 (:Person:Entity)
 
 // Organizations
@@ -482,21 +506,21 @@ Links to PostgreSQL episodes:
 
 The `semantic_type` property on `RELATES_TO` edges includes:
 
-| Semantic Type | Usage |
-|--------------|--------|
-| Commands | Authority relationships (Leaders → Organizations) |
-| ServesUnder | Service relationships (Knights → Orders) |
-| AlliedWith | Alliance relationships (Factions ↔ Factions) |
-| OpposedTo | Conflict relationships (Good ↔ Evil) |
-| Influences | Influence relationships (Deities → Mortals) |
-| CreatedBy | Creation relationships (Artifacts ← Creators) |
-| TransformedInto | Change relationships (Races → New Forms) |
-| DescendedFrom | Heritage relationships (People ← Ancestors) |
-| BoundTo | Binding relationships (Souls ↔ Artifacts) |
-| Protects | Protection relationships (Orders → Locations) |
-| Corrupts | Corruption relationships (Evil → Good) |
-| TeachesTo | Knowledge relationships (Masters → Students) |
-| Embodies | Representation relationships (Concepts ↔ Entities) |
+| Semantic Type   | Usage                                              |
+| --------------- | -------------------------------------------------- |
+| Commands        | Authority relationships (Leaders → Organizations)  |
+| ServesUnder     | Service relationships (Knights → Orders)           |
+| AlliedWith      | Alliance relationships (Factions ↔ Factions)       |
+| OpposedTo       | Conflict relationships (Good ↔ Evil)               |
+| Influences      | Influence relationships (Deities → Mortals)        |
+| CreatedBy       | Creation relationships (Artifacts ← Creators)      |
+| TransformedInto | Change relationships (Races → New Forms)           |
+| DescendedFrom   | Heritage relationships (People ← Ancestors)        |
+| BoundTo         | Binding relationships (Souls ↔ Artifacts)          |
+| Protects        | Protection relationships (Orders → Locations)      |
+| Corrupts        | Corruption relationships (Evil → Good)             |
+| TeachesTo       | Knowledge relationships (Masters → Students)       |
+| Embodies        | Representation relationships (Concepts ↔ Entities) |
 
 ### Constraints and Indexes
 
@@ -534,7 +558,8 @@ FOR (e:Entity) ON EACH [e.name, e.summary];
 
 - **PostgreSQL**: Store document/episode embeddings for retrieval
 - **Neo4j**: Store entity name/summary embeddings for graph search
-- Use consistent embedding model across both databases
+- Persist and compare a separate profile fingerprint for every semantic index
+- Never mix dimensions or profiles implicitly across PostgreSQL and Neo4j
 
 ### 3. Metadata Flexibility
 
@@ -660,15 +685,16 @@ LIMIT 5
 ### PostgreSQL Performance
 
 1. **Vector Index Tuning**
+
    ```sql
-   -- Adjust lists parameter based on data size
-   -- Rule of thumb: lists = sqrt(row_count)
+   -- Active episode embeddings use HNSW cosine search.
    CREATE INDEX idx_episodes_embedding ON episodes
-   USING ivfflat (embedding vector_cosine_ops)
-   WITH (lists = 100);  -- Tune this value
+   USING hnsw (embedding vector_cosine_ops)
+   WITH (m = 16, ef_construction = 64);
    ```
 
 2. **Partial Indexes**
+
    ```sql
    -- Index only unsynced episodes
    CREATE INDEX idx_episodes_unsynced ON episodes(graphiti_synced)
@@ -685,6 +711,7 @@ LIMIT 5
 ### Neo4j Performance
 
 1. **Indexed Properties**
+
    ```cypher
    // Add indexes on frequently queried properties
    CREATE INDEX entity_type IF NOT EXISTS
@@ -692,6 +719,7 @@ LIMIT 5
    ```
 
 2. **Query Profiling**
+
    ```cypher
    // Use PROFILE to analyze query performance
    PROFILE
@@ -726,7 +754,7 @@ VACUUM ANALYZE validation_findings;
 REINDEX INDEX idx_episodes_embedding;
 
 -- Check index bloat
-SELECT schemaname, tablename, 
+SELECT schemaname, tablename,
        pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
 FROM pg_tables
 WHERE schemaname = 'public'

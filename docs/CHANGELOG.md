@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Embedding Profile and Physical-Index Guards (0.7.17)**
+  - Added migration `0004_embedding_index_profiles` with immutable secret-free profile identities, one-active-space metadata, physical 768/384 dimension assertions, retired legacy spaces, and an episode HNSW cosine index when applied.
+  - Retired the destructive pre-migration `add_episode_uuid.sql` helper so it now refuses execution instead of dropping the episode table or recreating an incompatible vector space.
+  - Corrected the baseline episode schema to 768 dimensions and added read-only human/JSON preflight for profile fingerprints, physical dimensions, index method/operator/options, validity, and aggregate row coverage.
+  - Added exact-confirmation metadata activation with a distinct populated-space adoption attestation; activation never generates vectors or calls a provider.
+  - Made API startup, RAG, validation, and episode embedding generation fail closed before inference when configured, stored, and physical profiles disagree; moved `/api/v1/validate` off the legacy 384-dimensional chunk path.
+  - Verified 264 offline fast tests with 6 skips and 112 intentional deselections, plus all 13 relevant rollback-only PostgreSQL tests. Live inspection was read-only; migration `0004` and profile adoption remain pending, with no provider call, graph claim, ingestion, or worker restart.
+
 - **Provider Environment and Secret-Scanner Contract (0.7.16)**
   - Added one enforced provider-environment field registry covering selectors, task overrides, retries, routing, embeddings, Graphiti, and secret-file inputs.
   - Expanded `.env.example` to document every accepted provider field with empty credential values and added a regression proving its default all-Ollama profile resolves without cloud credentials.

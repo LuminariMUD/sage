@@ -1,6 +1,6 @@
 # Luminari Sage - Intelligent Lore Management System
 
-**Version**: 0.7.16
+**Version**: 0.7.17
 **Status**: Production Deployed
 **Deployment**: luminarimud.com:8003
 **Repository**: https://github.com/LuminariMUD/sage
@@ -170,13 +170,19 @@ docker compose up -d
 # Check service health
 docker compose logs -f api
 
-# Run semantic data pipeline (inside container)
-make semantic-pipeline
-# Or run individual steps:
-# make load-canon          # Load markdown documents
-# make create-episodes     # Create semantic chunks
-# make generate-embeddings # Generate vector embeddings
-# make sync-to-graphiti    # Build knowledge graph
+# Inspect migrations and embedding storage before any vector operation
+make db-migrate-status
+make embedding-preflight
+
+# After the backup-gated migrations, explicitly activate an empty vector space
+make embedding-profile-activate \
+  CONFIRM_EMBEDDING_PROFILE=ACTIVATE_EMPTY_EMBEDDING_PROFILE
+
+# Run individual pipeline steps only after preflight reports READY
+# make load-canon
+# make create-episodes
+# make generate-embeddings
+# make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # Test the API
 curl http://localhost:8003/ping
@@ -193,10 +199,10 @@ See [docs/guides/QUICKSTART.md](docs/guides/QUICKSTART.md) for detailed instruct
 
 - **16 Approved Canon Documents**: Markdown lore in `lore_docs/canon/`
 - **93 Draft Documents**: Markdown source material in `lore_docs/drafts/`
-- **~10,000 Episodes**: Semantic chunks with embeddings
+- **611 Loaded Episodes**: Semantic chunks in the current local corpus
 - **1,000+ Entities**: Characters, locations, factions, items, events
 - **5,000+ Relationships**: Graph connections with semantic properties
-- **384-dimension Vectors**: Using sentence-transformers/all-MiniLM-L6-v2
+- **768-dimension Episode Vectors**: Active Nomic application space; legacy 384-dimensional chunk search is retired
 
 ### System Capabilities
 
@@ -312,8 +318,9 @@ make semantic-pipeline
 # Individual steps (run in order)
 make load-canon              # Load canonical lore into PostgreSQL
 make create-episodes         # Create semantic chunks (200-500 tokens)
+make embedding-preflight     # Must report READY before vector reads/writes
 make generate-embeddings     # Generate vector embeddings
-make sync-to-graphiti        # Extract entities/relationships to Neo4j
+make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # Monitoring and status
 make status                  # System health and statistics
@@ -327,6 +334,39 @@ make status                  # System health and statistics
 - Resource-intensive (run separately from deployment)
 
 See [docs/systems/PIPELINE_SYSTEM.md](docs/systems/PIPELINE_SYSTEM.md) for detailed documentation.
+
+---
+
+## Embedding Storage Safety
+
+The application embedding profile is persisted separately from the physical
+pgvector column and index. API startup, RAG, validation, and episode embedding
+generation compare the configured fingerprint with that metadata, the physical
+dimension, the index method/operator class, and aggregate row counts before any
+provider request. A mismatch leaves embedding-dependent endpoints unavailable.
+
+```bash
+# Strictly read-only; emits no source text or vector values
+make embedding-preflight
+make embedding-preflight-json
+```
+
+Migration `0004_embedding_index_profiles` records the physical spaces but leaves
+existing episode vectors `unverified`. After applying it through the verified
+backup gate, adopt a populated Nomic space only when its provenance has been
+independently confirmed:
+
+```bash
+make embedding-profile-activate \
+  ADOPT_EXISTING=1 \
+  CONFIRM_EMBEDDING_PROFILE=ADOPT_EXISTING_EMBEDDING_PROFILE
+```
+
+Activation writes metadata only and never calls a provider. Matching dimensions
+alone are not proof of provenance. New provider/dimension candidates must use a
+shadow vector space and pass retrieval gates before cutover. See
+[the migration rules](schemas/migrations/README.md) for both empty-space and
+existing-space procedures.
 
 ---
 
@@ -496,6 +536,6 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ---
 
-**Last Updated**: 2026-07-30
-**Version**: 0.7.16
+**Last Updated**: 2026-08-07
+**Version**: 0.7.17
 **Status**: Production Ready

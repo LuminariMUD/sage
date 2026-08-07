@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-**Version**: 0.7.16
+**Version**: 0.7.17
 **Status**: Production Ready
 **Last Updated**: 2025-11-12
 
@@ -558,7 +558,9 @@ This guide provides solutions to common issues when working with Luminari Sage.
 1. **Add database indexes:**
 
    ```sql
-   CREATE INDEX IF NOT EXISTS idx_episodes_embedding ON episodes USING ivfflat (embedding vector_cosine_ops);
+   CREATE INDEX IF NOT EXISTS idx_episodes_embedding ON episodes
+   USING hnsw (embedding vector_cosine_ops)
+   WITH (m = 16, ef_construction = 64);
    ```
 
 2. **Check Neo4j indexes:**

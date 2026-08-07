@@ -1,6 +1,6 @@
 # Luminari Sage - Complete Documentation Guide
 
-**Version**: 0.7.16
+**Version**: 0.7.17
 **Status**: Production Ready
 **Last Updated**: 2025-11-12
 
@@ -469,7 +469,7 @@ All documentation files must include a header with:
 ```markdown
 # Document Title
 
-**Version**: 0.7.16
+**Version**: 0.7.17
 **Status**: Production Ready / In Development / Draft
 **Last Updated**: YYYY-MM-DD
 
@@ -481,7 +481,7 @@ Brief description of the document's purpose (1-2 sentences).
 ```markdown
 # API Reference
 
-**Version**: 0.7.16
+**Version**: 0.7.17
 **Status**: Production Ready
 **Last Updated**: 2025-11-12
 
@@ -1146,6 +1146,6 @@ Can't find what you need?
 ---
 
 **Last Updated**: 2025-11-12
-**Version**: 0.7.16
+**Version**: 0.7.17
 **Status**: Production Ready
 ```

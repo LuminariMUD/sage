@@ -15,7 +15,7 @@ from src.graphiti.audit import source_content_fingerprint
 pytestmark = pytest.mark.integration
 
 MIGRATION_DIRECTORY = Path(__file__).resolve().parents[1] / "schemas" / "migrations"
-MIGRATION_PATHS = sorted(MIGRATION_DIRECTORY.glob("*.sql"))
+MIGRATION_PATHS = sorted(MIGRATION_DIRECTORY.glob("000[1-3]_*.sql"))
 
 
 async def _expect_database_rejection(connection, statement: str, *args) -> None:
