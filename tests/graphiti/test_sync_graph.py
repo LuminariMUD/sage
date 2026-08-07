@@ -129,6 +129,7 @@ class FakeGraphitiCore:
         self.crash_before_write = False
         self.crash_after_write = False
         self.quality_report = None
+        self.last_add_kwargs = None
 
     def consume_relationship_quality(self, episode_uuid):
         del episode_uuid
@@ -138,12 +139,13 @@ class FakeGraphitiCore:
 
     async def add_episode(self, **kwargs):
         self.add_calls += 1
+        self.last_add_kwargs = kwargs
         if self.crash_before_write:
             self.crash_before_write = False
             raise InjectedCrash("before graph write")
         self.driver.nodes.append(
             {
-                "uuid": kwargs["uuid"],
+                "uuid": kwargs.get("uuid") or str(uuid4()),
                 "stable_id": None,
                 "source_description": kwargs["source_description"],
                 "content": kwargs["episode_body"],
@@ -219,6 +221,7 @@ async def test_crash_before_write_retries_without_false_node_or_duplicate():
     assert result.verification.is_exact
     assert len(driver.nodes) == 1
     assert core.add_calls == 2
+    assert "uuid" not in core.last_add_kwargs
 
 
 async def test_crash_after_write_recovers_by_native_uuid_without_second_provider_path():

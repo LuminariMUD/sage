@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-quality-report graph-quality-report-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined graph-rebuild-status graph-rebuild-plan graph-rebuild-prepare graph-rebuild-finalize backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate embedding-shadow-status embedding-shadow-status-json embedding-shadow-register embedding-shadow-backfill embedding-shadow-recover-run embedding-shadow-build-index retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-shadow-retrieval benchmark-shadow-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe operational-readiness operational-readiness-json
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-quality-report graph-quality-report-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined graph-rebuild-status graph-rebuild-plan graph-rebuild-prepare graph-rebuild-finalize backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate embedding-space-initialize-empty embedding-shadow-status embedding-shadow-status-json embedding-shadow-register embedding-shadow-backfill embedding-shadow-recover-run embedding-shadow-build-index retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-shadow-retrieval benchmark-shadow-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe operational-readiness operational-readiness-json
 
 # Capability-aware host launcher. It reuses the model-profile resolver and
 # applies the no-Ollama override only when every selected capability is cloud.
@@ -69,6 +69,7 @@ help:
 	@echo "  make embedding-preflight      - Check vector dimensions, profiles, indexes, and counts"
 	@echo "  make embedding-preflight-json - Emit the read-only embedding preflight as JSON"
 	@echo "  make embedding-profile-activate CONFIRM_EMBEDDING_PROFILE=... - Activate metadata only"
+	@echo "  make embedding-space-initialize-empty CONFIRM_EMBEDDING_SPACE=... - Initialize an empty configured-width space"
 	@echo "  make embedding-shadow-status  - Inspect candidate spaces read-only"
 	@echo "  make embedding-shadow-register SHADOW_EMBEDDING_PROVIDER=... CONFIRM_SHADOW_EMBEDDING=... - Register candidate metadata"
 	@echo "  make embedding-shadow-backfill SHADOW_EMBEDDING_PROVIDER=... CONFIRM_SHADOW_EMBEDDING=... - Run bounded candidate batches"
@@ -480,6 +481,14 @@ embedding-profile-activate:
 		python src/scripts/embedding_preflight.py activate \
 		$(if $(filter 1 true yes,$(ADOPT_EXISTING)),--adopt-existing,) \
 		--confirm "$(CONFIRM_EMBEDDING_PROFILE)"
+
+.PHONY: embedding-space-initialize-empty
+embedding-space-initialize-empty:
+	@test "$(CONFIRM_EMBEDDING_SPACE)" = "INITIALIZE_EMPTY_EMBEDDING_SPACE" || \
+		(echo "CONFIRM_EMBEDDING_SPACE=INITIALIZE_EMPTY_EMBEDDING_SPACE is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api \
+		python src/scripts/embedding_preflight.py initialize-empty \
+		--confirm "$(CONFIRM_EMBEDDING_SPACE)"
 
 .PHONY: embedding-shadow-status
 embedding-shadow-status:

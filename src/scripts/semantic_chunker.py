@@ -6,6 +6,8 @@ Uses sentence-transformers for semantic similarity and spaCy for sentence segmen
 All token counting uses tiktoken for consistency with OpenAI models.
 """
 
+import os
+
 import numpy as np
 import spacy
 import tiktoken
@@ -25,9 +27,16 @@ class SemanticChunker:
         similarity_threshold: float = 0.7,
         complexity_factor: float = 1.5,
         spacy_model: str = "en_core_web_sm",
+        embedding_revision: str | None = None,
     ):
         # Load models
-        self.sentence_model = SentenceTransformer(embedding_model)
+        resolved_revision = embedding_revision or os.getenv(
+            "SAGE_SENTENCE_TRANSFORMERS_REVISION"
+        )
+        self.sentence_model = SentenceTransformer(
+            embedding_model,
+            revision=resolved_revision,
+        )
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
         # Load spaCy for sentence segmentation

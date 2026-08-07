@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any
 
@@ -13,6 +13,7 @@ EMBEDDING_PROFILE_IMPLEMENTATION = "sage-provider-v1"
 EMBEDDING_STORAGE_TYPE = "pgvector-vector-float4"
 ACTIVATE_EMPTY_CONFIRMATION = "ACTIVATE_EMPTY_EMBEDDING_PROFILE"
 ADOPT_EXISTING_CONFIRMATION = "ADOPT_EXISTING_EMBEDDING_PROFILE"
+INITIALIZE_EMPTY_CONFIRMATION = "INITIALIZE_EMPTY_EMBEDDING_SPACE"
 
 _SQL_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _VECTOR_TYPE = re.compile(r"^vector\((?P<dimensions>[1-9][0-9]*)\)$")
@@ -85,6 +86,11 @@ EMBEDDING_SPACE_SPECS = MappingProxyType(
         )
     }
 )
+
+
+def episode_embedding_space(profile: EmbeddingProfile) -> EmbeddingSpaceSpec:
+    """Return the episode-space contract at the configured profile width."""
+    return replace(EPISODE_EMBEDDING_SPACE, dimensions=profile.dimensions)
 
 _METADATA_TABLE_QUERY = """
     SELECT
@@ -663,4 +669,115 @@ async def activate_embedding_space(
         spec,
         configured_profile=profile,
         require_active=True,
+    )
+
+
+async def initialize_empty_embedding_space(
+    postgres: Any,
+    profile: EmbeddingProfile,
+    *,
+    confirmation: str,
+) -> dict[str, Any]:
+    """Retarget a vector-empty unverified episode space and activate its profile.
+
+    The operation never reads source text, creates vectors, or calls a provider.
+    It may change the fixed pgvector width only while no embedding values exist
+    and the physical space has never been assigned a profile.
+    """
+    if confirmation != INITIALIZE_EMPTY_CONFIRMATION:
+        raise EmbeddingSpaceError("Empty embedding-space initialization confirmation is invalid")
+
+    target_spec = episode_embedding_space(profile)
+    if not 1 <= target_spec.dimensions <= 2_000:
+        raise EmbeddingSpaceError("Configured dimensions exceed the supported HNSW vector width")
+
+    table_name = _safe_identifier(target_spec.table_name)
+    column_name = _safe_identifier(target_spec.column_name)
+    index_name = _safe_identifier(target_spec.index_name)
+    index_method = _safe_identifier(target_spec.index_method)
+    operator_class = _safe_identifier(target_spec.operator_class)
+
+    async with postgres.acquire() as connection:
+        async with connection.transaction():
+            await connection.execute(
+                "SELECT pg_advisory_xact_lock(hashtext('sage:embedding-space-initialization'))"
+            )
+            await connection.execute(f"LOCK TABLE {table_name} IN ACCESS EXCLUSIVE MODE")
+
+            state = await connection.fetchrow(
+                """
+                SELECT id, state, profile_fingerprint
+                FROM embedding_index_states
+                WHERE semantic_index = $1
+                  AND physical_space = $2
+                FOR UPDATE
+                """,
+                target_spec.semantic_index,
+                target_spec.physical_space,
+            )
+            if state is None:
+                raise EmbeddingSpaceError("Embedding index-state metadata is missing")
+            if state["state"] == "active":
+                if state["profile_fingerprint"] != profile.fingerprint:
+                    raise EmbeddingSpaceError("A different embedding profile is already active")
+            elif state["state"] != "unverified" or state["profile_fingerprint"] is not None:
+                raise EmbeddingSpaceError("Only an unverified profile-free space can be initialized")
+
+            embedded_rows = await connection.fetchval(
+                f"SELECT count({column_name}) FROM {table_name}"
+            )
+            if int(embedded_rows or 0) != 0:
+                raise EmbeddingSpaceError("Stored embeddings cannot be retargeted in place")
+
+            column_row = _row_dict(
+                await connection.fetchrow(
+                    _COLUMN_QUERY,
+                    target_spec.table_name,
+                    target_spec.column_name,
+                )
+            )
+            formatted_type = str(column_row["formatted_type"]) if column_row else ""
+            vector_match = _VECTOR_TYPE.fullmatch(formatted_type)
+            if vector_match is None:
+                raise EmbeddingSpaceError("The episode embedding column is not a fixed vector")
+            physical_dimensions = int(vector_match.group("dimensions"))
+
+            if physical_dimensions != target_spec.dimensions:
+                await connection.execute(f"DROP INDEX IF EXISTS {index_name}")
+                await connection.execute(
+                    f"""
+                    ALTER TABLE {table_name}
+                    ALTER COLUMN {column_name} TYPE vector({target_spec.dimensions})
+                    USING {column_name}::vector({target_spec.dimensions})
+                    """
+                )
+                options = ", ".join(option.replace("=", " = ", 1) for option in target_spec.index_options)
+                await connection.execute(
+                    f"""
+                    CREATE INDEX {index_name}
+                    ON {table_name}
+                    USING {index_method} ({column_name} {operator_class})
+                    WITH ({options})
+                    """
+                )
+
+            await connection.execute(
+                """
+                UPDATE embedding_index_states
+                SET expected_dimensions = $3,
+                    updated_at = clock_timestamp()
+                WHERE semantic_index = $1
+                  AND physical_space = $2
+                """,
+                target_spec.semantic_index,
+                target_spec.physical_space,
+                target_spec.dimensions,
+            )
+
+    return await activate_embedding_space(
+        postgres,
+        profile,
+        target_spec,
+        adopt_existing=False,
+        confirmation=ACTIVATE_EMPTY_CONFIRMATION,
     )

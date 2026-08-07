@@ -13,9 +13,12 @@ import pytest
 from src.db.embedding_profiles import (
     ADOPT_EXISTING_CONFIRMATION,
     EPISODE_EMBEDDING_SPACE,
+    INITIALIZE_EMPTY_CONFIRMATION,
     EmbeddingSpaceError,
     activate_embedding_space,
     embedding_profile_record,
+    episode_embedding_space,
+    initialize_empty_embedding_space,
     preflight_embedding_space,
 )
 from src.llm.provider_config import resolve_provider_settings
@@ -241,6 +244,66 @@ async def test_baseline_schema_declares_supported_episode_space():
             "active_space_missing",
             "stored_profile_missing",
         }
+    finally:
+        await outer.rollback()
+        await connection.close()
+
+
+@pytest.mark.asyncio
+async def test_empty_episode_space_can_initialize_at_configured_dimensions():
+    schema_name = f"embedding_initialize_test_{uuid4().hex}"
+    connection = await asyncpg.connect(
+        host=os.getenv("POSTGRES_HOST", "postgres"),
+        port=int(os.getenv("POSTGRES_PORT", "5432")),
+        user=os.environ["POSTGRES_USER"],
+        password=os.environ["POSTGRES_PASSWORD"],
+        database=os.environ["POSTGRES_DB"],
+    )
+    outer = connection.transaction()
+    await outer.start()
+    try:
+        await connection.execute(f'CREATE SCHEMA "{schema_name}"')
+        await connection.execute(f'SET LOCAL search_path TO "{schema_name}", public')
+        await connection.execute("""
+            CREATE TABLE episodes (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                embedding vector(768)
+            );
+            CREATE TABLE chunks (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                embedding vector(384)
+            );
+            CREATE TABLE search_queries (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                query_embedding vector(384)
+            );
+            CREATE INDEX idx_chunks_embedding ON chunks
+                USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+            CREATE INDEX idx_search_embedding ON search_queries
+                USING ivfflat (query_embedding vector_cosine_ops) WITH (lists = 50);
+            """)
+        await connection.execute(MIGRATION_PATH.read_text(encoding="ascii"))
+
+        postgres = ConnectionPostgres(connection)
+        profile = _profile(dimensions=1024)
+        initialized = await initialize_empty_embedding_space(
+            postgres,
+            profile,
+            confirmation=INITIALIZE_EMPTY_CONFIRMATION,
+        )
+
+        assert initialized["status"] == "ready"
+        assert initialized["physical"]["formatted_type"] == "vector(1024)"
+        assert initialized["physical"]["index"]["method"] == "hnsw"
+        assert initialized["metadata"]["expected_dimensions"] == 1024
+        assert initialized["metadata"]["profile_fingerprint"] == profile.fingerprint
+
+        verified = await preflight_embedding_space(
+            postgres,
+            episode_embedding_space(profile),
+            configured_profile=profile,
+        )
+        assert verified["ready"] is True
     finally:
         await outer.rollback()
         await connection.close()

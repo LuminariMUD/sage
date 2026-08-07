@@ -154,6 +154,24 @@ async def test_openrouter_embedding_response_is_reordered_by_explicit_index():
 
 
 @pytest.mark.asyncio
+async def test_openrouter_embedding_accepts_provider_stripped_response_model():
+    profile = resolve_provider_settings(_openrouter_embedding_environment()).embedding_profile
+    embedder = OpenRouterEmbedder(profile)
+
+    async def provider_stripped_model(**kwargs):
+        return SimpleNamespace(
+            model="pplx-embed-test",
+            data=[SimpleNamespace(index=0, embedding=[1.0, 0.1])],
+            usage=None,
+        )
+
+    embedder.client.embeddings.create = provider_stripped_model
+
+    assert await embedder.embed_batch(["first"]) == [[1.0, 0.1]]
+    assert embedder.last_actual_model == "pplx-embed-test"
+
+
+@pytest.mark.asyncio
 async def test_openrouter_embedding_rejects_model_or_index_drift():
     profile = resolve_provider_settings(_openrouter_embedding_environment()).embedding_profile
     embedder = OpenRouterEmbedder(profile)

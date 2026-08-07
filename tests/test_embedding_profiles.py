@@ -11,6 +11,7 @@ from src.db.embedding_profiles import (
     EPISODE_EMBEDDING_SPACE,
     EmbeddingSpaceError,
     embedding_profile_record,
+    episode_embedding_space,
     preflight_embedding_space,
     require_embedding_space,
 )
@@ -114,6 +115,11 @@ def test_profile_record_is_complete_and_secret_free():
     }
     assert "base_url" not in record
     assert "api_key" not in record
+
+
+def test_episode_space_uses_configured_profile_dimensions():
+    assert episode_embedding_space(_profile(dimensions=1024)).dimensions == 1024
+    assert EPISODE_EMBEDDING_SPACE.dimensions == 768
 
 
 async def test_preflight_accepts_matching_active_profile_and_reports_coverage():
@@ -223,6 +229,25 @@ async def test_activation_cli_rejects_confirmation_before_database_connection(ca
             adopt_existing=True,
             confirm="wrong",
         ),
+        postgres_factory=postgres_factory,
+        profile_resolver=_profile,
+    )
+
+    assert result == 2
+    assert connected is False
+    assert "EmbeddingSpaceError" in capsys.readouterr().err
+
+
+async def test_empty_initialization_cli_rejects_confirmation_before_database_connection(capsys):
+    connected = False
+
+    def postgres_factory(*, read_only):
+        nonlocal connected
+        connected = True
+        raise AssertionError("invalid confirmation must not connect")
+
+    result = await embedding_preflight.run(
+        Namespace(command="initialize-empty", json=False, confirm="wrong"),
         postgres_factory=postgres_factory,
         profile_resolver=_profile,
     )

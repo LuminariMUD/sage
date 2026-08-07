@@ -63,6 +63,8 @@ def test_graphiti_provider_matrix_constructs_independent_clients(
     else:
         assert isinstance(embedding.embedder, OpenRouterEmbedder)
         assert embedding.embedder.client.max_retries == 0
+    expected_mode = "json_object" if text_provider == "openrouter" else "json_schema"
+    assert llm.structured_output_mode == expected_mode
     assert "offline-unit-test-secret" not in str(summary)
 
 

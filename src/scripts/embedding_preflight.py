@@ -15,9 +15,11 @@ from src.db.embedding_profiles import (
     ACTIVATE_EMPTY_CONFIRMATION,
     ADOPT_EXISTING_CONFIRMATION,
     EMBEDDING_SPACE_SPECS,
-    EPISODE_EMBEDDING_SPACE,
+    INITIALIZE_EMPTY_CONFIRMATION,
     EmbeddingSpaceError,
     activate_embedding_space,
+    episode_embedding_space,
+    initialize_empty_embedding_space,
     preflight_embedding_space,
 )
 from src.db.postgres import PostgresDB
@@ -36,6 +38,8 @@ async def collect_preflight(
     spaces: list[dict[str, Any]] = []
     for name in scopes:
         spec = EMBEDDING_SPACE_SPECS[name]
+        if spec.application_supported and profile is not None:
+            spec = episode_embedding_space(profile)
         report = await preflight_embedding_space(
             postgres,
             spec,
@@ -88,7 +92,7 @@ async def run(
                 args.scope,
                 profile_resolver=profile_resolver,
             )
-        else:
+        elif args.command == "activate":
             expected_confirmation = (
                 ADOPT_EXISTING_CONFIRMATION if args.adopt_existing else ACTIVATE_EMPTY_CONFIRMATION
             )
@@ -100,7 +104,7 @@ async def run(
             activated = await activate_embedding_space(
                 postgres,
                 profile,
-                EPISODE_EMBEDDING_SPACE,
+                episode_embedding_space(profile),
                 adopt_existing=args.adopt_existing,
                 confirmation=args.confirm or "",
             )
@@ -109,6 +113,25 @@ async def run(
                 "status": "ready" if activated["ready"] else "blocked",
                 "scope": "episodes",
                 "spaces": [activated],
+            }
+        else:
+            if args.confirm != INITIALIZE_EMPTY_CONFIRMATION:
+                raise EmbeddingSpaceError(
+                    "Empty embedding-space initialization confirmation is invalid"
+                )
+            postgres = postgres_factory(read_only=False)
+            await postgres.connect()
+            profile = profile_resolver()
+            initialized = await initialize_empty_embedding_space(
+                postgres,
+                profile,
+                confirmation=args.confirm or "",
+            )
+            report = {
+                "schema_version": 1,
+                "status": "ready" if initialized["ready"] else "blocked",
+                "scope": "episodes",
+                "spaces": [initialized],
             }
     except (EmbeddingSpaceError, OSError, ValueError) as error:
         incomplete = {
@@ -187,6 +210,15 @@ def build_parser() -> argparse.ArgumentParser:
             f"Use {ACTIVATE_EMPTY_CONFIRMATION} for an empty space or "
             f"{ADOPT_EXISTING_CONFIRMATION} with --adopt-existing"
         ),
+    )
+
+    initialize = subparsers.add_parser(
+        "initialize-empty",
+        help="Retarget a vector-empty unverified episode space and activate its profile",
+    )
+    initialize.add_argument(
+        "--confirm",
+        help=f"Use {INITIALIZE_EMPTY_CONFIRMATION}",
     )
     return parser
 

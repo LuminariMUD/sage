@@ -177,9 +177,10 @@ docker compose logs -f api
 make db-migrate-status
 make embedding-preflight
 
-# After the backup-gated migrations, explicitly activate an empty vector space
-make embedding-profile-activate \
-  CONFIRM_EMBEDDING_PROFILE=ACTIVATE_EMPTY_EMBEDDING_PROFILE
+# After the backup-gated migrations, initialize and activate the vector-empty
+# episode space at the configured provider's output width
+make embedding-space-initialize-empty \
+  CONFIRM_EMBEDDING_SPACE=INITIALIZE_EMPTY_EMBEDDING_SPACE
 
 # Run individual pipeline steps only after preflight reports READY
 # make load-canon
@@ -355,8 +356,17 @@ make embedding-preflight-json
 
 Migration `0004_embedding_index_profiles` records the physical spaces but leaves
 existing episode vectors `unverified`. After applying it through the verified
-backup gate, adopt a populated Nomic space only when its provenance has been
-independently confirmed:
+backup gate, a vector-empty space can be initialized at the configured profile
+width and activated without a provider call:
+
+```bash
+make embedding-space-initialize-empty \
+  CONFIRM_EMBEDDING_SPACE=INITIALIZE_EMPTY_EMBEDDING_SPACE
+```
+
+This operation refuses any space containing stored vectors or carrying an
+existing profile identity. Adopt a populated Nomic space only when its provenance
+has been independently confirmed:
 
 ```bash
 make embedding-profile-activate \
@@ -364,9 +374,9 @@ make embedding-profile-activate \
   CONFIRM_EMBEDDING_PROFILE=ADOPT_EXISTING_EMBEDDING_PROFILE
 ```
 
-Activation writes metadata only and never calls a provider. Matching dimensions
-alone are not proof of provenance. New provider/dimension candidates must use a
-shadow vector space and pass retrieval gates before cutover. See
+Metadata activation and empty-space initialization never call a provider. Matching
+dimensions alone are not proof of provenance. Changes to a populated provider or
+dimension must use a shadow vector space and pass retrieval gates before cutover. See
 [the migration rules](schemas/migrations/README.md) for both empty-space and
 existing-space procedures.
 

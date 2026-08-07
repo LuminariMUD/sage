@@ -375,6 +375,13 @@ def create_graphiti_llm_client(
     """Construct one Graphiti client with all opaque retries disabled."""
     if "structured_output" not in candidate.capabilities:
         raise ValueError("Graphiti extraction candidate lacks structured-output capability")
+    # OpenRouter distinguishes basic JSON response formatting from native JSON-schema
+    # constrained output. Its Qwen routes currently advertise the former but not the
+    # latter, so use Graphiti's schema-in-prompt fallback there. The result is still
+    # validated against the Pydantic response model below before graph writes proceed.
+    structured_output_mode = (
+        "json_object" if candidate.connection.provider == "openrouter" else "json_schema"
+    )
     max_tokens = _positive_output_tokens()
     secret = candidate.connection.api_key
     api_key = secret.get_secret_value() if secret else "ollama"
@@ -397,6 +404,7 @@ def create_graphiti_llm_client(
         config=llm_config,
         client=_graphiti_transport(candidate),
         max_tokens=max_tokens,
+        structured_output_mode=structured_output_mode,
     )
 
 

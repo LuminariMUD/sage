@@ -65,6 +65,7 @@ class ChunkGenerator:
         if use_semantic_chunking:
             self.semantic_chunker = SemanticChunker(
                 embedding_model=model_name,
+                embedding_revision=os.getenv("SAGE_SENTENCE_TRANSFORMERS_REVISION"),
                 base_tokens=base_tokens,
                 min_tokens=min_tokens,
                 max_tokens=max_tokens,

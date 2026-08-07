@@ -258,7 +258,6 @@ class GraphitiEpisodeProcessor:
             "Do not repeat equivalent entities or relationships."
         )
         return await self.graphiti.graphiti.add_episode(
-            uuid=stable_id,
             name=f"episode_{stable_id}",
             episode_body=lease.text,
             source=EpisodeType.text,

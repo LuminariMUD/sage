@@ -17,6 +17,21 @@ from src.llm.provider_config import EmbeddingProfile, TransportRetryPolicy
 from src.llm.retry import execute_with_transport_retry
 
 
+def _response_model_matches(requested_model: str, response_model: object) -> bool:
+    """Accept OpenRouter's provider-stripped canonical embedding model label.
+
+    OpenRouter currently returns ``pplx-embed-v1-0.6b`` for a request routed as
+    ``perplexity/pplx-embed-v1-0.6b``. The basename must still match exactly so
+    a response from a different model remains fail-closed.
+    """
+    if not isinstance(response_model, str) or not response_model:
+        return True
+    if response_model == requested_model:
+        return True
+    provider, separator, model_name = requested_model.rpartition("/")
+    return bool(provider and separator and response_model == model_name)
+
+
 class OpenRouterEmbedder(BaseEmbedder):
     """Validated, ordered, no-cross-model-fallback OpenRouter embedder."""
 
@@ -89,7 +104,7 @@ class OpenRouterEmbedder(BaseEmbedder):
             on_attempt=self._record_transport_attempt,
         )
         actual_model = getattr(response, "model", None)
-        if actual_model and actual_model != self.model:
+        if not _response_model_matches(self.model, actual_model):
             raise EmbeddingValidationError("Embedding response model does not match profile")
         indexed: dict[int, list[float]] = {}
         for item in response.data:

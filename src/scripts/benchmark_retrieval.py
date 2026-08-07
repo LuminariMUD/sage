@@ -15,8 +15,8 @@ from typing import Any
 sys.path.insert(0, "/app")
 
 from src.db.embedding_profiles import (
-    EPISODE_EMBEDDING_SPACE,
     EmbeddingSpaceError,
+    episode_embedding_space,
     preflight_embedding_space,
     require_embedding_space,
 )
@@ -176,7 +176,7 @@ async def run(
             profile = profile_resolver()
             preflight = await preflight_embedding_space(
                 postgres,
-                EPISODE_EMBEDDING_SPACE,
+                episode_embedding_space(profile),
                 configured_profile=profile,
                 require_active=True,
             )

@@ -20,8 +20,8 @@ from src.auth import AuthMiddleware
 from src.auth.host_validation import get_allowed_hosts
 from src.db import close_neo4j_db, close_postgres_db, get_neo4j_db, get_postgres_db
 from src.db.embedding_profiles import (
-    EPISODE_EMBEDDING_SPACE,
     EmbeddingSpaceError,
+    episode_embedding_space,
     preflight_embedding_space,
     require_embedding_space,
 )
@@ -108,7 +108,7 @@ async def _episode_embedding_preflight(postgres_db) -> dict[str, Any]:
     profile = get_embedding_profile()
     return await preflight_embedding_space(
         postgres_db,
-        EPISODE_EMBEDDING_SPACE,
+        episode_embedding_space(profile),
         configured_profile=profile,
         require_active=True,
     )
@@ -179,7 +179,7 @@ async def lifespan(app: FastAPI):
         try:
             embedding_storage_status = await preflight_embedding_space(
                 postgres_db,
-                EPISODE_EMBEDDING_SPACE,
+                episode_embedding_space(configured_embedding_profile),
                 configured_profile=configured_embedding_profile,
                 require_active=True,
             )

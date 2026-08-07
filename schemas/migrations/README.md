@@ -92,7 +92,16 @@ make embedding-preflight
 make embedding-preflight-json
 ```
 
-For a new empty episode space, activate the configured profile with metadata only:
+For a new vector-empty episode space, initialize its fixed pgvector width from the
+configured profile and activate it:
+
+```bash
+make embedding-space-initialize-empty \
+  CONFIRM_EMBEDDING_SPACE=INITIALIZE_EMPTY_EMBEDDING_SPACE
+```
+
+The operation refuses stored vectors and any prior profile identity. When the
+physical width already matches, metadata-only activation remains available:
 
 ```bash
 make embedding-profile-activate \
@@ -109,9 +118,10 @@ make embedding-profile-activate \
   CONFIRM_EMBEDDING_PROFILE=ADOPT_EXISTING_EMBEDDING_PROFILE
 ```
 
-Neither activation command generates embeddings or calls a provider. Do not adopt
-existing vectors based on matching dimensions alone. A provider or dimension
-change must use a shadow space and the separate benchmark/cutover workflow.
+Neither initialization nor activation generates embeddings or calls a provider.
+Do not adopt existing vectors based on matching dimensions alone. A provider or
+dimension change in a populated space must use a shadow space and the separate
+benchmark/cutover workflow.
 
 ## Shadow embedding generations
 
