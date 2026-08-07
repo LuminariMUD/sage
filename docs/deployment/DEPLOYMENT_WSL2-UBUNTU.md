@@ -523,7 +523,6 @@ API_PORT=8003
 # Paths (Container paths - do not change)
 # ============================================
 LORE_DIR=/app/lore_docs
-LORE_SOURCE=canon                # canon, legends, or all
 
 # ============================================
 # Development Settings

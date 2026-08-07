@@ -135,6 +135,7 @@ class GraphitiTextRouteClient(LLMClient):
         super().__init__(bindings[0][1].config, cache=False)
         self.route = route
         self._bindings = bindings
+        self.max_tokens = getattr(bindings[0][1], "max_tokens", 4096)
         self._operation_lock = asyncio.Lock()
         self._operation_active = False
         self._operation_calls = 0
@@ -288,7 +289,9 @@ class GraphitiTextRouteClient(LLMClient):
                     await result
 
 
-def _positive_output_tokens() -> int:
+def _positive_output_tokens(candidate: TextModelCandidate) -> int:
+    if candidate.max_output_tokens is not None:
+        return candidate.max_output_tokens
     raw = os.getenv("GRAPHITI_MAX_OUTPUT_TOKENS", "4096")
     try:
         value = int(raw)
@@ -382,7 +385,7 @@ def create_graphiti_llm_client(
     structured_output_mode = (
         "json_object" if candidate.connection.provider == "openrouter" else "json_schema"
     )
-    max_tokens = _positive_output_tokens()
+    max_tokens = _positive_output_tokens(candidate)
     secret = candidate.connection.api_key
     api_key = secret.get_secret_value() if secret else "ollama"
     llm_config = LLMConfig(

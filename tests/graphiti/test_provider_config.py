@@ -65,6 +65,7 @@ def test_graphiti_provider_matrix_constructs_independent_clients(
         assert embedding.embedder.client.max_retries == 0
     expected_mode = "json_object" if text_provider == "openrouter" else "json_schema"
     assert llm.structured_output_mode == expected_mode
+    assert llm.max_tokens == (65_536 if text_provider == "openrouter" else 4096)
     assert "offline-unit-test-secret" not in str(summary)
 
 

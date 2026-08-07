@@ -51,7 +51,6 @@ REQUIRED_RUNTIME_FIELDS = {
     "LOG_FILE",
     "LOG_LEVEL",
     "LORE_DIR",
-    "LORE_SOURCE",
     "MCP_CORS_ORIGINS",
     "MCP_HOST",
     "MCP_PORT",

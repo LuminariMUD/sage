@@ -198,6 +198,47 @@ def test_graphiti_provider_overrides_are_independent():
     assert settings.graphiti_embedding_profile.model == "nomic-embed-text"
 
 
+def test_openrouter_graphiti_capacity_is_independent_from_local_defaults():
+    openrouter_environment = _ollama_environment() | _openrouter_environment()
+    openrouter_environment["TEXT_PROVIDER"] = "openrouter"
+    openrouter_environment["GRAPHITI_TEXT_PROVIDER"] = "openrouter"
+    openrouter = resolve_provider_settings(openrouter_environment)
+    local = resolve_provider_settings(_ollama_environment())
+
+    assert openrouter.text_route("chat").primary.context_limit == 1_000_000
+    assert openrouter.graphiti_text_route.primary.context_limit == 1_000_000
+    assert openrouter.graphiti_text_route.primary.max_output_tokens == 65_536
+    assert openrouter.graphiti_text_route.primary.maximum_model_attempts == 3
+    assert openrouter.graphiti_text_route.maximum_provider_calls == 16
+    assert openrouter.graph_sync_policy.max_provider_calls == 16
+
+    assert local.text_route("chat").primary.context_limit == 12_288
+    assert local.graphiti_text_route.primary.max_output_tokens == 4096
+    assert local.graphiti_text_route.primary.maximum_model_attempts == 2
+    assert local.graphiti_text_route.maximum_provider_calls == 3
+
+
+def test_openrouter_graphiti_capacity_overrides_are_resolved_together():
+    environment = _ollama_environment() | _openrouter_environment()
+    environment.update(
+        {
+            "GRAPHITI_TEXT_PROVIDER": "openrouter",
+            "OPENROUTER_MAX_CONTEXT_TOKENS": "750000",
+            "OPENROUTER_GRAPHITI_MAX_OUTPUT_TOKENS": "32768",
+            "OPENROUTER_GRAPHITI_PRIMARY_ATTEMPTS": "4",
+            "OPENROUTER_GRAPHITI_MAX_PROVIDER_CALLS": "20",
+        }
+    )
+
+    settings = resolve_provider_settings(environment)
+
+    assert settings.graphiti_text_route.primary.context_limit == 750_000
+    assert settings.graphiti_text_route.primary.max_output_tokens == 32_768
+    assert settings.graphiti_text_route.primary.maximum_model_attempts == 4
+    assert settings.graphiti_text_route.maximum_provider_calls == 20
+    assert settings.graph_sync_policy.max_provider_calls == 20
+
+
 def test_graphiti_explicit_fallback_is_ordered_and_bounded():
     environment = _ollama_environment()
     environment.update(

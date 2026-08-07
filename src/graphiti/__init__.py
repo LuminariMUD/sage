@@ -110,13 +110,21 @@ class LuminariGraphiti:
 
         # Add LLM logging to see what relationship types are being generated
         original_generate = self.graphiti.llm_client.generate_response
-        max_output_tokens = max(256, int(os.getenv("GRAPHITI_MAX_OUTPUT_TOKENS", "4096")))
+        max_output_tokens = max(
+            256,
+            int(
+                getattr(
+                    llm_client,
+                    "max_tokens",
+                    os.getenv("GRAPHITI_MAX_OUTPUT_TOKENS", "4096"),
+                )
+            ),
+        )
 
         async def logged_generate_response(*args, **kwargs):
             try:
-                # graphiti-core requests up to 16K output tokens for edge extraction,
-                # which lets small local models repeat edges for minutes. Keep every
-                # structured response within the configured local inference budget.
+                # Keep each structured response within the resolved provider budget.
+                # Cloud and local routes intentionally resolve different ceilings.
                 if len(args) >= 3 and args[2] is not None:
                     args = (*args[:2], min(args[2], max_output_tokens), *args[3:])
                 else:

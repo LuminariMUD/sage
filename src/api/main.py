@@ -316,7 +316,7 @@ class LoreSearchRequest(BaseModel):
 
     query: str = Field(..., description="Search query")
     document_type: str | None = Field(None, description="Filter by document type")
-    canonical_only: bool = Field(False, description="Only return canonical documents")
+    canonical_only: bool = Field(True, description="Deprecated: the corpus is always canon-only")
     limit: int = Field(10, ge=1, le=100, description="Maximum results")
 
 
@@ -878,14 +878,17 @@ async def get_relationship_details(relationship_id: int):
 async def search_lore(
     query: str = Query(..., description="Search query"),
     document_type: str | None = Query(None, description="Filter by document type"),
-    canonical_only: bool = Query(False, description="Only canonical documents"),
     limit: int = Query(10, ge=1, le=100, description="Maximum results"),
 ):
-    """Search lore documents by title or content."""
+    """Search canon lore documents by title or content."""
     postgres_db = await get_postgres_db()
 
     # Build SQL query
-    conditions = ["search_vector @@ plainto_tsquery('english', $1)"]
+    conditions = [
+        "search_vector @@ plainto_tsquery('english', $1)",
+        "canonical IS TRUE",
+        "source_file LIKE 'canon/%'",
+    ]
     params = [query]
     param_count = 1
 
@@ -893,9 +896,6 @@ async def search_lore(
         param_count += 1
         conditions.append(f"document_type = ${param_count}")
         params.append(document_type)
-
-    if canonical_only:
-        conditions.append("canonical = true")
 
     where_clause = " AND ".join(conditions)
 
@@ -976,6 +976,8 @@ async def rag_query(request: RAGQueryRequest):
         FROM episodes e
         JOIN lore_documents d ON e.document_id = d.id
         WHERE e.embedding IS NOT NULL
+            AND d.canonical IS TRUE
+            AND d.source_file LIKE 'canon/%'
             AND 1 - (e.embedding <=> $1::vector) > $2
         ORDER BY e.embedding <=> $1::vector
         LIMIT $3
@@ -999,6 +1001,8 @@ async def rag_query(request: RAGQueryRequest):
         FROM episodes e
         JOIN lore_documents d ON e.document_id = d.id
         WHERE to_tsvector('english', e.text) @@ plainto_tsquery('english', $1)
+            AND d.canonical IS TRUE
+            AND d.source_file LIKE 'canon/%'
         ORDER BY ts_rank(to_tsvector('english', e.text), plainto_tsquery('english', $1)) DESC
         LIMIT $2
     """,
@@ -1110,8 +1114,11 @@ async def rag_query(request: RAGQueryRequest):
                 e.text,
                 e.episode_index
             FROM episodes e
+            JOIN lore_documents d ON d.id = e.document_id
             WHERE e.document_id = $1
               AND e.episode_index = ANY($2::int[])
+              AND d.canonical IS TRUE
+              AND d.source_file LIKE 'canon/%'
             """,
             doc_id,
             sorted_indices,
@@ -1619,6 +1626,8 @@ async def validate_lore(request: ValidationRequest):
         FROM episodes e
         JOIN lore_documents d ON e.document_id = d.id
         WHERE e.embedding IS NOT NULL
+          AND d.canonical IS TRUE
+          AND d.source_file LIKE 'canon/%'
           AND 1 - (e.embedding <=> $1::vector) > 0.5
         ORDER BY e.embedding <=> $1::vector
         LIMIT 10
@@ -1934,6 +1943,8 @@ async def get_statistics():
             COUNT(DISTINCT document_type) as document_types,
             COUNT(CASE WHEN canonical THEN 1 END) as canonical_documents
         FROM lore_documents
+        WHERE canonical IS TRUE
+          AND source_file LIKE 'canon/%'
     """)
 
     # Get episode stats
@@ -1941,7 +1952,10 @@ async def get_statistics():
         SELECT
             COUNT(*) as total_chunks,
             AVG(LENGTH(text)) as avg_chunk_size
-        FROM episodes
+        FROM episodes AS episode
+        JOIN lore_documents AS document ON document.id = episode.document_id
+        WHERE document.canonical IS TRUE
+          AND document.source_file LIKE 'canon/%'
     """)
 
     # Get entity stats from Neo4j
@@ -2176,6 +2190,11 @@ class ChatMessageResponse(BaseModel):
     message_id: str
 
 
+def _final_chat_event_content(event: dict[str, Any], buffer: str) -> str:
+    """Resolve final content across the legacy and modern chat event schemas."""
+    return event.get("answer") or event.get("content") or buffer
+
+
 @app.post("/api/v1/chat/message", response_model=ChatMessageResponse, tags=["chat"])
 async def send_chat_message(request: ChatMessageRequest):
     """Send a message to the chat agent and get streaming response URL."""
@@ -2364,7 +2383,10 @@ async def chat_stream(
                         from src.agents.langchain.chains.retrieval import RetrievalChain
 
                         retr = RetrievalChain()
-                        retrieval_result = await retr.ainvoke({"query": messages[-1].content})
+                        # The most recent stored message is normally the empty assistant
+                        # placeholder created for progressive updates.  Trace retrieval
+                        # must use the user message selected above, not that placeholder.
+                        retrieval_result = await retr.ainvoke({"query": user_message.content})
                         preview = {
                             "blocks": retrieval_result.get("context_blocks", []),
                             "entities": [
@@ -2417,8 +2439,10 @@ async def chat_stream(
                             for key in ("plan", "narrative", "story_development"):
                                 if key in event:
                                     meta[key] = event[key]
-                            # Get content from answer field (all routes should have it now)
-                            content = event.get("answer") or buffer
+                            # Legacy services emit ``answer`` while the modern ReAct
+                            # service emits ``content``. Persist either schema so the
+                            # completed stream does not leave an empty placeholder.
+                            content = _final_chat_event_content(event, buffer)
                             # Store structured data in metadata if present
                             if "story_development" in event:
                                 meta["story_development"] = event["story_development"]

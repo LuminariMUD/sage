@@ -96,7 +96,6 @@ services:
       API_HOST: 0.0.0.0
       API_PORT: 8003
       LORE_DIR: /app/lore/lore_docs
-      LORE_SOURCE: ${LORE_SOURCE:-canon}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Provider-neutral capability selection. Cloud credentials are mounted only
       # by the matching provider override file selected by deploy_remote.sh.
@@ -185,7 +184,7 @@ services:
     networks:
       - luminari-network
     volumes:
-      - /home/luminari/lore/lore_docs:/app/lore/lore_docs:ro
+      - /home/luminari/lore/lore_docs/canon:/app/lore/lore_docs/canon:ro
       - ./logs:/app/logs
     user: "1013:1013" # Match the luminari user on host
     depends_on:

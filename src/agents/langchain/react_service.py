@@ -88,8 +88,21 @@ class ReactService:
         # task maps to a chain-of-thought model (deepseek-r1 by default) whose output Ollama's
         # tool parser rejects with "does not match the expected peg-native format", failing
         # every tool call. "tools" resolves to a model that supports tool calling.
+        # The ReAct graph streams its own reasoning/tool/final events; it does not
+        # consume token chunks from this tool-selection request.  Some strict
+        # OpenRouter routes (including Qwen 3.7 Flash) expose tools and streaming
+        # independently but have no endpoint for the combined parameter set.
+        # The same strict route also rejects tools combined with max_tokens.  A
+        # ReAct decision emits only a tool call or ``finalize``, so it does not
+        # need a generation cap; answer/content tools retain their own caps.
+        # Keep the model call non-streaming so provider routing can select the
+        # advertised tool-capable endpoint.
         self.llm = get_chat_model(
-            task="tools", temperature=temperature, streaming=True, max_tokens=4000
+            task="tools",
+            temperature=temperature,
+            streaming=False,
+            disable_streaming=True,
+            reasoning_effort="none",
         )
 
         # Planner model keeps the roadmap focused (lower temperature)
@@ -671,7 +684,18 @@ CRITICAL: You MUST complete ALL content creation before finalizing!
                             )
 
                     # Inject lore context for creative tools when available
-                    if lore_context:
+                    if tool_name == "answer_lore_question":
+                        # The planner may paraphrase away user-visible constraints
+                        # such as "one sentence". The original request is the
+                        # authoritative question passed to the answer composer.
+                        original_request = state.get("original_request", "")
+                        if isinstance(original_request, str) and original_request.strip():
+                            enhanced_args["question"] = original_request
+                        # Retrieved state is already normalized to list[str].  Do not
+                        # trust a model-supplied context shape over canonical state;
+                        # StructuredTool correctly rejects strings/objects here.
+                        enhanced_args["context"] = lore_context
+                    elif lore_context:
                         if tool_name in {
                             "create_story",
                             "create_story_opening",
@@ -683,8 +707,6 @@ CRITICAL: You MUST complete ALL content creation before finalizing!
                             enhanced_args.setdefault("lore_context", lore_context)
                         elif tool_name == "create_complete_quest":
                             enhanced_args.setdefault("lore_context", lore_context)
-                        elif tool_name == "answer_lore_question":
-                            enhanced_args.setdefault("context", lore_context)
 
                     # Tools created with @tool decorator have a specific structure
                     # They should be invoked with ainvoke() method
@@ -798,6 +820,17 @@ CRITICAL: You MUST complete ALL content creation before finalizing!
 
         # Check if last action was finalize
         if state["current_step"] and state["current_step"].get("action") == "finalize":
+            return "finalize"
+
+        # A successful grounded answer completes an informational request.  Do
+        # not spend another provider call asking the model whether to finalize;
+        # that adds latency and can discard an already-good answer if the extra
+        # decision call encounters a transient transport failure.
+        if state.get("request_intent") == "informational" and any(
+            entry.get("type") == "answer_lore_question"
+            for entry in state.get("created_content", [])
+        ):
+            logger.info("Grounded informational answer complete, finalizing")
             return "finalize"
 
         # Check for repeated errors (prevent infinite error loops)

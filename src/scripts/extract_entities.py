@@ -416,6 +416,8 @@ class GraphitiEntityProcessor:
             JOIN lore_documents d ON e.document_id = d.id
             WHERE e.graphiti_synced = false
               AND length(e.text) > 50
+              AND d.canonical IS TRUE
+              AND d.source_file LIKE 'canon/%'
             ORDER BY d.source_file, e.episode_index
         """)
 

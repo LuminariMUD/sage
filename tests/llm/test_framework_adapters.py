@@ -60,10 +60,25 @@ def test_langchain_openrouter_uses_explicit_connection_headers_and_body(monkeypa
             "allow_fallbacks": False,
             "require_parameters": True,
             "data_collection": "deny",
-        }
+        },
+        "max_tokens": 64,
     }
+    assert model.max_tokens is None
+    payload = model._get_request_payload("ready")
+    assert "max_completion_tokens" not in payload
+    assert payload["extra_body"]["max_tokens"] == 64
     assert model.max_retries == 0
     assert model.use_responses_api is False
+
+
+def test_langchain_openrouter_can_disable_default_reasoning(monkeypatch):
+    _select_openrouter(monkeypatch)
+
+    model = get_chat_model(streaming=False, max_tokens=64, reasoning_effort="none")
+    payload = model._get_request_payload("ready")
+
+    assert payload["extra_body"]["reasoning"] == {"effort": "none"}
+    assert payload["extra_body"]["max_tokens"] == 64
 
 
 def test_pydantic_ai_openrouter_uses_same_validated_candidate(monkeypatch):

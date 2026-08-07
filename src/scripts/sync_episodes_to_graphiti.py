@@ -37,6 +37,26 @@ from src.security import install_sensitive_logging
 RUN_CONFIRMATION = "RUN_DURABLE_GRAPH_SYNC"
 
 
+class CanonCorpusViolation(RuntimeError):
+    """Raised before provider access when any episode is outside canon."""
+
+
+async def require_canon_episode_corpus(postgres: PostgresDB) -> None:
+    """Fail closed unless every stored episode belongs to ``lore_docs/canon``."""
+    excluded_count = int(await postgres.fetchval("""
+            SELECT count(*)
+            FROM episodes AS episode
+            LEFT JOIN lore_documents AS document ON document.id = episode.document_id
+            WHERE document.id IS NULL
+               OR document.canonical IS NOT TRUE
+               OR COALESCE(document.source_file, '') NOT LIKE 'canon/%'
+            """))
+    if excluded_count:
+        raise CanonCorpusViolation(
+            f"Graph sync blocked: {excluded_count} episode(s) are outside lore_docs/canon"
+        )
+
+
 def json_default(value: object) -> str:
     """Serialize only known durable-summary scalar types."""
     if isinstance(value, datetime):
@@ -91,6 +111,9 @@ async def _run_worker(args: argparse.Namespace) -> int:
     graphiti = None
     route_client = None
     try:
+        # This check deliberately runs before constructing a provider client or
+        # touching Neo4j, so contaminated relational state cannot spend tokens.
+        await require_canon_episode_corpus(postgres)
         route_client = create_graphiti_text_route_client(
             get_graphiti_text_route(),
             verbose=args.verbose,

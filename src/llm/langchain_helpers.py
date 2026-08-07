@@ -18,6 +18,7 @@ def get_chat_model(
     temperature: float | None = None,
     streaming: bool = True,
     max_tokens: int | None = None,
+    reasoning_effort: str | None = None,
     **kwargs: Any,
 ) -> Any:
     """
@@ -33,6 +34,8 @@ def get_chat_model(
                     If None, uses optimal temperature for the task.
         streaming: Enable streaming responses
         max_tokens: Maximum tokens to generate (None = no limit)
+        reasoning_effort: Optional OpenRouter reasoning level, including ``none``
+            for concise calls that must reserve the output budget for final content.
         **kwargs: Additional arguments passed to the model constructor
 
     Returns:
@@ -52,6 +55,17 @@ def get_chat_model(
     # Use optimal temperature for task if not specified
     if temperature is None:
         temperature = candidate.temperature
+    if reasoning_effort not in {
+        None,
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+    }:
+        raise ValueError("Reasoning effort is invalid")
 
     if provider == "ollama":
         # langchain-ollama's ChatOllama has no `streaming` field (it would be silently
@@ -86,8 +100,18 @@ def get_chat_model(
             supplied_body = kwargs.pop("extra_body", None)
             if supplied_body is not None and supplied_body != configured_body:
                 raise ValueError("OpenRouter routing cannot override the configured policy")
+            # Current ChatOpenAI serializes its ``max_tokens`` constructor field as
+            # ``max_completion_tokens``.  OpenRouter's strict Qwen route advertises
+            # and accepts ``max_tokens`` instead, so preserve the public helper's
+            # limit through the SDK's root-level extra-body merge.
+            if max_tokens is not None:
+                configured_body = dict(configured_body)
+                configured_body["max_tokens"] = max_tokens
+            if reasoning_effort is not None:
+                configured_body = dict(configured_body)
+                configured_body["reasoning"] = {"effort": reasoning_effort}
             model_kwargs["extra_body"] = configured_body
-        if max_tokens is not None:
+        elif max_tokens is not None:
             model_kwargs["max_tokens"] = max_tokens
         model_kwargs.update(kwargs)
         return ChatOpenAI(**model_kwargs)

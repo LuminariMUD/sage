@@ -5,7 +5,7 @@ Reset database and reprocess documents with semantic chunking.
 This script will:
 1. Clear existing episodes and chunks
 2. Reset document processing status
-3. Reprocess all documents with semantic chunking
+3. Reprocess canon documents with semantic chunking
 """
 
 import asyncio
@@ -76,7 +76,7 @@ async def clear_database():
 
 
 async def reprocess_with_semantic_chunking():
-    """Reprocess all documents using semantic chunking."""
+    """Reprocess canon documents using semantic chunking."""
 
     console.print(
         Panel.fit(
@@ -101,7 +101,7 @@ async def reprocess_with_semantic_chunking():
         overlap_percentage=0.25,
         similarity_threshold=0.7,
         complexity_factor=1.5,
-        force_recreate=True,  # Process all documents
+        force_recreate=True,  # Recreate all canon documents
     )
 
     return success
@@ -133,9 +133,9 @@ async def main():
 
     if await reprocess_with_semantic_chunking():
         console.print("\n🎉 [bold green]SUCCESS![/bold green]")
-        console.print("All documents have been reprocessed with semantic chunking.")
+        console.print("Canon documents have been reprocessed with semantic chunking.")
         console.print("\n[dim]Next steps:[/dim]")
-        console.print("1. Run embedding generation: [cyan]python generate_chunks.py[/cyan]")
+        console.print("1. Run embedding generation: [cyan]python generate_embeddings.py[/cyan]")
         console.print("2. Sync to Graphiti: [cyan]python sync_episodes_to_graphiti.py[/cyan]")
     else:
         console.print("\n❌ [bold red]FAILED![/bold red]")

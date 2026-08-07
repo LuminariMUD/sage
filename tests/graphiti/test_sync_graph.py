@@ -129,12 +129,15 @@ class FakeGraphitiCore:
         self.crash_before_write = False
         self.crash_after_write = False
         self.quality_report = None
+        self.quality_report_key = None
         self.last_add_kwargs = None
 
     def consume_relationship_quality(self, episode_uuid):
-        del episode_uuid
+        if self.quality_report_key is not None and episode_uuid != self.quality_report_key:
+            return None
         report = self.quality_report
         self.quality_report = None
+        self.quality_report_key = None
         return report
 
     async def add_episode(self, **kwargs):
@@ -143,9 +146,10 @@ class FakeGraphitiCore:
         if self.crash_before_write:
             self.crash_before_write = False
             raise InjectedCrash("before graph write")
+        created_uuid = kwargs.get("uuid") or str(uuid4())
         self.driver.nodes.append(
             {
-                "uuid": kwargs.get("uuid") or str(uuid4()),
+                "uuid": created_uuid,
                 "stable_id": None,
                 "source_description": kwargs["source_description"],
                 "content": kwargs["episode_body"],
@@ -157,7 +161,13 @@ class FakeGraphitiCore:
         if self.crash_after_write:
             self.crash_after_write = False
             raise InjectedCrash("after graph write")
-        return SimpleNamespace(nodes=[object(), object()], edges=[object()])
+        if self.quality_report is not None:
+            self.quality_report_key = created_uuid
+        return SimpleNamespace(
+            episode=SimpleNamespace(uuid=created_uuid),
+            nodes=[object(), object()],
+            edges=[object()],
+        )
 
 
 def _profile():

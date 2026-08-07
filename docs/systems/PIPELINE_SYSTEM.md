@@ -1,10 +1,12 @@
 # Pipeline System
 
-**Version**: 0.7.17
+**Version**: 0.7.27
 **Status**: Production Ready
-**Last Updated**: 2025-11-12
+**Last Updated**: 2026-08-07
 
-A simplified, robust ingestion pipeline for the Luminari lore repository that processes markdown files from organized directories (`canon/` and `drafts/`) into a hybrid Graph RAG system.
+A fail-closed ingestion pipeline that processes Markdown files exclusively from
+`lore_docs/canon` into the hybrid Graph RAG system. Drafts, meta documentation,
+text files, PDFs, and reference material are outside the production corpus.
 
 ---
 
@@ -25,14 +27,8 @@ A simplified, robust ingestion pipeline for the Luminari lore repository that pr
 ## Quick Start
 
 ```bash
-# Process canon documents (recommended)
+# Process the canon corpus
 make pipeline-canon
-
-# Process draft documents
-make pipeline-draft
-
-# Process all documents
-make pipeline-all
 
 # Resume interrupted processing
 make resume
@@ -48,8 +44,8 @@ make pipeline-canon VERBOSE=1
 The pipeline consists of three main stages:
 
 1. **Document Loading** (`load_documents.py`)
-   - Scans `canon/` and/or `drafts/` directories
-   - Loads all `.md` files (no filtering needed)
+   - Scans only `lore_docs/canon`
+   - Rejects path and symlink escapes from that directory
    - Tracks changes via content hashing
    - Stores in PostgreSQL with metadata
 
@@ -68,7 +64,7 @@ The pipeline consists of three main stages:
 
 ```mermaid
 graph TB
-    A[Markdown Files<br/>canon/ drafts/] --> B[load_documents.py]
+    A[Markdown Files<br/>lore_docs/canon only] --> B[load_documents.py]
     B --> C[PostgreSQL<br/>lore_documents table]
     C --> D[extract_entities.py]
     D --> E[Graphiti<br/>Entity Extraction]
@@ -86,8 +82,8 @@ graph TB
 
 #### Simplified Design
 
-- **No file filtering**: Trust the directory structure - `canon/` and `drafts/` contain only lore files
-- **No priorities**: All documents are processed equally
+- **One corpus root**: Only resolved Markdown paths beneath `lore_docs/canon`
+- **No priorities**: All canon documents are processed equally
 - **Dynamic document types**: Based on directory structure (`world`, `cultures`, `factions`, etc.)
 
 #### Robust Processing
@@ -148,16 +144,16 @@ Documents are automatically categorized by directory:
 
 ### 1. Document Ingestion
 
-- **Input**: Markdown files from `canon/` and `drafts/` directories
-- **Process**: `load_documents.py` scans directories recursively
+- **Input**: Markdown files beneath `lore_docs/canon`
+- **Process**: `load_documents.py` scans canon recursively and rejects path escapes
 - **Output**: Documents stored in PostgreSQL `lore_documents` table
 - **Change Detection**: SHA-256 content hashing prevents reprocessing unchanged files
 
 ### 2. Entity Extraction
 
-- **Input**: Documents with `graphiti_status = 'pending'`
-- **Process**: `extract_entities.py` uses Graphiti for LLM-based extraction
-- **Chunking**: Large documents split into overlapping semantic chunks
+- **Input**: Canon episodes with eligible durable graph-sync jobs
+- **Process**: `sync_episodes_to_graphiti.py` uses the confirmed durable Graphiti worker
+- **Chunking**: Canon documents are split into overlapping semantic episodes first
 - **Output**: Entities and relationships in Neo4j knowledge graph
 
 ### 3. Embedding Generation
@@ -299,8 +295,6 @@ The system recognizes 13 entity types optimized for fantasy lore:
 
 ```bash
 make pipeline-canon    # Process canon only (recommended)
-make pipeline-draft    # Process drafts only
-make pipeline-all      # Process everything
 
 make resume            # Continue interrupted processing
 make rebuild           # Full reset + pipeline-canon
@@ -310,9 +304,10 @@ make rebuild           # Full reset + pipeline-canon
 
 ```bash
 make load-canon        # Load canon documents to PostgreSQL
-make load-draft        # Load draft documents to PostgreSQL
-make load-all          # Load all documents to PostgreSQL
 ```
+
+`load-draft`, `load-all`, `pipeline-draft`, and `pipeline-all` are retained as
+explicit failure targets so stale automation cannot widen the corpus.
 
 ### Maintenance Operations
 
@@ -328,7 +323,7 @@ Add `VERBOSE=1` to any command for detailed output:
 
 ```bash
 make pipeline-canon VERBOSE=1
-make load-all VERBOSE=1
+make load-canon VERBOSE=1
 make resume VERBOSE=1
 ```
 
@@ -400,9 +395,9 @@ Found 0 markdown files to process
 
 **Causes:**
 
-- `canon/` or `drafts/` directories don't exist
-- No `.md` files in target directories
-- Wrong source parameter
+- `lore_docs/canon` does not exist
+- No `.md` files exist under `lore_docs/canon`
+- The canon-only bind mount is missing
 
 **Solutions:**
 
@@ -410,12 +405,8 @@ Found 0 markdown files to process
 # Check directory structure
 ls -la /home/luminari/lore/
 
-# Verify files exist
-find /home/luminari/lore/drafts -name "*.md" | head -10
-
-# Try different source
-make load-draft  # if canon is empty
-make load-all    # to include both
+# Verify canon files exist
+find /home/luminari/lore/lore_docs/canon -name "*.md" | head -10
 ```
 
 #### Database Connection Errors
@@ -604,7 +595,7 @@ documented migration/cutover workflow; do not overwrite the active space.
 
 **Weekly**:
 
-- Run full pipeline on significant changes: `make pipeline-all`
+- Run the canon pipeline on significant changes: `make pipeline-canon`
 - Review logs for recurring errors: `make logs`
 
 **Monthly**:
@@ -620,8 +611,8 @@ documented migration/cutover workflow; do not overwrite the active space.
 # Use bulk mode (fewer API calls)
 make pipeline-bulk
 
-# Process only specific source
-make pipeline-canon  # instead of pipeline-all
+# Process the production corpus
+make pipeline-canon
 ```
 
 **For debugging:**

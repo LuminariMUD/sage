@@ -36,8 +36,6 @@ help:
 	@echo ""
 	@echo "🔄 SEMANTIC CHUNKING PIPELINE:"
 	@echo "  make load-canon           - Load canon documents into PostgreSQL"
-	@echo "  make load-draft           - Load draft documents into PostgreSQL"
-	@echo "  make load-all             - Load both canon and draft documents"
 	@echo "  make create-episodes      - Create episodes with semantic chunking (200-500 tokens)"
 	@echo "  make generate-embeddings  - Generate embeddings for episodes"
 	@echo "  make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC - Run durable graph sync"
@@ -90,8 +88,6 @@ help:
 	@echo ""
 	@echo "📋 COMPLETE WORKFLOWS:"
 	@echo "  make pipeline-canon       - Canon: load → episodes → embeddings → sync"
-	@echo "  make pipeline-draft       - Draft: load → episodes → embeddings → sync"
-	@echo "  make pipeline-all         - All: load → episodes → embeddings → sync"
 	@echo "  make resume               - Resume interrupted pipeline (pending only)"
 	@echo "  make rebuild              - Backup-gated durable graph rebuild (three exact confirmations)"
 	@echo ""
@@ -131,15 +127,12 @@ load-canon:
 	@echo "📚 Loading canon documents into PostgreSQL..."
 	@docker compose exec -T api python src/scripts/load_documents.py --source canon $(VERBOSE_FLAG)
 
-.PHONY: load-draft
-load-draft:
-	@echo "📚 Loading draft documents into PostgreSQL..."
-	@docker compose exec -T api python src/scripts/load_documents.py --source draft $(VERBOSE_FLAG)
-
-.PHONY: load-all
-load-all:
-	@echo "📚 Loading all documents (canon + draft) into PostgreSQL..."
-	@docker compose exec -T api python src/scripts/load_documents.py --source all $(VERBOSE_FLAG)
+# Deliberately retained as loud failure targets so stale operator commands cannot
+# silently reintroduce low-quality draft material into the production corpus.
+.PHONY: load-draft load-all
+load-draft load-all:
+	@echo "This pipeline is canon-only; only lore_docs/canon may be loaded." >&2
+	@exit 2
 
 # =============================================================================
 # SEMANTIC CHUNKING PIPELINE
@@ -207,19 +200,16 @@ semantic-reset:
 .PHONY: pipeline pipeline-canon
 pipeline: pipeline-canon
 
-pipeline-canon: load-canon create-episodes generate-embeddings sync-to-graphiti
+pipeline-canon: db-migrate-check load-canon create-episodes generate-embeddings sync-to-graphiti
 	@echo "✅ Complete Canon pipeline finished!"
 
-.PHONY: pipeline-draft
-pipeline-draft: load-draft create-episodes generate-embeddings sync-to-graphiti
-	@echo "✅ Complete Draft pipeline finished!"
-
-.PHONY: pipeline-all
-pipeline-all: load-all create-episodes generate-embeddings sync-to-graphiti
-	@echo "✅ Complete All Sources pipeline finished!"
+.PHONY: pipeline-draft pipeline-all
+pipeline-draft pipeline-all:
+	@echo "This pipeline is canon-only; use make pipeline-canon." >&2
+	@exit 2
 
 .PHONY: resume
-resume:
+resume: db-migrate-check
 	@echo "🔄 Resuming interrupted pipeline..."
 	@docker compose exec -T api python src/scripts/create_episodes_from_documents.py $(VERBOSE_FLAG)
 	@docker compose exec -T api python src/scripts/generate_embeddings.py $(VERBOSE_FLAG)

@@ -158,6 +158,9 @@ PROVIDER_ENVIRONMENT_FIELDS = frozenset(
         "OPENROUTER_APP_NAME",
         "OPENROUTER_REQUEST_TIMEOUT",
         "OPENROUTER_GRAPHITI_MODEL",
+        "OPENROUTER_GRAPHITI_MAX_OUTPUT_TOKENS",
+        "OPENROUTER_GRAPHITI_PRIMARY_ATTEMPTS",
+        "OPENROUTER_GRAPHITI_MAX_PROVIDER_CALLS",
         "OPENROUTER_EMBEDDING_MODEL",
         "OPENROUTER_EMBEDDING_DIMENSIONS",
         "OPENROUTER_EMBEDDING_BATCH_SIZE",
@@ -183,6 +186,7 @@ PROVIDER_ENVIRONMENT_FIELDS = frozenset(
         "GRAPHITI_TEXT_MODEL_REVISION",
         "GRAPHITI_LLM_MODEL",
         "GRAPHITI_REQUEST_TIMEOUT",
+        "GRAPHITI_MAX_OUTPUT_TOKENS",
         "GRAPHITI_EXTRACTION_TEMPERATURE",
         "GRAPHITI_EXTRACTION_PRIMARY_ATTEMPTS",
         "GRAPHITI_EXTRACTION_FALLBACK_PROVIDER",
@@ -418,6 +422,7 @@ class TextModelCandidate:
     fingerprint: str
     routing: OpenRouterRoutingPolicy | None = None
     revision: str | None = None
+    max_output_tokens: int | None = None
 
     def __post_init__(self) -> None:
         _validate_label(self.name, "Text candidate name")
@@ -426,6 +431,8 @@ class TextModelCandidate:
         _validate_label(self.fingerprint, "Text candidate fingerprint")
         if self.revision is not None:
             _validate_label(self.revision, "Text model revision")
+        if self.max_output_tokens is not None and not 1 <= self.max_output_tokens <= 1_000_000:
+            raise ValueError("Text model output limit is invalid")
         if not 1 <= self.context_limit <= 10_000_000:
             raise ValueError("Text context limit is invalid")
         if not 0 <= self.temperature <= 2:
@@ -457,6 +464,7 @@ class TextModelCandidate:
             "temperature": self.temperature,
             "capabilities": sorted(self.capabilities),
             "maximum_model_attempts": self.maximum_model_attempts,
+            "max_output_tokens": self.max_output_tokens,
             "fingerprint": self.fingerprint,
         }
 
@@ -954,9 +962,19 @@ class ProviderSettingsResolver:
             raise ValueError(
                 f"{prefix}_{task.upper()}_CAPABILITIES is missing required task capabilities"
             )
+        default_context_limit = {
+            "ollama": 12_288,
+            "openrouter": 1_000_000,
+            "openai": 8192,
+        }[provider]
         context_limit = self._int(
             f"{prefix}_{task.upper()}_CONTEXT_TOKENS",
-            self._int(f"{prefix}_MAX_CONTEXT_TOKENS", 8192, 1, 10_000_000),
+            self._int(
+                f"{prefix}_MAX_CONTEXT_TOKENS",
+                default_context_limit,
+                1,
+                10_000_000,
+            ),
             1,
             10_000_000,
         )
@@ -974,6 +992,7 @@ class ProviderSettingsResolver:
         )
         routing = self._routing("TEXT") if provider == "openrouter" else None
         connection = self._connection(provider)
+        max_output_tokens = None
         if graphiti:
             connection = replace(
                 connection,
@@ -986,6 +1005,20 @@ class ProviderSettingsResolver:
                 ),
             )
             temperature = self._float("GRAPHITI_EXTRACTION_TEMPERATURE", temperature, 0, 2)
+            if provider == "openrouter":
+                max_output_tokens = self._int(
+                    "OPENROUTER_GRAPHITI_MAX_OUTPUT_TOKENS",
+                    65_536,
+                    1,
+                    1_000_000,
+                )
+            else:
+                max_output_tokens = self._int(
+                    "GRAPHITI_MAX_OUTPUT_TOKENS",
+                    4096,
+                    1,
+                    1_000_000,
+                )
         payload: dict[str, object] = {
             "provider": provider,
             "base_url": connection.base_url,
@@ -996,6 +1029,7 @@ class ProviderSettingsResolver:
             "temperature": temperature,
             "capabilities": sorted(capabilities),
             "maximum_model_attempts": maximum_model_attempts,
+            "max_output_tokens": max_output_tokens,
             "retry_on": sorted(retry_on or {"transport", "rate_limit", "resource_exhaustion"}),
             "protocol": "openai-chat-completions" if provider != "ollama" else "ollama-chat",
             "routing": routing.as_request_body() if routing else None,
@@ -1013,6 +1047,7 @@ class ProviderSettingsResolver:
             fingerprint=_canonical_fingerprint("candidate", payload),
             routing=routing,
             revision=revision,
+            max_output_tokens=max_output_tokens,
         )
 
     @staticmethod
@@ -1056,7 +1091,17 @@ class ProviderSettingsResolver:
         return MappingProxyType(routes)
 
     def _graphiti_route(self, provider: ProviderName) -> TextRouteProfile:
-        primary_attempts = self._int("GRAPHITI_EXTRACTION_PRIMARY_ATTEMPTS", 2, 1, 100)
+        generic_primary_attempts = self._int("GRAPHITI_EXTRACTION_PRIMARY_ATTEMPTS", 2, 1, 100)
+        primary_attempts = (
+            self._int(
+                "OPENROUTER_GRAPHITI_PRIMARY_ATTEMPTS",
+                3,
+                1,
+                100,
+            )
+            if provider == "openrouter"
+            else generic_primary_attempts
+        )
         generation_retry_on = frozenset({"transport", "rate_limit", "resource_exhaustion"}).union(
             _GRAPH_FALLBACK_FAILURES
         )
@@ -1090,16 +1135,27 @@ class ProviderSettingsResolver:
             if fallback.fingerprint == primary.fingerprint:
                 raise ValueError("Graphiti extraction fallback must differ from the primary")
             candidates.append(fallback)
-        route_limit = self._int(
+        generic_route_limit = self._int(
             "GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS",
             self._int("GRAPH_SYNC_MAX_PROVIDER_CALLS", 3, 1, 100),
             1,
             100,
         )
+        route_limit = (
+            self._int(
+                "OPENROUTER_GRAPHITI_MAX_PROVIDER_CALLS",
+                16,
+                1,
+                100,
+            )
+            if provider == "openrouter"
+            else generic_route_limit
+        )
         configured_durable_limit = self._value("GRAPH_SYNC_MAX_PROVIDER_CALLS")
         configured_route_limit = self._value("GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS")
         if (
-            configured_durable_limit
+            provider != "openrouter"
+            and configured_durable_limit
             and configured_route_limit
             and int(configured_durable_limit) != int(configured_route_limit)
         ):

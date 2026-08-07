@@ -452,7 +452,6 @@ This installation checklist breaks down the deployment into manageable phases. C
 
   # Paths
   LORE_DIR=/app/lore_docs
-  LORE_SOURCE=canon
 
   # Development Settings
   DISABLE_AUTH=false

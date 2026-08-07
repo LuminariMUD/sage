@@ -18,6 +18,15 @@ The graph-sync ledger is intentionally evidence-preserving. There is no automate
 down migration that drops attempt history. Rollback uses the verified pre-migration
 database backup and the documented application rollback procedure.
 
+## Canon-only corpus boundary
+
+Migration `0008_canon_only_corpus` makes `lore_docs/canon` the fail-closed
+production corpus. It refuses to apply when any existing episode belongs to an
+excluded document, rejects future episode inserts outside canon, and prevents a
+document with episodes from being moved out of canon. Draft and administrative
+documents may remain as inert document rows, but they cannot acquire episodes,
+embeddings, or durable graph-sync jobs.
+
 ## Relationship quality evidence
 
 Migration `0007_graph_relationship_quality` adds one optional append-only,

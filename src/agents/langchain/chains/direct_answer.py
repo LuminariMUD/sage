@@ -5,8 +5,8 @@ deterministic two-stage pipeline:
 
 1. Digest canonical context into structured bullet points that enumerate the
    facts available to answer the user's question.
-2. Compose a final response that cites the context blocks explicitly and
-   surfaces every useful detail, prioritising completeness over brevity.
+2. Compose a final response that cites the context blocks explicitly, while
+   respecting any length or format the user explicitly requested.
 
 When an OpenAI API key is unavailable the chain falls back to a deterministic
 response builder so tests remain offline-friendly.
@@ -139,6 +139,10 @@ canon sources. Minor inconsistencies are acceptable when they can be traced back
 to the episode text or the entity summary.
 
 Requirements:
+0. Follow explicit user requirements about response length and format. A request
+   for one sentence, a concise answer, a brief answer, or a short answer
+   overrides requirements 1-8: answer only in that requested format, retain
+   inline [Block X] citations, and omit headings and the Source Blocks appendix.
 1. Begin with "## Direct Answer" summarising the core response.
 2. Follow with "## Canonical Details" covering every supporting fact.
 3. Include "## Key Entities & Roles" and "## Notable Connections" when the
@@ -184,6 +188,24 @@ def _empty_digest() -> dict[str, Any]:
         "related_details": [],
         "gaps": [],
     }
+
+
+def _requests_compact_answer(question: str) -> bool:
+    """Return whether the user explicitly requested a short output format."""
+    normalized = " ".join(question.lower().split())
+    return any(
+        marker in normalized
+        for marker in (
+            "one sentence",
+            "single sentence",
+            "in a sentence",
+            "concise answer",
+            "concise sentence",
+            "brief answer",
+            "briefly",
+            "short answer",
+        )
+    )
 
 
 def _ensure_json(text: str) -> dict[str, Any]:
@@ -235,6 +257,7 @@ class DirectAnswerChain(Runnable):
                     temperature=temperature,
                     streaming=False,
                     max_tokens=3000,
+                    reasoning_effort="none",
                 )
             except Exception as exc:  # pragma: no cover - network failures
                 logger.warning(
@@ -254,6 +277,7 @@ class DirectAnswerChain(Runnable):
                     temperature=0.0,
                     streaming=False,
                     max_tokens=2000,
+                    reasoning_effort="none",
                 )
             except Exception as exc:  # pragma: no cover - network failures
                 logger.warning(
@@ -345,6 +369,15 @@ class DirectAnswerChain(Runnable):
         return "\n".join(lines)
 
     def _fallback_answer(self, question: str, blocks: list[str], digest: dict[str, Any]) -> str:
+        if _requests_compact_answer(question):
+            direct_answers = digest.get("direct_answers") or []
+            if direct_answers and isinstance(direct_answers[0], dict):
+                item = direct_answers[0]
+                summary = str(item.get("summary") or "The retrieved archive passage is relevant.")
+                citations = ", ".join(f"[Block {b}]" for b in item.get("blocks", []))
+                return f"{summary} {citations}".strip()
+            return f"{_shorten(blocks[0])} [Block 1]"
+
         lines: list[str] = []
         lines.append(
             f"## Direct Answer\nThe archives provide {len(blocks)} context blocks relevant to the query '{question}'."
@@ -436,10 +469,16 @@ class DirectAnswerChain(Runnable):
                 history_instructions=history_instructions,
             )
             response = self.answer_llm.invoke(prompt.to_messages())
-            final_answer = response.content.strip()
+            content = response.content if isinstance(response.content, str) else ""
+            final_answer = content.strip()
 
-            # Ensure the source section is appended even if the LLM forgot
-            if "Source Blocks" not in final_answer:
+            if not final_answer:
+                logger.warning("Answer model returned empty content; using grounded fallback")
+                final_answer = self._fallback_answer(question, blocks, digest)
+
+            # Preserve explicit short-form requests instead of silently turning
+            # them back into a long report with a source appendix.
+            if "Source Blocks" not in final_answer and not _requests_compact_answer(question):
                 source_section = self._build_source_section(blocks)
                 if source_section:
                     final_answer = f"{final_answer}\n\n{source_section}"

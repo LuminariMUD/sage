@@ -102,7 +102,7 @@ def test_approved_character_creation_documents_exist() -> None:
     assert COMPASS_PATH.is_file()
 
 
-def test_repository_lore_references_resolve() -> None:
+def test_canon_lore_references_do_not_require_excluded_sources() -> None:
     documents = (HOMELANDS_PATH, LANGUAGES_PATH, COMPASS_PATH)
 
     for document_path in documents:
@@ -110,9 +110,17 @@ def test_repository_lore_references_resolve() -> None:
             r"`(lore_docs/[^`]+\.md)`",
             read(document_path),
         ):
-            assert (
-                REPO_ROOT / reference
-            ).is_file(), f"{document_path.name} has a missing lore reference: {reference}"
+            if reference.startswith("lore_docs/canon/"):
+                assert (
+                    REPO_ROOT / reference
+                ).is_file(), f"{document_path.name} has a missing canon reference: {reference}"
+                continue
+
+            # Draft paths appear only as historical provenance. They are deliberately
+            # unavailable to the runtime and must never become loadable dependencies.
+            assert reference.startswith(
+                "lore_docs/drafts/"
+            ), f"{document_path.name} has an unsupported lore reference: {reference}"
 
 
 def test_every_runtime_homeland_has_a_complete_canon_record() -> None:

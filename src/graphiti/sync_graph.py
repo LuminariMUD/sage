@@ -121,7 +121,13 @@ class GraphitiEpisodeProcessor:
         verification = self._verification(lease, verified_state)
         if verified_state.candidate_content != lease.text or not verification.is_exact:
             raise GraphVerificationError("Neo4j episode failed exact post-write verification")
-        quality = self._consume_relationship_quality(stable_id)
+        # Graphiti creates a new episode under a temporary native UUID. The
+        # durable sync then stamps that node with the PostgreSQL episode UUID,
+        # but the in-memory policy report is still keyed by the original UUID.
+        # Consume it before losing that identity so quality evidence reaches
+        # the same atomic completion as the graph counts.
+        quality_key = self._created_episode_uuid(add_result) or stable_id
+        quality = self._consume_relationship_quality(quality_key)
         return GraphProcessingResult(
             verification=verification,
             graph_counts=self._graph_counts(add_result, quality),
@@ -288,6 +294,12 @@ class GraphitiEpisodeProcessor:
     def _consume_relationship_quality(self, stable_id: str) -> RelationshipQualityReport | None:
         consume_quality = getattr(self.graphiti.graphiti, "consume_relationship_quality", None)
         return consume_quality(stable_id) if callable(consume_quality) else None
+
+    @staticmethod
+    def _created_episode_uuid(result: Any) -> str | None:
+        episode = getattr(result, "episode", None) if result is not None else None
+        episode_uuid = getattr(episode, "uuid", None)
+        return episode_uuid if isinstance(episode_uuid, str) and episode_uuid else None
 
     @staticmethod
     def _graph_counts(

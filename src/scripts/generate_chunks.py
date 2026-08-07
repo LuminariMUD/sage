@@ -291,14 +291,16 @@ class ChunkGenerator:
         return chunks_created
 
     async def generate_all_chunks(self) -> dict[str, int]:
-        """Generate chunks for all documents."""
+        """Generate chunks for canon documents."""
         db = await get_postgres_db()
 
-        # Get all documents, prioritizing canonical ones
+        # This legacy utility may never widen the production corpus.
         docs = await db.fetch("""
             SELECT id, title, body_md, canonical
             FROM lore_documents
-            ORDER BY canonical DESC, title
+            WHERE canonical IS TRUE
+              AND source_file LIKE 'canon/%'
+            ORDER BY title
         """)
 
         console.print(f"\n[cyan]Processing {len(docs)} documents[/cyan]")

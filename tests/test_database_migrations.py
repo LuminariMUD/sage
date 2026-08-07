@@ -282,6 +282,17 @@ def test_repository_migration_contains_required_durable_contract():
     ):
         assert required_fragment in relationship_quality_sql
 
+    canon_corpus_sql = migrations[7].sql
+    for required_fragment in (
+        "lore_documents_canonical_source_check",
+        "canon_corpus_require_episode_document",
+        "episodes_require_canon_document",
+        "canon_corpus_guard_document_scope",
+        "lore_documents_guard_canon_episode_scope",
+        "lore_docs/canon",
+    ):
+        assert required_fragment in canon_corpus_sql
+
     retired_helper = (
         migrate_database.DEFAULT_MIGRATION_DIRECTORY.parent / "add_episode_uuid.sql"
     ).read_text(encoding="ascii")

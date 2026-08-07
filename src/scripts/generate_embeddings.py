@@ -32,7 +32,7 @@ async def generate_embeddings(
     profile_resolver=get_embedding_profile,
     embedder_factory=get_embedder,
 ):
-    """Generate embeddings for all episodes without embeddings."""
+    """Generate embeddings for canon episodes without embeddings."""
     print("🔢 Starting embedding generation...")
 
     # Prove the configured profile matches the active physical vector space before
@@ -53,10 +53,13 @@ async def generate_embeddings(
 
     # Fetch episodes without embeddings
     episodes = await db.fetch("""
-        SELECT id, text
-        FROM episodes
-        WHERE embedding IS NULL
-        ORDER BY id
+        SELECT episode.id, episode.text
+        FROM episodes AS episode
+        JOIN lore_documents AS document ON document.id = episode.document_id
+        WHERE episode.embedding IS NULL
+          AND document.canonical IS TRUE
+          AND document.source_file LIKE 'canon/%'
+        ORDER BY episode.id
     """)
 
     if not episodes:

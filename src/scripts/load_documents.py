@@ -41,13 +41,15 @@ DEFAULT_DOCUMENT_TYPE = "lore"
 
 
 class DocumentLoader:
-    """Load and process markdown documents for the lore database."""
+    """Load canon Markdown documents into the lore database."""
 
     def __init__(
         self, lore_dir: str, source: str = "canon", verbose: bool = False, resume: bool = False
     ):
         self.lore_dir = Path(lore_dir)
-        self.source = source  # "canon", "draft", or "all"
+        if source != "canon":
+            raise ValueError("The production lore corpus is restricted to lore_docs/canon")
+        self.source = "canon"
         self.verbose = verbose
         self.resume = resume
         self.loaded_count = 0
@@ -96,8 +98,8 @@ class DocumentLoader:
             rel_path = file_path.relative_to(self.lore_dir)
             parts = rel_path.parts
 
-            # Skip 'canon' or 'drafts' prefix and check category directory
-            if len(parts) > 1 and parts[0] in ["canon", "drafts"]:
+            # Skip the canon prefix and check the category directory.
+            if len(parts) > 1 and parts[0] == "canon":
                 category_dir = parts[1]
                 if category_dir in DOCUMENT_TYPE_MAP:
                     return DOCUMENT_TYPE_MAP[category_dir]
@@ -113,38 +115,34 @@ class DocumentLoader:
         return DEFAULT_DOCUMENT_TYPE
 
     def find_markdown_files(self) -> list[Path]:
-        """Find all markdown files - no filtering needed since canon/ and drafts/ contain only lore."""
-        md_files = []
+        """Find Markdown files whose resolved paths remain inside ``canon``."""
+        canon_dir = self.lore_dir / "canon"
+        if not canon_dir.is_dir():
+            raise FileNotFoundError(f"Canon lore directory does not exist: {canon_dir}")
 
-        # Determine which directories to scan
-        if self.source == "canon":
-            scan_dirs = [self.lore_dir / "canon"]
-        elif self.source == "draft":
-            scan_dirs = [self.lore_dir / "drafts"]
-        elif self.source == "all":
-            scan_dirs = [self.lore_dir / "canon", self.lore_dir / "drafts"]
-        else:
-            raise ValueError(f"Invalid source: {self.source}. Must be 'canon', 'draft', or 'all'")
-
-        # Get ALL .md files - they're all valid lore content
-        for scan_dir in scan_dirs:
-            if not scan_dir.exists():
-                if self.verbose:
-                    console.print(f"[yellow]Warning: Directory {scan_dir} does not exist[/yellow]")
-                continue
-
-            # No filtering needed - trust the directory structure
-            md_files.extend(scan_dir.rglob("*.md"))
+        md_files = list(canon_dir.rglob("*.md"))
+        for file_path in md_files:
+            self.canon_relative_path(file_path)
 
         # Sort by modification time (most recently modified first) for better progress visibility
         md_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
 
         if self.verbose:
-            console.print(
-                f"[dim]Found {len(md_files)} markdown files in {[str(d) for d in scan_dirs]}[/dim]"
-            )
+            console.print(f"[dim]Found {len(md_files)} markdown files in {canon_dir}[/dim]")
 
         return md_files
+
+    def canon_relative_path(self, file_path: Path) -> Path:
+        """Return a canonical source path or reject path/symlink escape attempts."""
+        canon_dir = (self.lore_dir / "canon").resolve(strict=True)
+        resolved_file = file_path.resolve(strict=True)
+        if resolved_file.suffix.lower() != ".md":
+            raise ValueError("Only Markdown files from lore_docs/canon may be loaded")
+        try:
+            relative_to_canon = resolved_file.relative_to(canon_dir)
+        except ValueError as error:
+            raise ValueError("Lore document resolved outside lore_docs/canon") from error
+        return Path("canon") / relative_to_canon
 
     async def load_document(self, file_path: Path, db) -> bool:
         """Load a single document into the database."""
@@ -153,8 +151,8 @@ class DocumentLoader:
             with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
-            # Get relative path for source_file
-            rel_path = file_path.relative_to(self.lore_dir)
+            # Resolve first so a symlink inside canon cannot import outside content.
+            rel_path = self.canon_relative_path(file_path)
 
             # Extract title from first header or filename
             title = file_path.stem.replace("_", " ").title()
@@ -175,16 +173,8 @@ class DocumentLoader:
             # Determine document type
             doc_type = self.get_document_type(file_path)
 
-            # Check if document is canonical (in canon directory)
-            canonical = str(rel_path).startswith("canon/")
-
-            # Add source information to metadata
-            if str(rel_path).startswith("canon/"):
-                doc_source = "canon"
-            elif str(rel_path).startswith("drafts/"):
-                doc_source = "draft"
-            else:
-                doc_source = "unknown"
+            canonical = True
+            doc_source = "canon"
 
             # Prepare metadata
             file_stat = file_path.stat()
@@ -324,9 +314,9 @@ async def main():
     parser = argparse.ArgumentParser(description="Load markdown documents into PostgreSQL")
     parser.add_argument(
         "--source",
-        choices=["canon", "draft", "all"],
-        default=os.getenv("LORE_SOURCE", "canon"),
-        help="Source to load from: canon (default), draft, or all",
+        choices=["canon"],
+        default="canon",
+        help="Corpus source (fixed to canon)",
     )
     parser.add_argument(
         "--lore-dir",

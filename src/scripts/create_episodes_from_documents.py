@@ -89,7 +89,7 @@ async def create_episodes_from_documents(
     max_documents: int | None = None,
     force_recreate: bool = False,
 ):
-    """Create episodes from documents in PostgreSQL"""
+    """Create episodes from canon documents in PostgreSQL."""
 
     console.print(
         Panel.fit(
@@ -131,15 +131,17 @@ async def create_episodes_from_documents(
     # Handle force_recreate by resetting status once at the start
     if force_recreate:
         console.print(
-            "[yellow]Force recreate enabled - resetting all document processing status...[/yellow]"
+            "[yellow]Force recreate enabled - resetting canon processing status...[/yellow]"
         )
         await postgres.execute("""
             UPDATE lore_documents
             SET processing_status = NULL,
                 processed_at = NULL,
                 updated_at = NOW()
+            WHERE canonical IS TRUE
+              AND source_file LIKE 'canon/%'
         """)
-        console.print("✅ [green]Reset processing status for all documents[/green]")
+        console.print("✅ [green]Reset processing status for canon documents[/green]")
 
     try:
         while True:
@@ -148,7 +150,9 @@ async def create_episodes_from_documents(
                 """
                 SELECT id, title, body_md, document_type, source_file
                 FROM lore_documents
-                WHERE processing_status != 'completed' OR processing_status IS NULL
+                WHERE canonical IS TRUE
+                  AND source_file LIKE 'canon/%'
+                  AND (processing_status != 'completed' OR processing_status IS NULL)
                 ORDER BY created_at
                 LIMIT $1
             """,
@@ -356,14 +360,19 @@ async def check_episode_status():
                     COUNT(*) FILTER (WHERE processing_status = 'pending' OR processing_status IS NULL) as pending_documents,
                     COUNT(*) FILTER (WHERE processing_status = 'failed') as failed_documents
                 FROM lore_documents
+                WHERE canonical IS TRUE
+                  AND source_file LIKE 'canon/%'
             """)
 
             episode_stats = await postgres.fetchrow("""
                 SELECT
                     COUNT(*) as total_episodes,
-                    COUNT(DISTINCT document_id) as documents_with_episodes,
-                    AVG(length(text)) as avg_episode_length
-                FROM episodes
+                    COUNT(DISTINCT episode.document_id) as documents_with_episodes,
+                    AVG(length(episode.text)) as avg_episode_length
+                FROM episodes AS episode
+                JOIN lore_documents AS document ON document.id = episode.document_id
+                WHERE document.canonical IS TRUE
+                  AND document.source_file LIKE 'canon/%'
             """)
 
             await postgres.disconnect()

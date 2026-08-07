@@ -66,17 +66,19 @@ class SimpleChunkGenerator:
 
 
 async def main():
-    """Generate simple chunks for all documents."""
+    """Generate simple chunks for canon documents."""
     print("Simple Chunk Generator (No ML Models)")
     print("=" * 50)
 
     # Connect to database
     db = await get_postgres_db()
 
-    # Get all documents
+    # This legacy utility shares the same hard corpus boundary as production.
     documents = await db.fetch("""
         SELECT id, stable_id, title, body_md, source_file
         FROM lore_documents
+        WHERE canonical IS TRUE
+          AND source_file LIKE 'canon/%'
         ORDER BY title
     """)
 

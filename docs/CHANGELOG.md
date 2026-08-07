@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OpenRouter Runtime Hardening and Canon-Only Lore Corpus (0.7.27)**
+  - Added task-specific OpenRouter capacity controls, provider call ceilings, long-context Qwen defaults, and provider-aware configuration resolution across application and Graphiti paths.
+  - Improved compact direct-answer handling and corrected streamed-chat persistence and trace retrieval so completed assistant content and the originating user message are retained consistently.
+  - Enforced `lore_docs/canon` as the only ingestible and retrievable corpus across loaders, episode generation, embeddings, graph synchronization, RAG queries, Compose mounts, and operational statistics; legacy draft/all entry points now fail closed.
+  - Added pending migration `0008_canon_only_corpus` with database constraints and triggers that reject excluded sources, plus focused boundary, provider, graph, and chat regression coverage.
+  - Verified 58 focused and adjacent tests, Ruff lint/format checks, both Compose configurations, isolated PostgreSQL migration behavior, live canon-only container visibility, and clean diff checks. No lore source document was changed or removed.
+
 - **Aggregate Operational Readiness and Candidate Metrics (0.7.26)**
   - Added candidate-specific provider reservations, completions, outcomes, failure classes, average/p95/maximum latency, token usage, and coverage to durable run summaries.
   - Added read-only human/JSON operational readiness commands combining sanitized provider/profile identity, queue and expired-lease state, latest-run metrics, relationship-quality evidence, aggregate graph-audit results, and embedding preflight.
