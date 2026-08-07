@@ -112,7 +112,7 @@ fi
 ollama_chat_model=${OLLAMA_CHAT_MODEL:-qwen2.5:7b}
 ollama_creative_model=${OLLAMA_CREATIVE_MODEL:-$ollama_chat_model}
 ollama_reasoning_model=${OLLAMA_REASONING_MODEL:-qwen2.5:3b}
-ollama_extraction_model=${OLLAMA_EXTRACTION_MODEL:-$ollama_reasoning_model}
+ollama_extraction_model=${OLLAMA_EXTRACTION_MODEL:-$ollama_chat_model}
 ollama_tools_model=${OLLAMA_TOOLS_MODEL:-$ollama_chat_model}
 ollama_embedding_model=${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
 

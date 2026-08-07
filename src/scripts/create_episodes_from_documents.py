@@ -476,7 +476,7 @@ Examples:
         "--overlap-percentage",
         type=float,
         default=0.25,
-        help="Overlap percentage between chunks (default: 0.25 = 25%)",
+        help="Overlap fraction between chunks (default: 0.25)",
     )
     parser.add_argument(
         "--similarity-threshold",

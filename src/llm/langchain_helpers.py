@@ -70,12 +70,12 @@ def get_chat_model(
     if provider == "ollama":
         # langchain-ollama's ChatOllama has no `streaming` field (it would be silently
         # dropped); streaming is expressed via `disable_streaming` on BaseChatModel.
+        kwargs.setdefault("disable_streaming", not streaming)
         return ChatOllama(
             model=candidate.model,
             base_url=candidate.connection.base_url,
             temperature=temperature,
             num_ctx=candidate.context_limit,
-            disable_streaming=not streaming,
             **kwargs,
         )
     elif provider in {"openrouter", "openai"}:

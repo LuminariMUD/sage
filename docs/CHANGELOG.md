@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Validated Ollama Extraction Defaults (0.7.28)**
+  - Switched local Graphiti extraction to the tool-capable `qwen2.5:7b` chat model by default and raised the local operation-wide provider-call ceiling from 3 to 32 so nontrivial episodes can complete Graphiti's internal request sequence.
+  - Preserved explicit LangChain streaming overrides without duplicate constructor arguments and corrected the episode CLI overlap help text so argparse can render it safely.
+  - Added focused regression coverage and verified 75 targeted tests, Ruff checks, both local and OpenRouter Compose profiles, a live Ollama ingestion/embedding/graph-sync path, and three streamed ReAct retrieval queries.
+
 - **OpenRouter Runtime Hardening and Canon-Only Lore Corpus (0.7.27)**
   - Added task-specific OpenRouter capacity controls, provider call ceilings, long-context Qwen defaults, and provider-aware configuration resolution across application and Graphiti paths.
   - Improved compact direct-answer handling and corrected streamed-chat persistence and trace retrieval so completed assistant content and the originating user message are retained consistently.

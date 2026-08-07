@@ -894,7 +894,7 @@ class ProviderSettingsResolver:
                 "chat": "qwen2.5:7b",
                 "creative": self._value("OLLAMA_CHAT_MODEL", "qwen2.5:7b"),
                 "reasoning": "qwen2.5:3b",
-                "extraction": self._value("OLLAMA_REASONING_MODEL", "qwen2.5:3b"),
+                "extraction": self._value("OLLAMA_CHAT_MODEL", "qwen2.5:7b"),
                 "tools": self._value("OLLAMA_CHAT_MODEL", "qwen2.5:7b"),
             }
             return self._value(f"OLLAMA_{task.upper()}_MODEL", defaults[task])
@@ -1137,7 +1137,7 @@ class ProviderSettingsResolver:
             candidates.append(fallback)
         generic_route_limit = self._int(
             "GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS",
-            self._int("GRAPH_SYNC_MAX_PROVIDER_CALLS", 3, 1, 100),
+            self._int("GRAPH_SYNC_MAX_PROVIDER_CALLS", 32, 1, 100),
             1,
             100,
         )

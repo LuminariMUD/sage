@@ -215,7 +215,17 @@ def test_openrouter_graphiti_capacity_is_independent_from_local_defaults():
     assert local.text_route("chat").primary.context_limit == 12_288
     assert local.graphiti_text_route.primary.max_output_tokens == 4096
     assert local.graphiti_text_route.primary.maximum_model_attempts == 2
-    assert local.graphiti_text_route.maximum_provider_calls == 3
+    assert local.graphiti_text_route.maximum_provider_calls == 32
+
+
+def test_ollama_extraction_defaults_to_tool_capable_chat_model():
+    environment = _ollama_environment()
+    environment.pop("OLLAMA_EXTRACTION_MODEL")
+
+    settings = resolve_provider_settings(environment)
+
+    assert settings.text_route("extraction").primary.model == "qwen2.5:7b"
+    assert settings.graphiti_text_route.primary.model == "qwen2.5:7b"
 
 
 def test_openrouter_graphiti_capacity_overrides_are_resolved_together():

@@ -1,6 +1,6 @@
 # Pipeline System
 
-**Version**: 0.7.27
+**Version**: 0.7.28
 **Status**: Production Ready
 **Last Updated**: 2026-08-07
 

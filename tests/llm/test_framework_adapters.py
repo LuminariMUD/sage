@@ -43,6 +43,16 @@ def test_langchain_ollama_keeps_native_chat_adapter(monkeypatch):
     assert model.disable_streaming is True
 
 
+def test_langchain_ollama_accepts_explicit_disable_streaming(monkeypatch):
+    """Callers may reinforce non-streaming mode without duplicating constructor args."""
+    _select_ollama(monkeypatch)
+
+    model = get_chat_model(streaming=False, disable_streaming=True)
+
+    assert isinstance(model, ChatOllama)
+    assert model.disable_streaming is True
+
+
 def test_langchain_openrouter_uses_explicit_connection_headers_and_body(monkeypatch):
     _select_openrouter(monkeypatch)
 
