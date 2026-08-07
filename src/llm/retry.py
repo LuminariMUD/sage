@@ -50,7 +50,10 @@ def classify_provider_failure(error: BaseException) -> ClassifiedProviderFailure
     """Classify an exception without retaining its potentially sensitive text."""
     status = _status_code(error)
     name = type(error).__name__.lower()
-    if isinstance(error, MalformedModelOutputError) or isinstance(error, json.JSONDecodeError):
+    if (
+        isinstance(error, (MalformedModelOutputError, json.JSONDecodeError))
+        or "emptyresponse" in name
+    ):
         return ClassifiedProviderFailure("malformed_json", "malformed_model_output", status)
     if isinstance(error, ModelSchemaValidationError) or "validationerror" in name:
         return ClassifiedProviderFailure("schema_validation", "model_schema_invalid", status)

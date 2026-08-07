@@ -284,6 +284,39 @@ and `0005` pending and no shadow tables. No migration, profile registration,
 backfill, recovery, index build, benchmark, provider/model request, graph claim,
 ingestion, or live mutation occurred. The worker remains stopped by operator request.
 
+### 2026-08-07 - L2 durable extraction route checkpoint, not activated
+
+- Wired the confirmation-gated durable worker to the complete ordered Graphiti text
+  route. The route is not resolved and no client is constructed on refusal or
+  read-only status paths.
+- Replaced graphiti-core's opaque four-attempt retry wrapper with a single-attempt
+  candidate boundary and retained zero SDK transport retries. One locked call budget
+  now covers all Graphiti-internal concurrent generation work in a leased episode.
+- Enforced configured failure routing: a candidate retries only approved classes,
+  fallback advances only for malformed JSON/empty output, independent schema
+  validation, or measured output-limit failure, and authentication/configuration
+  failures cannot switch candidates.
+- Moved durable call completion above JSON and Pydantic validation. Every actual
+  request is still reserved before dispatch and records its candidate identity plus
+  available actual-model/upstream/usage metadata, while prompts, responses, invalid
+  values, and arbitrary exception text remain outside the ledger.
+- Propagated non-primary success through verified completion as degraded and added a
+  separate degraded-success count to the worker summary. Exhaustion uses the existing
+  durable retry/quarantine state machine and sanitized attempt-chain inspection.
+
+The existing three-request ceiling is a fail-closed safety default, not a measured
+per-episode recommendation. Graphiti may require more than three LLM calls for
+entity/edge extraction, deduplication, attributes, summaries, and enrichment even
+when each call succeeds. It must remain unchanged until the bounded synthetic
+benchmark and a cost/GPU decision establish an authorized operational value.
+
+Eighty-one focused offline tests pass, and the complete network-isolated fast suite
+passes 311 tests with 6 skips and 114 intentional deselections. The ignored `.env`
+was not opened or printed, and the configured OpenRouter credential was not used for
+a request. No provider/model call, benchmark, graph claim, ingestion, migration,
+profile transition, database/graph mutation, or worker restart occurred. The
+operator's stop instruction remains authoritative.
+
 ## Why this project exists
 
 The local stack now runs end to end, including PostgreSQL, Neo4j, Ollama, the API, the MCP server, and the browser UI. The full 611-episode graph import exposed several opportunities to make the system faster, easier to operate, and more reliable with small local models.
@@ -312,6 +345,11 @@ The intended processing model is idempotent at-least-once delivery; this workstr
 ### 1. Make structured extraction reliable across model sizes
 
 **Observed:** The local `qwen2.5:3b` reasoning model periodically returns malformed JSON, usually an unterminated string in a large structured response. Graphiti often recovers through its internal retries, but some episodes can exhaust those retries. A larger `qwen2.5:7b` model is available as a slower fallback.
+
+**Implementation status:** The bounded route, independent schema validation,
+candidate-specific durable accounting, hidden-retry removal, and degraded fallback
+outcome are implemented offline. Candidate quality, the operational call ceiling,
+and activation remain unapproved pending the explicit benchmark and review.
 
 **Proposed:**
 

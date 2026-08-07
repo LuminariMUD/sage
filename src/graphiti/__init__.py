@@ -237,7 +237,19 @@ class LuminariGraphiti:
         """Close connections."""
         if hasattr(self, "driver"):
             await self.driver.close()
-        # Graphiti handles its own connection cleanup
+        llm_client = getattr(getattr(self, "graphiti", None), "llm_client", None)
+        close = getattr(llm_client, "close", None)
+        if callable(close):
+            result = close()
+            if hasattr(result, "__await__"):
+                await result
+        else:
+            transport = getattr(llm_client, "client", None)
+            transport_close = getattr(transport, "close", None)
+            if callable(transport_close):
+                result = transport_close()
+                if hasattr(result, "__await__"):
+                    await result
 
     async def add_episode_with_lore_relationships(
         self,
@@ -732,12 +744,16 @@ async def initialize_graphiti(
     neo4j_user: str | None = None,
     neo4j_password: str | None = None,
     verbose: bool = False,
+    llm_client: Any | None = None,
+    embedder: Any | None = None,
 ) -> LuminariGraphiti:
     """Initialize and return a configured Graphiti instance."""
     graphiti = LuminariGraphiti(
         neo4j_uri=neo4j_uri,
         neo4j_user=neo4j_user,
         neo4j_password=neo4j_password,
+        llm_client=llm_client,
+        embedder=embedder,
         verbose=verbose,
     )
 

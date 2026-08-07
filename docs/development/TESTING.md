@@ -1,6 +1,6 @@
 # Testing Guide
 
-**Version**: 0.7.19
+**Version**: 0.7.20
 **Status**: Production Ready
 **Last Updated**: 2026-08-07
 
@@ -279,6 +279,34 @@ make benchmark-shadow-retrieval \
   SHADOW_EMBEDDING_PROVIDER=openrouter \
   CONFIRM_RETRIEVAL_BENCHMARK=RUN_RETRIEVAL_BENCHMARK
 ```
+
+## Durable Graphiti Route
+
+The route, accounting, and worker propagation tests are fully mocked. They do not
+resolve the real provider credential, connect to PostgreSQL or Neo4j, invoke a
+model, claim a job, or start the worker:
+
+```bash
+docker compose run --rm --no-deps --entrypoint python api -m pytest -q \
+  tests/graphiti/test_text_route_client.py \
+  tests/graphiti/test_provider_tracking.py \
+  tests/graphiti/test_sync_models.py \
+  tests/graphiti/test_sync_worker.py \
+  tests/test_graphiti_sync_contract.py
+```
+
+This suite proves that graphiti-core's implicit retry loop is bypassed, the SDK has
+zero hidden retries, one hard call ceiling spans concurrent Graphiti work, only
+configured failure classes can retry or fall back, authentication cannot fall back,
+and fallback success reaches the durable result as degraded. It also proves that a
+provider request is reserved before dispatch but not marked successful until JSON
+and Pydantic validation complete, with candidate-specific identity, usage, and
+content-free failure taxonomy.
+
+The route ceiling counts actual internal LLM requests, not episodes. Its default of
+three is intentionally fail closed and can be insufficient for ordinary Graphiti
+processing. Do not turn an offline test pass into authorization to raise that budget
+or run ingestion; use the separately confirmed non-persistent benchmark first.
 
 ## Graphiti Extraction Benchmark
 
@@ -700,9 +728,9 @@ docker compose logs api
 **Solution**:
 
 ```bash
-# Load test data
+# Load test data; graph ingestion also requires explicit operator authorization
 make load-canon
-make sync-to-graphiti
+make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # Or use sample data
 make load-sample-data

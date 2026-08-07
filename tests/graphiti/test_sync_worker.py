@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
@@ -99,6 +100,7 @@ class FakeRepository:
         self.claimed = asyncio.Event()
         self.claim_count = 0
         self.failures = []
+        self.successes = []
         self.events = []
         self.profile_state = {
             "matching_jobs": 1,
@@ -137,6 +139,7 @@ class FakeRepository:
 
     async def complete_verified_success(self, lease, verification, **kwargs):
         self.events.append("success")
+        self.successes.append(kwargs)
         return CompletionStatus.SYNCED
 
     async def complete_failure(self, lease, failure):
@@ -187,11 +190,11 @@ class FakeProcessor:
         )
 
 
-def _worker(repository, processor):
+def _worker(repository, processor, *, llm_client=None):
     return GraphSyncWorker(
         repository=repository,
         graph_processor=processor,
-        llm_client=_llm_client(),
+        llm_client=llm_client or _llm_client(),
         profile=_profile(),
         policy=GraphSyncPolicy(lease_seconds=30),
         worker_id="worker-a",
@@ -216,6 +219,33 @@ async def test_worker_recovers_claims_verifies_and_stops_owned_run():
         "drain",
         "stop",
     ]
+
+
+async def test_worker_records_routed_fallback_as_degraded_success():
+    lease = _lease()
+    repository = FakeRepository(lease)
+    llm_client = _llm_client()
+    llm_client.last_operation_degraded = False
+
+    @asynccontextmanager
+    async def operation():
+        try:
+            yield llm_client
+        finally:
+            llm_client.last_operation_degraded = True
+
+    llm_client.operation = operation
+    worker = _worker(
+        repository,
+        FakeProcessor(lease),
+        llm_client=llm_client,
+    )
+
+    summary = await worker.run(max_episodes=1)
+
+    assert summary.synced == 1
+    assert summary.degraded_synced == 1
+    assert repository.successes[0]["degraded"] is True
 
 
 async def test_systemic_configuration_failure_pauses_without_stopping_run():

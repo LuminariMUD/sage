@@ -3,7 +3,7 @@
 | Field                 | Value                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | Status                | Active phased implementation                                                                           |
-| Implementation        | Runtime, provider, and embedding-space guard slices implemented; provider/vector activation frozen     |
+| Implementation        | Runtime, provider, Graphiti route, and embedding-space slices implemented; activation remains frozen   |
 | Last updated          | 2026-08-07                                                                                             |
 | Scope                 | Text generation, embeddings, Graphiti, configuration, storage migrations, deployment, and tests        |
 | Compatibility target  | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
@@ -313,6 +313,44 @@ until an explicitly backed-up migration activation. No migration, registration,
 backfill, recovery, index build, benchmark, provider/model request, graph claim,
 ingestion, live mutation, or worker restart occurred.
 
+### Durable Graphiti extraction routing checkpoint - implemented offline, not activated
+
+- The exact-confirmation durable worker now constructs and injects the complete
+  ordered Graphiti text route; unconfirmed and read-only status paths still resolve
+  neither the route nor a provider client.
+- A single-attempt Graphiti candidate client bypasses graphiti-core's implicit
+  four-attempt Tenacity wrapper, keeps each OpenAI-compatible transport at zero SDK
+  retries, and independently validates every supplied Pydantic response model.
+  `finish_reason=length`, malformed JSON/empty output, and schema validation receive
+  distinct stable classifications.
+- One locked operation-wide ceiling spans every actual request from Graphiti's
+  concurrent extraction, deduplication, attribute, summary, and enrichment work.
+  Same-candidate attempts and movement to the next candidate occur only for their
+  explicitly configured classes; authentication and configuration failures cannot
+  fall back.
+- The durable tracker reserves the candidate-specific provider/model/fingerprint
+  before dispatch and completes it only after parsing and schema validation. Raw
+  response metadata can supply actual model/upstream and token usage, but prompts,
+  response content, validation values, and arbitrary exception detail never enter
+  the provider-call ledger.
+- A successful non-primary candidate now reaches the verified attempt result and
+  terminal worker summary as degraded success. An exhausted route enters the
+  existing durable retry/quarantine state machine with all actual calls visible in
+  the sanitized attempt chain.
+
+The configured default of three provider calls is deliberately fail closed. It
+counts internal Graphiti LLM work rather than episodes and may be insufficient for
+a nontrivial episode; it is not an approved operational recommendation. A larger
+ceiling still requires the bounded extraction benchmark, cost/resource review, and
+explicit activation decision.
+
+Eighty-one focused offline tests and the complete network-isolated fast gate pass:
+311 passed, 6 skipped, and 114 intentionally deselected. The ignored `.env` was not
+opened or printed, and its configured OpenRouter credential was not used. No live
+provider/model request, benchmark, graph claim, ingestion, migration, profile
+transition, database/graph mutation, or worker restart occurred. The operator's
+stop instruction remains authoritative.
+
 ---
 
 ## 1. Executive Summary
@@ -350,7 +388,7 @@ This document is the umbrella source of truth for architecture, sequencing, cros
 - [ ] Add provider-aware health information, metrics, error handling, and secret transport.
 - [ ] Preserve the current local-only mode with no OpenRouter credential requirement.
 - [ ] Add a durable, leased, idempotent Graphiti ingestion lifecycle with attempt history, bounded retries, and quarantine.
-- [ ] Distinguish transport retries, same-candidate generation retries, intentional text-model fallback, and durable job retries in configuration, telemetry, and tests.
+- [x] Distinguish transport retries, same-candidate generation retries, intentional text-model fallback, and durable job retries in configuration, telemetry, and tests.
 - [x] Add a read-only PostgreSQL/Neo4j reconciliation command with actionable exit codes and machine-readable output.
 - [ ] Measure graph completeness and graph quality independently.
 - [ ] Add repeatable local and provider-matrix release gates, including browser streaming and preserved-volume checks.
@@ -795,10 +833,10 @@ The first local route should evaluate `qwen2.5:3b` as the fast primary and `qwen
 - [ ] Prefer schema-constrained generation where verified; still validate the parsed result independently.
 - [ ] Split entity and relationship extraction when oversized combined responses are the measured cause of truncation.
 - [x] Coordinate or disable opaque Graphiti-internal retries so the application-level maximum provider-call budget remains authoritative.
-- [ ] Retry the same candidate only for its allowed failure classes; advance to a fallback only for explicitly configured classes.
+- [x] Retry the same candidate only for its allowed failure classes; advance to a fallback only for explicitly configured classes.
 - [x] Stop claims on systemic failures instead of exhausting or quarantining unrelated episode jobs.
-- [ ] Record successful fallback as degraded success, not ordinary primary success.
-- [ ] Send an exhausted route to durable retry or quarantine with the complete sanitized attempt chain.
+- [x] Record successful fallback as degraded success, not ordinary primary success.
+- [x] Send an exhausted route to durable retry or quarantine with the complete sanitized attempt chain.
 - [ ] Require explicit reprocessing when the sync-profile fingerprint changes.
 
 An OpenRouter candidate can later replace or follow an Ollama candidate under the same contract. Provider choice must not change success semantics.
@@ -968,8 +1006,8 @@ Perplexity embeddings are natively quantized and unnormalized, but the first rel
 - [ ] Benchmark local `qwen2.5:3b`, local `qwen2.5:7b`, and any candidate OpenRouter extraction model on the fixed corpus.
 - [ ] Enable verified schema-constrained output and independently validate every response.
 - [ ] Test combined versus staged entity/relationship extraction where truncation is observed.
-- [ ] Implement the explicit primary/fallback route and record fallback success as degraded success.
-- [ ] Coordinate Graphiti-internal and application retry counts under one maximum-provider-call budget.
+- [x] Implement the explicit primary/fallback route and record fallback success as degraded success.
+- [x] Coordinate Graphiti-internal and application retry counts under one maximum-provider-call budget.
 - [ ] Define and version the canonical relationship vocabulary and safe alias normalization.
 - [ ] Validate relationship endpoints before graph maintenance and record proposed/normalized/accepted/rejected counts.
 - [ ] Add graph-quality reports that are separate from synchronization-completeness reports.

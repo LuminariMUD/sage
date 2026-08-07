@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from time import perf_counter
 
 from src.graphiti.provider_tracking import ProviderCallTracker
@@ -33,6 +33,7 @@ class WorkerRunSummary:
     recovered_expired: int = 0
     attempted: int = 0
     synced: int = 0
+    degraded_synced: int = 0
     reused_existing: int = 0
     retrying: int = 0
     quarantined: int = 0
@@ -137,11 +138,20 @@ class GraphSyncWorker:
             self.profile,
         )
         try:
-            async with tracker.installed():
-                result = await self._process_with_heartbeats(lease)
+            operation = getattr(self.llm_client, "operation", None)
+            if callable(operation):
+                async with operation():
+                    async with tracker.installed():
+                        result = await self._process_with_heartbeats(lease)
+                if bool(getattr(self.llm_client, "last_operation_degraded", False)):
+                    result = replace(result, degraded=True)
+            else:
+                async with tracker.installed():
+                    result = await self._process_with_heartbeats(lease)
             status = await self.repository.complete_verified_success(
                 lease,
                 result.verification,
+                degraded=result.degraded,
                 graph_counts=result.graph_counts,
             )
             return status, result
@@ -219,6 +229,8 @@ class GraphSyncWorker:
     ) -> None:
         if status is CompletionStatus.SYNCED:
             summary.synced += 1
+            if result is not None and result.degraded:
+                summary.degraded_synced += 1
             if result is not None and result.reused_existing:
                 summary.reused_existing += 1
         elif status is CompletionStatus.RETRY_WAIT:

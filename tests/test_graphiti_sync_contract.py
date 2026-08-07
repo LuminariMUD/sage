@@ -58,6 +58,8 @@ def test_entrypoint_contains_no_boolean_queue_or_projection_write():
     assert "WHERE graphiti_synced = FALSE" not in source
     assert "SET graphiti_synced" not in source
     assert "UPDATE episodes" not in source
+    assert "create_graphiti_text_route_client" in source
+    assert "llm_client=route_client" in source
     assert sync.RUN_CONFIRMATION == "RUN_DURABLE_GRAPH_SYNC"
 
 

@@ -4,7 +4,9 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
+from pydantic import BaseModel, ValidationError
 
+from src.graphiti.sync_failures import classify_sync_failure
 from src.graphiti.sync_models import (
     FailureClass,
     FailureDisposition,
@@ -16,6 +18,11 @@ from src.graphiti.sync_models import (
     StableIdVerification,
     deterministic_retry_delay,
     sanitize_summary,
+)
+from src.llm.retry import (
+    MalformedModelOutputError,
+    ModelOutputLimitError,
+    ModelSchemaValidationError,
 )
 
 
@@ -84,6 +91,75 @@ def test_failure_record_constructor_cannot_bypass_redaction():
 
     assert secret not in record.summary
     assert "<redacted>" in record.summary
+
+
+def test_schema_failure_summary_never_retains_invalid_model_content():
+    class RequiredOutput(BaseModel):
+        count: int
+
+    sensitive_output = "private lore output that must not enter the ledger"
+    try:
+        RequiredOutput.model_validate({"count": sensitive_output})
+    except ValidationError as error:
+        failure = classify_sync_failure(error)
+    else:
+        raise AssertionError("Invalid model output unexpectedly passed validation")
+
+    assert failure.failure_class is FailureClass.SCHEMA_VALIDATION
+    assert failure.summary == "Model output failed schema validation"
+    assert sensitive_output not in failure.summary
+
+
+@pytest.mark.parametrize(
+    ("error", "failure_class", "summary"),
+    [
+        (
+            MalformedModelOutputError("private malformed model output"),
+            FailureClass.MALFORMED_JSON,
+            "Model output could not be decoded as JSON",
+        ),
+        (
+            ModelSchemaValidationError("private schema-invalid model output"),
+            FailureClass.SCHEMA_VALIDATION,
+            "Model output failed schema validation",
+        ),
+        (
+            ModelOutputLimitError("private truncated model output"),
+            FailureClass.OUTPUT_LIMIT,
+            "Model output reached its configured limit",
+        ),
+    ],
+)
+def test_model_output_failures_use_stable_content_free_taxonomy(error, failure_class, summary):
+    failure = classify_sync_failure(error)
+
+    assert failure.failure_class is failure_class
+    assert failure.summary == summary
+    assert "private" not in failure.summary
+
+
+@pytest.mark.parametrize(
+    ("status_code", "failure_class", "code", "disposition"),
+    [
+        (402, FailureClass.RESOURCE_EXHAUSTION, "provider_resource_exhausted", "pause_systemic"),
+        (408, FailureClass.TRANSPORT, "provider_http_transient", "retry"),
+        (409, FailureClass.TRANSPORT, "provider_http_transient", "retry"),
+        (503, FailureClass.TRANSPORT, "provider_http_transient", "retry"),
+    ],
+)
+def test_provider_http_failures_keep_route_and_durable_taxonomy_aligned(
+    status_code, failure_class, code, disposition
+):
+    class ProviderHTTPError(RuntimeError):
+        pass
+
+    error = ProviderHTTPError("private upstream detail")
+    error.status_code = status_code
+    failure = classify_sync_failure(error)
+
+    assert failure.failure_class is failure_class
+    assert failure.code == code
+    assert failure.disposition.value == disposition
 
 
 def test_provider_call_requires_failure_taxonomy_and_valid_timing():

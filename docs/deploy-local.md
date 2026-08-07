@@ -223,6 +223,27 @@ PostgreSQL episode UUID as Graphiti's native UUID, and marks success only after
 independently proving one Neo4j record has the expected stable ID, source
 description, source fingerprint, sync profile, and embedding profile.
 
+Only after that exact gate passes, the worker constructs the complete ordered
+Graphiti text route. The OpenAI-compatible SDK retry count and graphiti-core's
+four-attempt retry wrapper are both disabled at this boundary. Same-candidate
+generation retries and candidate fallback occur only for their configured failure
+classes. Every actual request is reserved before network I/O and is completed in
+the durable ledger only after JSON parsing and independent schema validation;
+malformed, schema-invalid, and output-limit records contain stable classifications
+rather than model output. A successful fallback is persisted and reported as a
+degraded success.
+
+`GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS` is one operation-wide ceiling across all
+Graphiti-internal extraction, deduplication, attribute, summary, and enrichment
+requests for an episode, including concurrent tasks. The default of `3` is a
+fail-closed safety value, not a measured production recommendation, and may stop a
+nontrivial episode before graph persistence. Keep it aligned with
+`GRAPH_SYNC_MAX_PROVIDER_CALLS`, establish a larger value only through the bounded
+non-persistent benchmark, and use `MAX_EPISODES` for the independent job-claim
+limit. Exhaustion enters the durable retry/quarantine lifecycle; it never creates
+an unrecorded provider request. Merely configuring a provider credential does not
+authorize a benchmark or worker run.
+
 Legacy bulk mode is disabled because it bypasses leases, provider-call budgets,
 and post-write durable verification. Use `MAX_EPISODES` for a bounded authorized
 run:

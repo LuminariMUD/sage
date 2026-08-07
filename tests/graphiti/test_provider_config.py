@@ -8,6 +8,7 @@ import pytest
 
 from src.graphiti.provider_config import (
     ProviderGraphitiEmbedder,
+    SingleAttemptOpenAIGenericClient,
     get_graphiti_config_summary,
     get_graphiti_embedding_client,
     get_graphiti_llm_client,
@@ -52,6 +53,7 @@ def test_graphiti_provider_matrix_constructs_independent_clients(
     summary = get_graphiti_config_summary()
 
     assert llm.client.max_retries == 0
+    assert isinstance(llm, SingleAttemptOpenAIGenericClient)
     assert isinstance(embedding, ProviderGraphitiEmbedder)
     assert summary["text_provider"] == text_provider
     assert summary["embedding_provider"] == embedding_provider

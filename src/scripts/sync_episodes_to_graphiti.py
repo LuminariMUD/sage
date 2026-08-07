@@ -24,11 +24,13 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from src.db import close_postgres_db, get_postgres_db
 from src.db.postgres import PostgresDB
 from src.graphiti import initialize_graphiti
+from src.graphiti.provider_config import create_graphiti_text_route_client
 from src.graphiti.sync_graph import GraphitiEpisodeProcessor
 from src.graphiti.sync_models import GraphSyncPolicy, sanitize_summary
 from src.graphiti.sync_profile import GraphSyncExecutionProfile
 from src.graphiti.sync_state import GraphSyncRepository
 from src.graphiti.sync_worker import GraphSyncWorker
+from src.llm.config import get_graphiti_text_route
 from src.llm.provider_config import resolve_provider_settings
 from src.security import install_sensitive_logging
 
@@ -87,8 +89,16 @@ async def _run_worker(args: argparse.Namespace) -> int:
     policy = policy_from_environment()
     postgres = await get_postgres_db()
     graphiti = None
+    route_client = None
     try:
-        graphiti = await initialize_graphiti(verbose=args.verbose)
+        route_client = create_graphiti_text_route_client(
+            get_graphiti_text_route(),
+            verbose=args.verbose,
+        )
+        graphiti = await initialize_graphiti(
+            llm_client=route_client,
+            verbose=args.verbose,
+        )
         repository = GraphSyncRepository(postgres)
         processor = GraphitiEpisodeProcessor(graphiti, profile)
         worker = GraphSyncWorker(
@@ -124,6 +134,8 @@ async def _run_worker(args: argparse.Namespace) -> int:
     finally:
         if graphiti is not None:
             await graphiti.close()
+        elif route_client is not None:
+            await route_client.close()
         await close_postgres_db()
 
 

@@ -13,6 +13,11 @@ from src.graphiti.sync_models import (
     ProfileMismatchError,
     ProviderCallLimitExceeded,
 )
+from src.llm.retry import (
+    MalformedModelOutputError,
+    ModelOutputLimitError,
+    ModelSchemaValidationError,
+)
 
 
 def _status_code(error: BaseException) -> int | None:
@@ -27,6 +32,7 @@ def _status_code(error: BaseException) -> int | None:
 def classify_sync_failure(error: BaseException, *, shutting_down: bool = False) -> FailureRecord:
     """Map an exception to one sanitized, stable lifecycle disposition."""
     name = type(error).__name__.lower()
+    module = type(error).__module__.lower()
     status = _status_code(error)
 
     if shutting_down:
@@ -71,11 +77,15 @@ def classify_sync_failure(error: BaseException, *, shutting_down: bool = False) 
             summary=error,
             disposition=FailureDisposition.RETRY,
         )
-    if isinstance(error, json.JSONDecodeError) or "jsondecode" in name:
+    if (
+        isinstance(error, (MalformedModelOutputError, json.JSONDecodeError))
+        or "jsondecode" in name
+        or "emptyresponse" in name
+    ):
         return FailureRecord.build(
             failure_class=FailureClass.MALFORMED_JSON,
             code="malformed_json",
-            summary=error,
+            summary="Model output could not be decoded as JSON",
             disposition=FailureDisposition.RETRY,
         )
     if status == 401 or "authentication" in name or "autherror" in name:
@@ -92,6 +102,15 @@ def classify_sync_failure(error: BaseException, *, shutting_down: bool = False) 
             summary=error,
             disposition=FailureDisposition.PAUSE_SYSTEMIC,
         )
+    if status == 402 or any(
+        marker in name for marker in ("insufficientquota", "quotaexceeded", "resourceexhausted")
+    ):
+        return FailureRecord.build(
+            failure_class=FailureClass.RESOURCE_EXHAUSTION,
+            code="provider_resource_exhausted",
+            summary="Provider resource is exhausted",
+            disposition=FailureDisposition.PAUSE_SYSTEMIC,
+        )
     if status == 429 or "ratelimit" in name:
         return FailureRecord.build(
             failure_class=FailureClass.RATE_LIMIT,
@@ -99,14 +118,21 @@ def classify_sync_failure(error: BaseException, *, shutting_down: bool = False) 
             summary=error,
             disposition=FailureDisposition.PAUSE_SYSTEMIC,
         )
-    if "validationerror" in name:
+    if isinstance(error, ModelOutputLimitError):
+        return FailureRecord.build(
+            failure_class=FailureClass.OUTPUT_LIMIT,
+            code="model_output_limit",
+            summary="Model output reached its configured limit",
+            disposition=FailureDisposition.RETRY,
+        )
+    if isinstance(error, ModelSchemaValidationError) or "validationerror" in name:
         return FailureRecord.build(
             failure_class=FailureClass.SCHEMA_VALIDATION,
             code="schema_validation_failed",
-            summary=error,
+            summary="Model output failed schema validation",
             disposition=FailureDisposition.RETRY,
         )
-    if "serviceunavailable" in name or "sessionexpired" in name or "neo4j" in name:
+    if "neo4j" in module or "neo4j" in name or "sessionexpired" in name:
         return FailureRecord.build(
             failure_class=FailureClass.PERSISTENCE,
             code="graph_store_unavailable",
@@ -120,8 +146,17 @@ def classify_sync_failure(error: BaseException, *, shutting_down: bool = False) 
             summary=error,
             disposition=FailureDisposition.PAUSE_SYSTEMIC,
         )
-    if isinstance(error, (TimeoutError, ConnectionError)) or any(
-        marker in name for marker in ("timeout", "connect", "transport", "network")
+    if status in {408, 409} or (status is not None and status >= 500):
+        return FailureRecord.build(
+            failure_class=FailureClass.TRANSPORT,
+            code="provider_http_transient",
+            summary=error,
+            disposition=FailureDisposition.RETRY,
+        )
+    if (
+        isinstance(error, (TimeoutError, ConnectionError))
+        or any(marker in name for marker in ("timeout", "connect", "transport", "network"))
+        or "serviceunavailable" in name
     ):
         return FailureRecord.build(
             failure_class=FailureClass.TRANSPORT,
@@ -135,13 +170,6 @@ def classify_sync_failure(error: BaseException, *, shutting_down: bool = False) 
             code="invalid_configuration",
             summary=error,
             disposition=FailureDisposition.PAUSE_SYSTEMIC,
-        )
-    if status is not None and status >= 500:
-        return FailureRecord.build(
-            failure_class=FailureClass.TRANSPORT,
-            code="provider_server_error",
-            summary=error,
-            disposition=FailureDisposition.RETRY,
         )
     return FailureRecord.build(
         failure_class=FailureClass.INTERNAL,

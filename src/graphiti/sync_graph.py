@@ -31,6 +31,7 @@ class GraphProcessingResult:
     verification: StableIdVerification
     graph_counts: GraphCounts
     reused_existing: bool
+    degraded: bool = False
 
 
 @dataclass(frozen=True)
