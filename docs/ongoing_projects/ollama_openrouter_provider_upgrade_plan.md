@@ -3,16 +3,23 @@
 | Field                 | Value                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | Status                | Active phased implementation                                                                           |
-| Implementation        | Runtime, provider, Graphiti route, and embedding-space slices implemented; activation remains frozen   |
-| Last updated          | 2026-08-07                                                                                             |
+| Implementation        | Durable Ollama data plane activated; OpenRouter cutover and reviewed quality gates remain               |
+| Last updated          | 2026-08-08                                                                                             |
 | Scope                 | Text generation, embeddings, Graphiti, configuration, storage migrations, deployment, and tests        |
 | Compatibility target  | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
 | Supporting workstream | [Local LLM and Graph Pipeline Improvements](./local_llm_graph_pipeline_improvements.md)                |
 
-> **Current live state:** The operator rejected the previous 611-episode corpus as
-> unusable and ordered its deletion. PostgreSQL now has zero episodes and zero
-> graph-sync ledger rows; Neo4j has zero nodes and zero relationships. Every earlier
-> 611/305 count below is historical checkpoint evidence, not accepted graph data.
+> **Current live state:** The replacement canon corpus is complete under one audited
+> Ollama sync/embedding profile: 16 documents, 1,185 embedded episodes, and 1,185
+> verified graph jobs with zero cross-store drift. Migrations are current through
+> `0008`, and a verified completion backup protects the result. Every earlier
+> 611/305 count below is historical evidence for the rejected predecessor corpus.
+> Durable local findings are summarized in the
+> [supporting workstream](./local_llm_graph_pipeline_improvements.md).
+
+The 2026-08-07 checkpoints below are retained as implementation history. Their
+activation-freeze and pending-migration statements are superseded by the current
+state above; unfinished OpenRouter and reviewed-quality work remains open.
 
 ---
 

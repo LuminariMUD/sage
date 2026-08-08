@@ -1,6 +1,6 @@
 # Luminari Sage - Intelligent Lore Management System
 
-**Version**: 0.7.28
+**Version**: 0.7.29
 **Status**: Production Deployed
 **Deployment**: luminarimud.com:8003
 **Repository**: https://github.com/LuminariMUD/sage
@@ -203,9 +203,12 @@ See [docs/guides/QUICKSTART.md](docs/guides/QUICKSTART.md) for detailed instruct
 
 - **16 Canon Source Files**: Markdown lore in `lore_docs/canon/`
 - **99 Draft Source Files**: Markdown source material in `lore_docs/drafts/`
-- **14 Preserved Local Documents**: The current database retains source documents but has zero episodes after the rejected corpus was deleted
-- **Empty Current Graph**: The current local Neo4j store has zero nodes and relationships
-- **No Active Episode Vectors**: The pending target is 1024 dimensions; legacy 384-dimensional chunk search is retired
+- **1,185 Canon Episodes**: All 16 canonical database documents are chunked with
+  no excluded episode rows
+- **1,185 Active Episode Vectors**: Complete 768-dimensional Nomic coverage in a
+  valid HNSW space
+- **1,185 Verified Graph Jobs**: One audited Ollama profile with zero cross-store
+  drift
 
 ### System Capabilities
 
@@ -221,7 +224,8 @@ See [docs/guides/QUICKSTART.md](docs/guides/QUICKSTART.md) for detailed instruct
 - **Lore Search**: 200-500ms average
 - **RAG Query**: 1-3 seconds average
 - **Agent Response**: 3-10 seconds (streaming)
-- **Pipeline Processing**: 30-60 minutes (initial load)
+- **Full Local Graph Sync**: About 9 hours 40 minutes for the verified
+  1,185-episode baseline; corpus density and hardware materially affect runtime
 
 ---
 
@@ -625,6 +629,6 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ---
 
-**Last Updated**: 2026-08-07
-**Version**: 0.7.28
+**Last Updated**: 2026-08-08
+**Version**: 0.7.29
 **Status**: Production Ready

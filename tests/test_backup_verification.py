@@ -57,7 +57,7 @@ def _build_backup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path
     )
     _write_private(
         backup_directory / "neo4j-SHA256SUMS",
-        (f"{hashes['neo4j']}  neo4j.dump\n" f"{hashes['system']}  system.dump\n").encode(),
+        (f"{hashes['neo4j']}  neo4j.dump\n{hashes['system']}  system.dump\n").encode(),
     )
     _write_private(
         backup_directory / "BACKUP_COMPLETE",
@@ -129,3 +129,13 @@ def test_verify_backup_rejects_forged_checksum_manifest(
 
     with pytest.raises(backup_verifier.BackupVerificationError, match="manifest"):
         backup_verifier.verify_backup(reference)
+
+
+def test_offline_neo4j_helpers_use_a_resolvable_hostname() -> None:
+    repository = Path(__file__).resolve().parents[1]
+    script = (repository / "src" / "scripts" / "backup_neo4j.sh").read_text(encoding="utf-8")
+
+    assert "admin_hostname=sage-neo4j-admin" in script
+    assert '--hostname "$admin_hostname"' in script
+    assert '--add-host "$admin_hostname:127.0.0.1"' in script
+    assert script.count('"${admin_container_identity[@]}"') == script.count("docker run --rm")

@@ -6,24 +6,20 @@ Keep the real `.env` mode `0600` and never commit it.
 
 ## Current checkpoint
 
-- Date: 2026-08-07
+- Date: 2026-08-08
 - Work branch: `main`
 - Repository: <https://github.com/LuminariMUD/sage>
-- The legacy all-Ollama runtime remains healthy: PostgreSQL, Neo4j, Ollama,
-  API/MCP, and the static chat UI are running. The newly configured provider
-  profile has not been activated by a restart.
-- PostgreSQL contains 14 preserved lore documents, zero episodes, zero durable
-  graph-sync jobs, and zero runs. Neo4j contains zero nodes and zero
-  relationships after deletion of the operator-rejected corpus.
-- The ignored local target profile selects OpenRouter for application and
-  Graphiti text and embeddings. `make provider-stack-plan` resolves that target
-  to `ollama-not-required`, so the next authorized `make dev` will omit both Ollama
-  services. Ingestion remains frozen.
-- The development image builds successfully. The current deterministic-suite
-  result is recorded in `docs/CHANGELOG.md` and the two active project plans.
-- The fresh-container offline fast gate passes 339 tests with 8 skips and 115
-  intentional deselections. Host-only Compose renders pass for cloud-only and
-  all-local service sets.
+- The canon data plane is complete under one audited Ollama graph/embedding
+  profile: 16 documents, 1,185 episodes, 1,185 Nomic vectors, and 1,185 verified
+  graph jobs. The final cross-store audit is clean.
+- Database migrations are current through `0008_canon_only_corpus`. Verified
+  completion backup `backups/canon-ollama-complete-20260807T222000Z` protects the
+  populated state.
+- An OpenRouter or other model/profile cutover remains a separate controlled
+  migration. Do not overwrite the active vector space or mix graph profiles.
+- The development image and provider-specific Compose profiles pass their
+  deterministic validation gates; current results are recorded in
+  `docs/CHANGELOG.md` and the two active project plans.
 - An authenticated desktop/mobile browser check now passes through the real
   LangChain/Ollama chat path: message creation and the SSE stream both return
   `200`, an answer renders, and there are no console/page errors, leaked API
@@ -46,16 +42,15 @@ make status
 | MCP server            | FastAPI/Uvicorn process on `127.0.0.1:8004` |
 | Developer UI          | Static chat UI on `127.0.0.1:8080`          |
 | Chat, creative, tools | Ollama `qwen2.5:7b`                         |
-| Graphiti extraction   | Ollama `qwen2.5:3b`                         |
+| Graphiti extraction   | Ollama `qwen2.5:7b`                         |
 | Embeddings            | Ollama `nomic-embed-text` (768 dimensions)  |
 | Vector/document data  | PostgreSQL 18 + pgvector                    |
 | Knowledge graph       | Neo4j 2026.06 Community + Graphiti          |
 
-The local profile does not require a cloud LLM. The 3B extraction model was
-selected after a live benchmark on the workstation's 8 GB GPU: it produced
-coherent entities and facts in roughly 16 seconds after model load, while the
-7B model generally took around a minute per episode. Chat and creative work
-remain on 7B for better response quality.
+The local profile does not require a cloud LLM. The smaller 3B extraction model
+was faster in early experiments, but the tool-capable 7B model is the validated
+default used for the complete canon population. Chat and creative work also use
+7B for response quality.
 
 Ollama is configured with a 12,288-token context, two parallel slots, and at
 most two resident models. Graphiti responses are capped at 4,096 output tokens
@@ -100,6 +95,16 @@ profile. No cloud-provider key is required for that path. When OpenRouter is
 selected, prefer exactly one of `OPENROUTER_API_KEY` or
 `OPENROUTER_API_KEY_FILE`; `OPENROUTER_KEY` is a deprecated compatibility alias
 and cannot be combined with either canonical input.
+
+Model tags are not immutable artifact identities. Before activation, set
+`GRAPHITI_TEXT_MODEL_REVISION` and the selected provider's embedding revision
+(for example, `OLLAMA_EMBEDDING_REVISION`) to an immutable revision or manifest
+digest when one is available. Also set `GRAPHITI_EMBEDDING_MODEL_REVISION` when
+Graphiti intentionally overrides that provider revision. If a revision is empty,
+the profile fingerprint binds the configured tag but not the artifact behind that
+tag. Adding or changing a revision later creates a new profile and requires the
+normal graph rebuild or shadow-vector cutover rather than an in-place metadata
+edit.
 
 The public `.env.example` is contract-tested against every field accepted by
 the provider resolver. Keep empty selector values and explanatory comments on
@@ -219,14 +224,18 @@ approximate ETA. Use `RUN_ID=<uuid>` for a historical run and
 `PROGRESS_WINDOW_SECONDS=<60..86400>` to change the default five-minute rolling
 window. A missing ETA always includes a stable reason such as `warming_up`,
 `stopped`, `paused_systemic`, `blocked_quarantine`, or `insufficient_progress`.
+Episode density varies enough that a tiny bounded sample can materially
+underestimate a full run. Use full-run and trailing-window rates only after a
+meaningful fraction of the corpus has completed when planning an operator window.
 
 Graph synchronization is inert unless both `--run` and the exact confirmation
-token are supplied. The Make target enforces the same gate. Do not run it while
-an operator freeze is active. The worker claims authoritative durable jobs one
-at a time, records an immutable attempt and every provider request, writes the
-PostgreSQL episode UUID as Graphiti's native UUID, and marks success only after
-independently proving one Neo4j record has the expected stable ID, source
-description, source fingerprint, sync profile, and embedding profile.
+token are supplied. The Make target enforces the same gate. Do not run it without
+current operator authorization or while an operator freeze is active. The worker
+claims authoritative durable jobs one at a time, records an immutable attempt and
+every provider request, writes the PostgreSQL episode UUID as Graphiti's native
+UUID, and marks success only after independently proving one Neo4j record has the
+expected stable ID, source description, source fingerprint, sync profile, and
+embedding profile.
 
 Only after that exact gate passes, the worker constructs the complete ordered
 Graphiti text route. The OpenAI-compatible SDK retry count and graphiti-core's
@@ -238,16 +247,21 @@ malformed, schema-invalid, and output-limit records contain stable classificatio
 rather than model output. A successful fallback is persisted and reported as a
 degraded success.
 
-`GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS` is one operation-wide ceiling across all
-Graphiti-internal extraction, deduplication, attribute, summary, and enrichment
-requests for an episode, including concurrent tasks. The default of `3` is a
-fail-closed safety value, not a measured production recommendation, and may stop a
-nontrivial episode before graph persistence. Keep it aligned with
-`GRAPH_SYNC_MAX_PROVIDER_CALLS`, establish a larger value only through the bounded
-non-persistent benchmark, and use `MAX_EPISODES` for the independent job-claim
-limit. Exhaustion enters the durable retry/quarantine lifecycle; it never creates
-an unrecorded provider request. Merely configuring a provider credential does not
-authorize a benchmark or worker run.
+The provider-specific Graphiti call limit is one operation-wide ceiling across
+all extraction, deduplication, attribute, summary, and enrichment requests for
+an episode, including concurrent tasks. Defaults are `100` for local Ollama,
+`16` for OpenRouter, and `32` for OpenAI. The Ollama value is based on the
+completed canon run, whose successful attempts peaked at 68 calls. Paid-provider
+limits remain independent spend guards.
+
+`GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS` and
+`GRAPH_SYNC_MAX_PROVIDER_CALLS` remain aligned compatibility overrides for
+non-OpenRouter routes. Leave both empty to use the provider-specific defaults;
+if either is configured, set both to the same reviewed value. Use
+`MAX_EPISODES` for the independent job-claim limit. Exhaustion enters the durable
+retry/quarantine lifecycle and never creates an unrecorded provider request.
+Merely configuring a provider credential does not authorize a benchmark or
+worker run.
 
 Legacy bulk mode is disabled because it bypasses leases, provider-call budgets,
 and post-write durable verification. Use `MAX_EPISODES` for a bounded authorized
@@ -259,12 +273,24 @@ make sync-to-graphiti \
   MAX_EPISODES=5
 ```
 
+Graph-sync Make targets launch a one-off container as
+`SAGE_CONTAINER_ROLE=graph-worker`. That role intentionally skips the API HTTP
+probe because it does not serve port 8003; worker truth comes from the durable
+run/job ledger and logs. Normal API containers retain the bounded loopback health
+probe, and unknown roles fail closed.
+
 ## Controlled graph rebuild
 
 Migration `0006_graph_rebuild_operations` must be applied through the normal
 verified-backup migration gate before these commands are available. The read-only
 plan reports the configured target profiles, current cross-store audit, graph
 counts, leases, active runs, and any blocker:
+
+Before the first completed rebuild, `graph_sync_profile_state` is intentionally
+absent and new jobs inherit `legacy:unversioned`. A worker configured for another
+profile refuses while those non-synchronized jobs exist, preventing a mixed graph.
+Use this backup-gated rebuild workflow to establish the first active profile; do
+not rewrite job profiles or bypass the snapshot guard.
 
 ```bash
 make graph-rebuild-plan
@@ -368,11 +394,9 @@ git status --short --branch
 
 ## Remaining work at this checkpoint
 
-1. Keep ingestion and provider activation frozen until the operator separately
-   authorizes the pending migrations, source reprocessing, vector evaluation, and
-   graph rebuild.
-2. Create a fresh verified backup before applying migrations `0004` through
-   `0006`; do not reuse the backup of the deleted 611-episode corpus.
-3. After authorization, rebuild the episode corpus, evaluate the shadow vector
-   space, run the controlled graph rebuild, and require clean pre/post audits and a
-   preserved-volume restart before cutover.
+1. Build a versioned reviewed-lore set with owner-approved relationship precision,
+   recall, and important-edge thresholds. Synchronization completeness and
+   aggregate rejection counts are not substitutes for that quality gate.
+2. Treat any OpenRouter or other provider/model migration as a new profile. Use
+   the shadow-vector and controlled graph-rebuild workflows with fresh backups,
+   clean pre/post audits, and preserved-volume restart validation.

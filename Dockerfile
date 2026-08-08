@@ -118,9 +118,10 @@ ENV HF_HUB_DISABLE_TELEMETRY=1
 # Switch to non-root user
 USER sage
 
-# Health check (will use API_PORT environment variable at runtime)
+# Role-aware health check: API containers use HTTP; one-off graph workers do not
+# start the API and explicitly disable that inapplicable probe through their role.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c 'import os, urllib.request; urllib.request.urlopen("http://127.0.0.1:%s/api/v1/health" % os.getenv("API_PORT", "8003"), timeout=5).read()' || exit 1
+    CMD python src/scripts/container_healthcheck.py
 
 # Expose ports for both API (8003) and MCP (8004)
 EXPOSE 8003 8004

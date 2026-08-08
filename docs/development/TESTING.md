@@ -1,8 +1,8 @@
 # Testing Guide
 
-**Version**: 0.7.28
+**Version**: 0.7.29
 **Status**: Production Ready
-**Last Updated**: 2026-08-07
+**Last Updated**: 2026-08-08
 
 Comprehensive guide for testing Luminari Sage, covering unit tests, integration tests, and testing strategies.
 
@@ -306,10 +306,12 @@ provider request is reserved before dispatch but not marked successful until JSO
 and Pydantic validation complete, with candidate-specific identity, usage, and
 content-free failure taxonomy.
 
-The route ceiling counts actual internal LLM requests, not episodes. Its default of
-three is intentionally fail closed and can be insufficient for ordinary Graphiti
-processing. Do not turn an offline test pass into authorization to raise that budget
-or run ingestion; use the separately confirmed non-persistent benchmark first.
+The route ceiling counts actual internal LLM requests, not episodes. Defaults are
+provider-specific: 100 for local Ollama, 16 for OpenRouter, and 32 for OpenAI. The
+local default is backed by a completed canon run whose successful attempts reached
+68 calls; paid-provider defaults remain separate spend guards. Offline test results
+do not authorize an override or ingestion run; use the separately confirmed
+non-persistent benchmark before changing a provider's reviewed limit.
 
 ## Relationship Quality Evidence
 

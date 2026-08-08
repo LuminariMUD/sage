@@ -1,6 +1,6 @@
 # Provider Upgrade Backup and Restore Runbook
 
-**Last updated**: 2026-08-07
+**Last updated**: 2026-08-08
 **Scope**: PostgreSQL and Neo4j data required by the provider and graph-sync upgrade
 
 ## Safety contract
@@ -67,18 +67,21 @@ Then wait for API health, confirm the graph worker is still absent, and run `mak
 
 ## Neo4j restore
 
-Neo4j Community Edition must remain stopped while both databases are loaded. The helper container copies private host artifacts into an exact temporary directory on the Neo4j data volume so `neo4j-admin` can read them as the `neo4j` user.
+Neo4j Community Edition must remain stopped while both databases are loaded. The helper container copies private host artifacts into an exact temporary directory on the Neo4j data volume so `neo4j-admin` can read them as the `neo4j` user. Every network-isolated helper uses a stable hostname with a matching loopback hosts entry so Java logging can resolve the local container identity.
 
 ```bash
 backup_reference=backups/provider-upgrade-YYYYMMDDTHHMMSSZ
 neo4j_container=luminari-neo4j
 restore_dir=/data/dumps/sage-provider-restore
+admin_hostname=sage-neo4j-admin
 
 make verify-provider-upgrade-backup BACKUP_REFERENCE="$backup_reference"
 docker compose stop api neo4j
 neo4j_image=$(docker inspect --format '{{.Config.Image}}' "$neo4j_container")
 
 docker run --rm \
+  --hostname "$admin_hostname" \
+  --add-host "$admin_hostname:127.0.0.1" \
   --network none \
   --volumes-from "$neo4j_container" \
   --volume "$(realpath "$backup_reference"):/backup:ro" \
@@ -94,15 +97,21 @@ docker run --rm \
   ' bash "$restore_dir"
 
 docker run --rm --network none --user neo4j \
+  --hostname "$admin_hostname" \
+  --add-host "$admin_hostname:127.0.0.1" \
   --volumes-from "$neo4j_container" \
   --entrypoint /var/lib/neo4j/bin/neo4j-admin "$neo4j_image" \
   database load --from-path="$restore_dir" --overwrite-destination=true neo4j
 docker run --rm --network none --user neo4j \
+  --hostname "$admin_hostname" \
+  --add-host "$admin_hostname:127.0.0.1" \
   --volumes-from "$neo4j_container" \
   --entrypoint /var/lib/neo4j/bin/neo4j-admin "$neo4j_image" \
   database load --from-path="$restore_dir" --overwrite-destination=true system
 
 docker run --rm \
+  --hostname "$admin_hostname" \
+  --add-host "$admin_hostname:127.0.0.1" \
   --network none \
   --volumes-from "$neo4j_container" \
   --entrypoint bash \

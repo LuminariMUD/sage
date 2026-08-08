@@ -8,6 +8,11 @@ script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 project_dir=$(cd -- "$script_dir/../.." && pwd)
 container_name=${1:-luminari-neo4j}
 requested_destination=${2:-"backups/neo4j-$(date -u +%Y%m%dT%H%M%SZ)"}
+admin_hostname=sage-neo4j-admin
+admin_container_identity=(
+    --hostname "$admin_hostname"
+    --add-host "$admin_hostname:127.0.0.1"
+)
 
 if [[ ${CONFIRM_NEO4J_OFFLINE_BACKUP:-} != 1 ]]; then
     echo "Set CONFIRM_NEO4J_OFFLINE_BACKUP=1 to allow the required brief outage." >&2
@@ -70,6 +75,7 @@ remove_dump_dir() {
     fi
 
     docker run --rm \
+        "${admin_container_identity[@]}" \
         --network none \
         --user neo4j \
         --volumes-from "$container_name" \
@@ -122,6 +128,7 @@ docker stop --time 60 "$container_name" >/dev/null
 
 dump_dir_created=1
 docker run --rm \
+    "${admin_container_identity[@]}" \
     --network none \
     --user neo4j \
     --volumes-from "$container_name" \
@@ -142,6 +149,7 @@ docker run --rm \
     ' bash "$container_dump_dir"
 
 docker run --rm \
+    "${admin_container_identity[@]}" \
     --network none \
     --user neo4j \
     --volumes-from "$container_name" \
@@ -150,6 +158,7 @@ docker run --rm \
     database load --info --from-path="$container_dump_dir" neo4j \
     > "$backup_dir/neo4j-restore-info.txt"
 docker run --rm \
+    "${admin_container_identity[@]}" \
     --network none \
     --user neo4j \
     --volumes-from "$container_name" \
@@ -159,6 +168,7 @@ docker run --rm \
     > "$backup_dir/system-restore-info.txt"
 
 docker run --rm \
+    "${admin_container_identity[@]}" \
     --network none \
     --user neo4j \
     --volumes-from "$container_name" \
@@ -173,6 +183,7 @@ docker run --rm \
     neo4j \
     > "$backup_dir/neo4j-consistency-check.txt"
 docker run --rm \
+    "${admin_container_identity[@]}" \
     --network none \
     --user neo4j \
     --volumes-from "$container_name" \

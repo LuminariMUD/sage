@@ -14,6 +14,18 @@ from src.scripts.sync_episodes_to_graphiti import (
 )
 
 
+def _make_recipe(makefile: str, target: str) -> str:
+    marker = f"{target}:"
+    start = makefile.index(marker)
+    lines = makefile[start:].splitlines()[1:]
+    recipe: list[str] = []
+    for line in lines:
+        if line and not line.startswith(("\t", " ")):
+            break
+        recipe.append(line)
+    return "\n".join(recipe)
+
+
 def test_document_loader_accepts_only_canon_source(tmp_path):
     (tmp_path / "canon").mkdir()
 
@@ -119,6 +131,18 @@ def test_makefile_retires_draft_and_all_pipeline_targets():
     assert makefile.count("This pipeline is canon-only") == 2
     assert "pipeline-canon: db-migrate-check load-canon" in makefile
     assert "resume: db-migrate-check" in makefile
+
+
+def test_makefile_maps_verbose_to_episode_debug_for_every_episode_recipe():
+    repository = Path(__file__).resolve().parents[1]
+    makefile = (repository / "Makefile").read_text(encoding="utf-8")
+
+    assert "EPISODE_DEBUG_FLAG = --debug" in makefile
+    for target in ("create-episodes", "create-episodes-large", "resume"):
+        recipe = _make_recipe(makefile, target)
+        assert "create_episodes_from_documents.py" in recipe
+        assert "$(EPISODE_DEBUG_FLAG)" in recipe
+        assert "create_episodes_from_documents.py $(VERBOSE_FLAG)" not in recipe
 
 
 def test_compose_mounts_expose_only_the_canon_directory():

@@ -215,7 +215,34 @@ def test_openrouter_graphiti_capacity_is_independent_from_local_defaults():
     assert local.text_route("chat").primary.context_limit == 12_288
     assert local.graphiti_text_route.primary.max_output_tokens == 4096
     assert local.graphiti_text_route.primary.maximum_model_attempts == 2
-    assert local.graphiti_text_route.maximum_provider_calls == 32
+    assert local.graphiti_text_route.maximum_provider_calls == 100
+    assert local.graph_sync_policy.max_provider_calls == 100
+
+
+def test_paid_openai_graphiti_default_is_independent_from_ollama():
+    environment = _ollama_environment()
+    environment.update(
+        {
+            "TEXT_PROVIDER": "openai",
+            "GRAPHITI_TEXT_PROVIDER": "openai",
+            "OPENAI_API_KEY": "unit-test-openai-secret",
+        }
+    )
+
+    settings = resolve_provider_settings(environment)
+
+    assert settings.graphiti_text_route.maximum_provider_calls == 32
+    assert settings.graph_sync_policy.max_provider_calls == 32
+
+
+def test_ollama_graphiti_capacity_has_a_provider_specific_override():
+    environment = _ollama_environment()
+    environment["OLLAMA_GRAPHITI_MAX_PROVIDER_CALLS"] = "72"
+
+    settings = resolve_provider_settings(environment)
+
+    assert settings.graphiti_text_route.maximum_provider_calls == 72
+    assert settings.graph_sync_policy.max_provider_calls == 72
 
 
 def test_ollama_extraction_defaults_to_tool_capable_chat_model():

@@ -1,8 +1,8 @@
 # Pipeline System
 
-**Version**: 0.7.28
+**Version**: 0.7.29
 **Status**: Production Ready
-**Last Updated**: 2026-08-07
+**Last Updated**: 2026-08-08
 
 A fail-closed ingestion pipeline that processes Markdown files exclusively from
 `lore_docs/canon` into the hybrid Graph RAG system. Drafts, meta documentation,

@@ -9,10 +9,12 @@
 # Capability-aware host launcher. It reuses the model-profile resolver and
 # applies the no-Ollama override only when every selected capability is cloud.
 PROVIDER_COMPOSE = python3 src/scripts/compose_provider_stack.py
+GRAPH_WORKER_ROLE_FLAG = -e SAGE_CONTAINER_ROLE=graph-worker
 
 # Support for verbose mode
 ifdef VERBOSE
 	VERBOSE_FLAG = --verbose
+	EPISODE_DEBUG_FLAG = --debug
 	GRAPHITI_DEBUG_FLAG = --verbose
 endif
 
@@ -143,14 +145,14 @@ create-episodes:
 	@echo "🧠 Creating episodes with semantic chunking (200-500 tokens, 25% overlap)..."
 	@docker compose exec -T api python src/scripts/create_episodes_from_documents.py \
 		--base-tokens 200 --max-tokens 500 --overlap-percentage 0.25 \
-		--similarity-threshold 0.7 --complexity-factor 1.5 $(VERBOSE_FLAG)
+		--similarity-threshold 0.7 --complexity-factor 1.5 $(EPISODE_DEBUG_FLAG)
 
 .PHONY: create-episodes-large
 create-episodes-large:
 	@echo "🧠 Creating large episodes with semantic chunking (300-800 tokens)..."
 	@docker compose exec -T api python src/scripts/create_episodes_from_documents.py \
 		--base-tokens 400 --max-tokens 800 --overlap-percentage 0.3 \
-		--similarity-threshold 0.7 --complexity-factor 1.5 $(VERBOSE_FLAG)
+		--similarity-threshold 0.7 --complexity-factor 1.5 $(EPISODE_DEBUG_FLAG)
 
 .PHONY: generate-embeddings
 generate-embeddings:
@@ -162,7 +164,8 @@ sync-to-graphiti:
 	@test "$(CONFIRM_GRAPH_SYNC)" = "RUN_DURABLE_GRAPH_SYNC" || \
 		(echo "CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC is required" >&2; exit 2)
 	@echo "[graph-sync] Starting explicitly confirmed durable synchronization..."
-	@docker compose run --rm --no-deps api python src/scripts/sync_episodes_to_graphiti.py \
+	@docker compose run --rm --no-deps $(GRAPH_WORKER_ROLE_FLAG) api \
+		python src/scripts/sync_episodes_to_graphiti.py \
 		--run --confirm "$(CONFIRM_GRAPH_SYNC)" $(GRAPH_SYNC_MAX_FLAG) $(GRAPHITI_DEBUG_FLAG)
 
 .PHONY: sync-to-graphiti-ollama
@@ -170,7 +173,8 @@ sync-to-graphiti-ollama:
 	@test "$(CONFIRM_GRAPH_SYNC)" = "RUN_DURABLE_GRAPH_SYNC" || \
 		(echo "CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC is required" >&2; exit 2)
 	@echo "[graph-sync] Starting explicitly confirmed durable sync with Ollama..."
-	@docker compose run --rm --no-deps -e GRAPHITI_PROVIDER=ollama api \
+	@docker compose run --rm --no-deps $(GRAPH_WORKER_ROLE_FLAG) \
+		-e GRAPHITI_PROVIDER=ollama api \
 		python src/scripts/sync_episodes_to_graphiti.py --run \
 		--confirm "$(CONFIRM_GRAPH_SYNC)" $(GRAPH_SYNC_MAX_FLAG) $(GRAPHITI_DEBUG_FLAG)
 
@@ -179,7 +183,8 @@ sync-to-graphiti-openai:
 	@test "$(CONFIRM_GRAPH_SYNC)" = "RUN_DURABLE_GRAPH_SYNC" || \
 		(echo "CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC is required" >&2; exit 2)
 	@echo "[graph-sync] Starting explicitly confirmed durable sync with OpenAI..."
-	@docker compose run --rm --no-deps -e GRAPHITI_PROVIDER=openai api \
+	@docker compose run --rm --no-deps $(GRAPH_WORKER_ROLE_FLAG) \
+		-e GRAPHITI_PROVIDER=openai api \
 		python src/scripts/sync_episodes_to_graphiti.py --run \
 		--confirm "$(CONFIRM_GRAPH_SYNC)" $(GRAPH_SYNC_MAX_FLAG) $(GRAPHITI_DEBUG_FLAG)
 
@@ -211,7 +216,7 @@ pipeline-draft pipeline-all:
 .PHONY: resume
 resume: db-migrate-check
 	@echo "🔄 Resuming interrupted pipeline..."
-	@docker compose exec -T api python src/scripts/create_episodes_from_documents.py $(VERBOSE_FLAG)
+	@docker compose exec -T api python src/scripts/create_episodes_from_documents.py $(EPISODE_DEBUG_FLAG)
 	@docker compose exec -T api python src/scripts/generate_embeddings.py $(VERBOSE_FLAG)
 	@$(MAKE) sync-to-graphiti CONFIRM_GRAPH_SYNC="$(CONFIRM_GRAPH_SYNC)" \
 		MAX_EPISODES="$(MAX_EPISODES)" $(if $(VERBOSE),VERBOSE=1,)

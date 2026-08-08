@@ -36,6 +36,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Canon Ollama Population and Operational Closure (0.7.29)**
+  - Completed the 16-document canon population with 1,185 embedded episodes and
+    1,185 verified graph jobs under one audited Ollama profile; retained a verified
+    completion backup and a clean cross-store/readiness result.
+  - Replaced the shared Graphiti call fallback with provider-specific defaults:
+    100 for Ollama based on a measured successful maximum of 68, 16 for
+    OpenRouter, and 32 for OpenAI. Compatibility overrides remain aligned and
+    empty by default.
+  - Corrected Make's episode verbose mapping, made one-off graph-worker health
+    checks role-aware, and made offline Neo4j admin containers locally resolvable.
+  - Documented first-profile bootstrap through the controlled rebuild and the
+    need to record immutable model revisions/digests before future activation.
+
 - **Validated Ollama Extraction Defaults (0.7.28)**
   - Switched local Graphiti extraction to the tool-capable `qwen2.5:7b` chat model by default and raised the local operation-wide provider-call ceiling from 3 to 32 so nontrivial episodes can complete Graphiti's internal request sequence.
   - Preserved explicit LangChain streaming overrides without duplicate constructor arguments and corrected the episode CLI overlap help text so argparse can render it safely.

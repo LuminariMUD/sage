@@ -150,6 +150,7 @@ PROVIDER_ENVIRONMENT_FIELDS = frozenset(
         "OLLAMA_EMBEDDING_BATCH_SIZE",
         "OLLAMA_EMBEDDING_REVISION",
         "OLLAMA_EMBEDDING_INPUT_TYPE",
+        "OLLAMA_GRAPHITI_MAX_PROVIDER_CALLS",
         "OPENROUTER_BASE_URL",
         "OPENROUTER_API_KEY",
         "OPENROUTER_API_KEY_FILE",
@@ -174,6 +175,7 @@ PROVIDER_ENVIRONMENT_FIELDS = frozenset(
         "OPENAI_EMBEDDING_DIMENSIONS",
         "OPENAI_EMBEDDING_BATCH_SIZE",
         "OPENAI_EMBEDDING_REVISION",
+        "OPENAI_GRAPHITI_MAX_PROVIDER_CALLS",
         "SENTENCE_TRANSFORMERS_MODEL",
         "SENTENCE_TRANSFORMERS_DIMENSIONS",
         "SENTENCE_TRANSFORMERS_BATCH_SIZE",
@@ -1135,33 +1137,51 @@ class ProviderSettingsResolver:
             if fallback.fingerprint == primary.fingerprint:
                 raise ValueError("Graphiti extraction fallback must differ from the primary")
             candidates.append(fallback)
-        generic_route_limit = self._int(
-            "GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS",
-            self._int("GRAPH_SYNC_MAX_PROVIDER_CALLS", 32, 1, 100),
-            1,
-            100,
-        )
-        route_limit = (
-            self._int(
+        if provider == "openrouter":
+            route_limit = self._int(
                 "OPENROUTER_GRAPHITI_MAX_PROVIDER_CALLS",
                 16,
                 1,
                 100,
             )
-            if provider == "openrouter"
-            else generic_route_limit
-        )
-        configured_durable_limit = self._value("GRAPH_SYNC_MAX_PROVIDER_CALLS")
-        configured_route_limit = self._value("GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS")
-        if (
-            provider != "openrouter"
-            and configured_durable_limit
-            and configured_route_limit
-            and int(configured_durable_limit) != int(configured_route_limit)
-        ):
-            raise ValueError(
-                "GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS and GRAPH_SYNC_MAX_PROVIDER_CALLS must match"
+        else:
+            configured_route_limit = self._value("GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS")
+            configured_durable_limit = self._value("GRAPH_SYNC_MAX_PROVIDER_CALLS")
+            route_override = (
+                self._int("GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS", 32, 1, 100)
+                if configured_route_limit
+                else None
             )
+            durable_override = (
+                self._int("GRAPH_SYNC_MAX_PROVIDER_CALLS", 32, 1, 100)
+                if configured_durable_limit
+                else None
+            )
+            if (
+                route_override is not None
+                and durable_override is not None
+                and route_override != durable_override
+            ):
+                raise ValueError(
+                    "GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS and "
+                    "GRAPH_SYNC_MAX_PROVIDER_CALLS must match"
+                )
+            if route_override is not None or durable_override is not None:
+                route_limit = cast(int, route_override or durable_override)
+            elif provider == "ollama":
+                route_limit = self._int(
+                    "OLLAMA_GRAPHITI_MAX_PROVIDER_CALLS",
+                    100,
+                    1,
+                    100,
+                )
+            else:
+                route_limit = self._int(
+                    "OPENAI_GRAPHITI_MAX_PROVIDER_CALLS",
+                    32,
+                    1,
+                    100,
+                )
         fallback_on = cast(
             frozenset[FailureClassName],
             _GRAPH_FALLBACK_FAILURES if len(candidates) > 1 else frozenset(),

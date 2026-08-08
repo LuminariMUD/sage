@@ -2,16 +2,17 @@
 
 | Field            | Value                                                                                                     |
 | ---------------- | --------------------------------------------------------------------------------------------------------- |
-| Status           | Active implementation                                                                                     |
-| Last updated     | 2026-08-07                                                                                                |
+| Status           | Canon population complete; reviewed relationship-quality evaluation remains                              |
+| Last updated     | 2026-08-08                                                                                                |
 | Observed         | 2026-08-06 during the full local-development bootstrap                                                    |
 | Scope            | Ollama, Graphiti, PostgreSQL-to-Neo4j synchronization, local observability, and browser chat verification |
 | Umbrella program | [Ollama and OpenRouter Provider Upgrade Plan](./ollama_openrouter_provider_upgrade_plan.md)               |
 
-> **Current live state:** The operator rejected the previous 611-episode corpus as
-> unusable and ordered its deletion. PostgreSQL now has zero episodes and zero
-> graph-sync ledger rows; Neo4j has zero nodes and zero relationships. All earlier
-> 611/305 counts in this document are historical evidence only, not accepted data.
+> **Current live state:** All 16 canon sources produced 1,185 episodes. Every episode
+> has a 768-dimensional Nomic embedding and a verified Graphiti sync job under one
+> Ollama profile; the final cross-store audit is clean. Migration `0008` is applied,
+> and `backups/canon-ollama-complete-20260807T222000Z` is the verified completion
+> backup. Earlier 611/305 counts below describe the rejected predecessor corpus.
 
 ## Relationship to the umbrella program
 
@@ -27,6 +28,45 @@ The provider upgrade plan is authoritative for shared architecture, terminology,
 This workstream must not introduce a local-only shortcut that weakens the provider-neutral contract. In particular, text extraction may use an explicit bounded model fallback, while embeddings must never switch model, revision, implementation, or dimension inside an active vector space.
 
 ## Implementation progress
+
+### 2026-08-08 - Canon Ollama population completed
+
+- The backup-gated rebuild populated and audited the complete canon corpus without
+  fallback success, quarantine, lease expiry, persistence failure, verification
+  failure, or profile mixing. Operational readiness finished with no warning or
+  critical alert.
+- A database with no completed graph rebuild has no active graph profile. New jobs
+  therefore inherit `legacy:unversioned`, and the worker correctly refuses to mix
+  them with a configured profile. Initial activation must use the controlled
+  whole-graph rebuild; ad hoc job rewrites are not a bootstrap path.
+- Successful local attempts used as many as 68 internal Graphiti requests. The
+  Ollama operation-wide default is therefore 100, while OpenRouter and OpenAI keep
+  independent paid-provider guards of 16 and 32. The generic extraction/sync
+  variables remain aligned compatibility overrides, empty by default.
+- The activated rows have `model_revision = null`, so their immutable fingerprints
+  bind the configured model tags but not the underlying Ollama artifacts. Recovery
+  evidence records `qwen2.5:7b` manifest
+  `sha256:845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e`
+  and `nomic-embed-text:latest` manifest
+  `sha256:0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f`.
+  Future activations should configure immutable revision/digest fields before
+  building data; adding one later creates a different profile.
+- The full run averaged roughly two verified episodes per minute. A three-episode
+  sample underpredicted completion by about 37%, confirming that operators should
+  plan from full-run or trailing-window rates only after a material share of the
+  corpus has completed.
+- Complete relationship evidence confirmed that endpoint and vocabulary mismatch
+  dominates safe rejection. Aggregate acceptance is not precision or recall, so
+  no prompt, schema, vocabulary, or validation gate should change without a
+  versioned reviewed-lore evaluation.
+- Closure also mapped Make's `VERBOSE=1` to the episode CLI's `--debug` flag, made
+  one-off graph-worker health role-aware, and gave offline Neo4j admin containers a
+  resolvable stable hostname. These changes do not weaken API health checks, graph
+  verification, or backup consistency checks.
+
+The dated 2026-08-07 checkpoints below are retained as implementation history.
+Their pending-migration and worker-freeze statements no longer describe the
+current populated state.
 
 ### 2026-08-07 - Aggregate operational readiness checkpoint, read-only
 
