@@ -5,6 +5,88 @@ This document tracks all completed work on the LuminariMUD world-building projec
 
 ---
 
+## [2026-08-10] - Historical Draft Backlog Canonized
+
+### Canon Promotions
+
+- ✅ **`canon/world/the_roads_of_magic.md`**
+  - Reconciles Arcane calling from the Primal Reach with the Woven and Deep
+    divine roads, Primal remembrance, Psionic refusal, the Loom, Arcanite, and
+    Shadowmoon effects
+  - Preserves the primary magic source while correcting the obsolete claim that
+    every divine working comes from a Titan
+- ✅ **`canon/world/relics_and_the_art_of_making.md`**
+  - Establishes four degrees of wonder, the Forge/Growth/Binding schools,
+    Arcanite craft, storied artifacts, Hunger, Strife, and legacy pieces
+  - Removes numeric item tiers, equipment-slot percentages, administration, and
+    the contradicted treatment of Five Locks as loot
+- ✅ **`canon/world/the_feyveil_and_the_otherworld.md`**
+  - Consolidates the Feyveil, concept-tangible Otherworld, Pools of Twilight,
+    elven return traditions, thin places, and Quechian root-cities
+- ✅ **`canon/cultures/living_customs_of_lumia.md`**
+  - Rewrites five overlapping cultural currents, shared observances, trade
+    goods, and the long arguments over permanence, memory, and souls
+- ✅ **`canon/cultures/the_courts_of_hunger.md`**
+  - Expands established vampire metaphysics into four Courts, the Necessary Cup,
+    Five Farewells, daylight mantles, and death-after-death
+- ✅ **`canon/cultures/tales_told_against_the_dark.md`**
+  - Promotes tale traditions as canonically told folklore while preserving the
+    difference between a real tradition and a literally true claim
+- ✅ **`canon/factions/the_three_embers.md`**
+  - Establishes the Mosswood Freehands, Ashenport Civic Guard, League of the
+    Lantern Atlas, their leaders, and the Ashfall Compact
+- ✅ **`canon/locations/the_ashenport_road.md`**
+  - Distills the Lenadrian inheritance, regional cast, Darkling investigation,
+    legendary sites, moral choices, relics, and agent network into a five-part
+    adventure framework
+
+### Source Adjudication
+
+- ✅ All fourteen historical files under `lore_docs/drafts` received an explicit
+  disposition in `meta/LORE_AUDIT.md`
+- ✅ Lore-bearing material was rewritten, reconciled, or confirmed as already
+  covered by canon
+- ✅ Runtime levels, vnums, coordinates, command strings, reward formulas,
+  administrative processes, staff scheduling, PvP policy, generated repetition,
+  and borrowed setting geography were retired
+- ✅ The draft directory was removed after migration; no unresolved draft or
+  staging copy remains
+
+### Foundation Reconciliation
+
+- ✅ Five Locks consistently resolve to Memory, Identity, Time, Space, and Will;
+  material key claims remain unverified historical interpretations
+- ✅ The Shadowmoon's effects remain canonical while its body, conventional
+  orbit, and origin remain unresolved
+- ✅ The Egg of Unmaking is now an in-world threat doctrine rather than objective
+  fact
+- ✅ Half-orc sacred and Chulani historical origin accounts are explicitly
+  reconciled
+- ✅ The world name is consistently **Lumia** in the touched foundation records
+- ✅ Avernus is rejected as an established location of the Prison
+
+### Metadata and Verification
+
+- ✅ `meta/README_lore.md` replaced with the current authority model and canon
+  index
+- ✅ `meta/TODO_lore.md` replaced with an accurate future worklist that separates
+  deliberate mysteries from missing content
+- ✅ `meta/LORE_AUDIT.md` replaced with a source-by-source promotion and deletion
+  ledger
+- ✅ Completion audit verified zero draft files, all eight non-empty promotions,
+  canonical terminology, no introduced material Lock or Avernus claim, and a
+  lore-only diff
+- ✅ Lore regressions: 16 passed across `test_character_creation_lore.py` and
+  `test_divine_canon.py`
+- ⚠️ `test_canon_corpus_boundary.py` could not collect because the environment
+  lacks the `neo4j` Python package; the failure occurred before lore assertions
+  ran
+- ✅ Full canon-path references resolve, tracked and untracked whitespace checks
+  pass, and all unrelated worktree changes—including the pre-existing
+  `meta/convert_all_docs.py` edit—remain untouched
+
+---
+
 ## [2026-08-09] - Divine Concordances Promoted to Canon
 
 ### ✨ The Gods of Lumia
@@ -647,7 +729,9 @@ This document tracks all completed work on the LuminariMUD world-building projec
 
 ---
 
-*Last comprehensive update: 2026-07-29*
-*Project status: 16 approved canon documents and 93 draft documents*
-*World-building status: Core systems, character-creation lore, legendary locations, villain hierarchy, and the Forgotten Tide documented*
-*Next milestone: Implement the approved character-creation records and continue world geography integration*
+*Last comprehensive update: 2026-08-10*
+*Project status: 26 approved canon documents and no surviving draft tree*
+*World-building status: Historical draft backlog canonized; core systems,
+character creation, cultures, magic, relics, Otherworld, regional factions, and
+the Ashenport adventure framework documented*
+*Next milestone: Geographic integration and calendar concordance*
