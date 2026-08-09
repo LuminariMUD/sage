@@ -4,21 +4,21 @@
 | --------------- | ----------------------------------------------- |
 | Status          | Active review of the retained draft corpus      |
 | Reviewed        | 2026-08-09                                      |
-| Scope           | All 18 files remaining under `lore_docs/drafts` |
+| Scope           | All 14 files remaining under `lore_docs/drafts` |
 | Standard        | In-world lore only                              |
 | Canon authority | `lore_docs/canon`                               |
 
 ## Executive finding
 
-The retained corpus contains **14 files with genuine source-lore value**: five
-primary sources and nine mixed documents from which lore should be extracted.
+The retained corpus contains **10 files with genuine source-lore value**: five
+primary sources and five mixed documents from which lore should be extracted.
 The other four files contain potentially useful ideas, but they are later
 syntheses rather than trustworthy lore sources.
 
 | Verdict                   | Files | Meaning                                                                                                                    |
 | ------------------------- | ----: | -------------------------------------------------------------------------------------------------------------------------- |
 | **KEEP — primary lore**   |     5 | Authored/source material with substantial setting value. Preserve with provenance; this verdict does not make it canon.    |
-| **EXTRACT — mixed**       |     9 | Genuine lore exists, but it must be separated from mechanics, external-IP residue, obsolete claims, or quest instructions. |
+| **EXTRACT — mixed**       |     5 | Genuine lore exists, but it must be separated from mechanics, external-IP residue, obsolete claims, or quest instructions. |
 | **CANDIDATE — synthetic** |     4 | Lore-shaped material worth retaining as an idea pool pending human approval. Do not promote wholesale.                     |
 
 This review treats lore as in-world history, cosmology, peoples, characters,
@@ -37,6 +37,9 @@ still being less reliable as lore evidence.
 from this draft corpus after explicit approval and promoted to
 `lore_docs/canon/factions` on 2026-08-09. Their former verdicts no longer
 contribute to the retained-draft totals.
+
+Files deleted from `lore_docs/drafts` are outside this retained-corpus review and
+are not preserved as historical rows here.
 
 ## Highest-value source material
 
@@ -77,7 +80,7 @@ must not survive extraction merely because they appear beside original material.
 
 1. Put the five **KEEP** files in a read-only, provenance-preserving source
    archive. Do not feed them to production lore retrieval as canon.
-2. Create small, subject-specific extraction notes for the nine **EXTRACT** files.
+2. Create small, subject-specific extraction notes for the five **EXTRACT** files.
    Every extracted claim should retain its source path and record any canon
    conflict.
 3. Quarantine the four **CANDIDATE** files as unapproved concepts. They should not
@@ -100,15 +103,12 @@ must not survive extraction merely because they appear beside original material.
 | ------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------- |
 | `factions/Faction Overview.md` | **KEEP** | Primary faction and character lore for the Mosswood Bandits, Ashenport Guards, Explorer's League, and their leaders. |
 
-### `locations` — 8 files
+### `locations` — 5 files
 
 | File                                       | Verdict       | Lore-only finding                                                                                                                                                                                                     |
 | ------------------------------------------ | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `locations/02_10_2021  Notes.md`           | **EXTRACT**   | Mixed notes with genuine kernels: Pools of Twilight rites, maritime halfling life, Sanctus/dragon history, Crystal Dwarf customs, and Trelux traits. Much is already canon; extract only unique supported details.    |
-| `locations/Arcanite Mines Brief.md`        | **EXTRACT**   | Thin but genuine premise of a layered arcanite mine occupied by a Darkling cult, altered miners, and golems. Discard dungeon mechanics.                                                                               |
 | `locations/Ashenport Region Main Quest.md` | **EXTRACT**   | High-value primary quest archive containing the Lenadrians, five-key arc, Darkling types, Lady Raven, named sites, and artifacts. Heavy mechanics, obsolete geography, and external-IP residue prevent wholesale use. |
-| `locations/Darkling Ritual Brief.md`       | **EXTRACT**   | Small narrative kernel about a sacrificial attempt to restore Lady Raven. Remove encounter flow and implementation details.                                                                                           |
-| `locations/Fremlins quest.md`              | **EXTRACT**   | Very small quest seed about a fremlin community, stolen trinket, trade, and friendship. Preserve only if fremlins are approved as a Lumia people.                                                                     |
 | `locations/LEGENDARY_LOCATIONS.md`         | **CANDIDATE** | Useful synthetic index of quest sites, but it repeats the Ashenport/Hir-Pesh error, includes legacy cosmology, and labels unapproved claims as established. Validate each site against primary sources.               |
 | `locations/TREASURES.md`                   | **CANDIDATE** | Synthetic crafting/artifact consolidation with some useful traditions, but also formulas, invented schools, unapproved artifacts, and a mistaken treatment of the Five Locks as items.                                |
 | `locations/Worldbuilding.md`               | **KEEP**      | Major foundational source for Lumia's moons, peoples, planes, Swiftpaths, Mosswood, Ashenport, and named characters. Preserve with explicit flags for superseded claims.                                              |
@@ -121,19 +121,18 @@ must not survive extraction merely because they appear beside original material.
 | `timeline/The Secret History + Storbuilding Questbuilding GameDesign Brainstorming.md` | **EXTRACT** | High-value attributed creation-history source is mixed with generic game-design brainstorming and mechanics. Preserve the Aeon/Khadhu Coshek/Prisoner section and its provenance. |
 | `timeline/luminari-aeon-and-prisoner-lore.txt`                                         | **KEEP**    | Concise primary lore seed for Aeon Luminous, the Prisoner, arcanite, and the Last War.                                                                                            |
 
-### `world` — 4 files
+### `world` — 3 files
 
-| File                                      | Verdict       | Lore-only finding                                                                                                                                                         |
-| ----------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `world/How artifacts will work.md`        | **EXTRACT**   | Small setting concepts—unique/possessive artifacts, Titan bestowal, cyclical ownership, destructive bearers, and player legacies—embedded in mechanics and staff process. |
-| `world/Luminari - Help File Templates.md` | **EXTRACT**   | Mostly mechanics, but it contains an alternate Arcana Golem race account. Preserve only as a rejected/competing source; it conflicts with the soul-vessel model.          |
-| `world/Magic in Lumia.md`                 | **KEEP**      | Primary Arcane/Divine source model and dual-caster premise.                                                                                                               |
-| `world/TALES_AND_LEGENDS.md`              | **CANDIDATE** | Synthetic folklore collection with useful cultural texture, quests, and artifacts, but extensive unapproved invention. Treat each tale as a proposal.                     |
+| File                               | Verdict       | Lore-only finding                                                                                                                                                         |
+| ---------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `world/How artifacts will work.md` | **EXTRACT**   | Small setting concepts—unique/possessive artifacts, Titan bestowal, cyclical ownership, destructive bearers, and player legacies—embedded in mechanics and staff process. |
+| `world/Magic in Lumia.md`          | **KEEP**      | Primary Arcane/Divine source model and dual-caster premise.                                                                                                               |
+| `world/TALES_AND_LEGENDS.md`       | **CANDIDATE** | Synthetic folklore collection with useful cultural texture, quests, and artifacts, but extensive unapproved invention. Treat each tale as a proposal.                     |
 
 ## Audit boundary
 
 This document remains a disposition review of the retained drafts. The two
-approved divine documents left the corpus through an explicit canonization pass;
-no verdict on any other draft was changed. A later extraction pass should operate
-only on the remaining **KEEP** and **EXTRACT** sets and should present conflicts
-for explicit human approval.
+approved divine documents left the corpus through an explicit canonization pass,
+and later deletions are omitted entirely. No verdict on any retained draft was
+changed. A later extraction pass should operate only on the remaining **KEEP**
+and **EXTRACT** sets and should present conflicts for explicit human approval.
