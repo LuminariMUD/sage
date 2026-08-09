@@ -4,8 +4,10 @@
 from the Grey Archive of Aethyra with corrections attributed to three hands and
 agreed upon by none of them.*
 
-> *A god is a song the world has learned to sing.*  
-> *A Titan is the deep place where the echo goes.*  
+> *A god is a song the world has learned to sing.*
+>
+> *A Titan is the deep place where the echo goes.*
+>
 > *Both may answer prayer. This does not make them the same.*
 
 ## The Error in a Single Word
@@ -228,7 +230,8 @@ The False Fea is a nightmare with a name, and names are doors.
 Gods may divide. Gods may merge. New gods may gather around new names, though the
 process is rare and seldom gentle.
 
-Titans do not multiply.
+Since the Twenty became known as Twenty, no accepted history records a Titan
+multiplying.
 
 That is why the Twenty-First Titan is not merely another divine claimant. It is an
 offense against the category itself: a Woven possibility attempting to become a
@@ -382,9 +385,70 @@ It is not enough for the truth.
 
 ---
 
+## Provenance and Canon Decisions
+
+### Approved canon foundations
+
+This concordance reconciles the divine claims established in:
+
+- `lore_docs/canon/factions/DEITIES.md`
+- `lore_docs/canon/factions/KNIGHTS.md`
+- `lore_docs/canon/factions/divine_knight_concordance.md`
+- `lore_docs/canon/factions/the_villian_hierarchy.md`
+- `lore_docs/canon/factions/the_forgotten_tide.md`
+- `lore_docs/canon/locations/the_five_nations.md`
+- `lore_docs/canon/cultures/races_of_lumia.md`
+- `lore_docs/canon/timeline/the_shattered_truth.md`
+- `lore_docs/canon/timeline/timeline.md`
+- `lore_docs/canon/timeline/ages.md`
+
+### Historical evidence adjudicated
+
+- `lore_docs/drafts/world/Magic in Lumia.md` preserves the primary account of
+  Titan-granted magic passing through a patron's pocket dominion.
+- The retired `lore_docs/drafts/factions/Titans abstract.md` supplied the oldest
+  surviving account of Titans, worship, pocket dominions, and their attention
+  after the Prison was made.
+- The retired `lore_docs/drafts/factions/Current Titan List.md` supplied the
+  Twenty-name tradition and the names Iluai, Fea, and Orolro. Its mechanical
+  fields and its claims identifying the Prisoner or a Luminari power as Titans
+  were not adopted.
+
+Historical drafts are testimony, not continuing authority. Their accepted claims
+are restated in this document so canon does not depend upon excluded sources.
+
+### Adopted resolutions
+
+- **Divine** is the approved umbrella term for power shaped by a greater will;
+  it does not make gods and Titans one kind of being.
+- The Woven Gods are anchored through the Loom and mortal relationship. The Deep
+  Titans are anchored in their own dominions, while worship extends their reach
+  into Lumia.
+- God-granted and Titan-granted miracles share a magical grammar learned through
+  the Luminari method, but they do not share an ultimate source.
+- The Twenty Titans, Titan Blessed, False Titans, and Twenty-First Titan retain
+  the meanings defined in this concordance.
+- Iluai and Nethris may both hold authority around death because a deep condition
+  and its mortal meaning are not the same office.
+- The relationship between Jal'Kara and Orolro, the status of the Elemental
+  Primarchs, and the ultimate origins of either divine order remain deliberately
+  unresolved.
+
+### Canon and runtime boundary
+
+This document establishes metaphysical identity, divine magic's two sources,
+religious terminology, and the interpretation of existing Titan traditions. It
+does not assign spell lists, numeric effects, alignment restrictions, engine
+identifiers, or implementation constants.
+
+---
+
 *Final marginal note, author unknown:*
 
-*When you pray, something listens.*  
-*When something answers, you call it divine.*  
-*The wise ask what answered.*  
+*When you pray, something listens.*
+
+*When something answers, you call it divine.*
+
+*The wise ask what answered.*
+
 *The very wise ask what else heard them calling.*

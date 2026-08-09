@@ -2,11 +2,11 @@
 
 | Field        | Value                                                                                       |
 | ------------ | ------------------------------------------------------------------------------------------- |
-| Status       | Proposed; implementation has not started                                                     |
+| Status       | Proposed; implementation has not started                                                    |
 | Last updated | 2026-08-09                                                                                  |
 | Scope        | Canon file discovery, revisions, semantic episodes, embeddings, Graphiti, Neo4j, and audits |
 | Candidate    | [CocoIndex](https://cocoindex.io/docs/index) as the incremental reconciliation engine       |
-| Related      | [Local LLM and Graph Pipeline Improvements](./local_llm_graph_pipeline_improvements.md)      |
+| Related      | [Local LLM and Graph Pipeline Improvements](./local_llm_graph_pipeline_improvements.md)     |
 
 ## Executive summary
 
@@ -85,6 +85,19 @@ provider and write durable Neo4j state. `make semantic-pipeline` is only an alia
 for `pipeline-canon` and requires the same token. No watcher or deployment hook
 runs this automatically. Existing-file edits, renames, and deletions remain outside
 the clean incremental guarantee described above.
+
+### Pending additive canon ingestion
+
+The following sources became official filesystem canon on 2026-08-09 but were
+deliberately not loaded, chunked, embedded, or synchronized at promotion time:
+
+- `lore_docs/canon/factions/DEITIES.md`
+- `lore_docs/canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md`
+
+The source corpus therefore contains eighteen canon documents while the current
+derived PostgreSQL, embedding, and graph profile still represents sixteen. When
+ingestion is separately authorized, use the complete confirmed `pipeline-canon`
+path above rather than running an untracked partial graph update.
 
 ## Goals
 
@@ -553,17 +566,17 @@ Exit gate:
 
 ## Risks and mitigations
 
-| Risk | Mitigation |
-| ---- | ---------- |
-| CocoIndex v1 maturity or API churn | Pin the validated version; isolate it behind Sage adapters; require the shadow spike and restart tests. |
-| PostgreSQL/Neo4j cross-target inconsistency | Keep PostgreSQL authoritative, publish an outbox transactionally, and retain durable graph retries and audits. |
+| Risk                                               | Mitigation                                                                                                                            |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| CocoIndex v1 maturity or API churn                 | Pin the validated version; isolate it behind Sage adapters; require the shadow spike and restart tests.                               |
+| PostgreSQL/Neo4j cross-target inconsistency        | Keep PostgreSQL authoritative, publish an outbox transactionally, and retain durable graph retries and audits.                        |
 | Graphiti cannot exactly retract an edited document | Make graph semantics a Phase 0 gate; require controlled rebuild or source-ownership repair when targeted operations are insufficient. |
-| Duplicate or unstable chunk identities | Use deterministic revision-scoped identities and test repeated clean runs. |
-| Stale embeddings after content or profile changes | Make text and the full embedding profile part of the memoization key and store the profile fingerprint with every active vector. |
-| Missed filesystem events | Treat watch events as triggers for full desired-state reconciliation, not as authoritative mutations. |
-| Provider-cost bursts | Debounce changes, retain hard provider budgets, expose plans, and keep live provider calls opt-in. |
-| Legacy readers expose retired data | Inventory every retrieval query and enforce active-corpus guards before activation. |
-| Migration breaks durable history | Use additive immutable migrations, backup verification, isolated integration tests, and rollback-only live rehearsals. |
+| Duplicate or unstable chunk identities             | Use deterministic revision-scoped identities and test repeated clean runs.                                                            |
+| Stale embeddings after content or profile changes  | Make text and the full embedding profile part of the memoization key and store the profile fingerprint with every active vector.      |
+| Missed filesystem events                           | Treat watch events as triggers for full desired-state reconciliation, not as authoritative mutations.                                 |
+| Provider-cost bursts                               | Debounce changes, retain hard provider budgets, expose plans, and keep live provider calls opt-in.                                    |
+| Legacy readers expose retired data                 | Inventory every retrieval query and enforce active-corpus guards before activation.                                                   |
+| Migration breaks durable history                   | Use additive immutable migrations, backup verification, isolated integration tests, and rollback-only live rehearsals.                |
 
 ## Definition of done
 

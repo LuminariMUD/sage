@@ -13,11 +13,11 @@
 ✅ **The Forgers** - Development roles as cosmic positions mirroring creation (THE_FORGERS_PROPHECY.md)
 
 ### 2. Divine Structure
-✅ **Complete Pantheon** - 40+ deities with full portfolios, domains, relationships
+✅ **Complete Pantheon** - `canon/factions/DEITIES.md` establishes forty deities in lore-only form
 ✅ **Divine Conflicts** - The Dawn Sundering, Memory Wars, etc.
-✅ **Divine Heralds** - Celestial servants for each deity
+✅ **Divine Heralds** - Best-attested celestial and elemental servants preserved in the canonical deity concordance
 ✅ **The Loom Connection** - Gods bound to and pulling at the Loom
-✅ **Knight-Deity Concordance** - Complete symbiotic relationships mapped (DIVINE_KNIGHT_CONCORDANCE.md)
+✅ **Knight-Deity Concordance** - Public and esoteric patron records are reconciled in `canon/factions/DEITIES.md`
 
 ### 3. Knight Orders & Factions
 ✅ **Six Sacred Orders** - Complete progression system
@@ -78,9 +78,10 @@
 ✅ **Cataclysms** - Each age-ending event documented
 
 ### 7. Magic Systems
-🔧 **Canon Consolidation Needed** - No unified canon magic-system document exists
+🔧 **Partial Canon Consolidation** - The two sources of divine magic are established; a unified treatment of Arcane magic remains pending
 ✅ **Primary Source Preserved** - `drafts/world/Magic in Lumia.md` describes Arcane power from the Primal Realm and Divine power from Titan planes
 ✅ **Canon Metaphysical Context** - `canon/timeline/the_shattered_truth.md` describes magic as will manipulating a reality made mutable by separation
+✅ **Divine Source Model** - `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md` establishes the Woven and Deep roads of divine magic
 ❓ **Open Work** - Accepted traditions, costs, limitations, interactions, and Shadowmoon effects require canon review
 
 ### 8. Threats & Antagonists
@@ -92,7 +93,7 @@
 ✅ **Mortal Threats** - Arcanite Syndicate, Vitalist Revolution, Reality Cabal, Silent Throne
 ✅ **Supernatural Threats** - Void Crown Remnants, Titan Heretics, Awakened Arcana, Darklings of the Touch
 🔧 **Cosmic Threats** - The Prisoner and approved Shadowmoon effects remain; additional threats require review
-🔧 **Divine Terminology** - `drafts/factions/THE_TWO_ORDERS_OF_DIVINITY.md` now proposes a canon-compatible distinction between gods and Titans; approval and canon promotion remain pending
+✅ **Divine Terminology** - `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md` establishes the distinction between Woven Gods and Deep Titans, with the shared terminology reflected in `canon/factions/DEITIES.md`
 ✅ **Darkling Details** - First Darkling Wars, Five Fingers extensions, Shadowmoon empowerment documented
 
 ## Gap Analysis
@@ -137,6 +138,7 @@
 5. **MAGIC SYSTEM DETAILS** 🔧 NEEDS CANON CONSOLIDATION
    - Primary Arcane/Divine source account preserved in `drafts/world/Magic in Lumia.md`
    - Canon metaphysical context preserved in `canon/timeline/the_shattered_truth.md`
+   - Two divine source roads established in `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md`
    - Accepted traditions, costs, limitations, and interactions remain to be decided
 
 6. **ACTIVE THREATS** ✅ COMPLETE
@@ -212,8 +214,8 @@
 - ✅ `adventure_hooks/` - TALES_AND_LEGENDS.md synthesizing 10 converted docs
 - ✅ `ages_and_cataclysms/` - AGES.md, TIMELINE.md + 3 converted docs
 - ✅ `cultures_and_traditions/` - CULTURES_OF_LUMIA.md with Five Great Cultural Spheres
-- ✅ `factions_and_orders/` - DEITIES.md, KNIGHTS.md, DIVINE_KNIGHT_CONCORDANCE.md, THE_FORGOTTEN_TIDE.md
-- 🔧 `magic_systems/` - Primary Arcane/Divine source preserved; canon consolidation pending
+- ✅ `factions_and_orders/` - DEITIES.md, THE_TWO_ORDERS_OF_DIVINITY.md, KNIGHTS.md, DIVINE_KNIGHT_CONCORDANCE.md, THE_FORGOTTEN_TIDE.md
+- 🔧 `magic_systems/` - Divine source roads are canonical; Arcane consolidation remains pending
 - 🔧 `mysteries_and_secrets/` - Canonical Locks and Shadowmoon context preserved; further development pending
 - ✅ `prophecies_and_fate/` - THE_FORGERS_PROPHECY.md, THE_FIVE_LOCKS_PARALLEL.md + 2 converted docs
 - ✅ `races_and_bloodlines/` - RACES_OF_LUMIA.md synthesizing 5 converted docs

@@ -6,12 +6,14 @@ Keep the real `.env` mode `0600` and never commit it.
 
 ## Current checkpoint
 
-- Date: 2026-08-08
+- Date: 2026-08-09
 - Work branch: `main`
 - Repository: <https://github.com/LuminariMUD/sage>
-- The canon data plane is complete under one audited Ollama graph/embedding
-  profile: 16 documents, 1,185 episodes, 1,185 Nomic vectors, and 1,185 verified
-  graph jobs. The final cross-store audit is clean.
+- The current loaded canon snapshot is complete under one audited Ollama
+  graph/embedding profile: 16 documents, 1,185 episodes, 1,185 Nomic vectors,
+  and 1,185 verified graph jobs. The snapshot's final cross-store audit is clean.
+  Two divine documents promoted on 2026-08-09 are official filesystem canon but
+  intentionally await a separately authorized ingestion pass.
 - Database migrations are current through `0008_canon_only_corpus`. Verified
   completion backup `backups/canon-ollama-complete-20260807T222000Z` protects the
   populated state.

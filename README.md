@@ -1,6 +1,6 @@
 # Luminari Sage - Intelligent Lore Management System
 
-**Version**: 0.7.30
+**Version**: 0.7.31
 **Status**: Production Deployed
 **Deployment**: luminarimud.com:8003
 **Repository**: https://github.com/LuminariMUD/sage
@@ -212,10 +212,13 @@ See [docs/guides/QUICKSTART.md](docs/guides/QUICKSTART.md) for detailed instruct
 
 ### Data Scale
 
-- **16 Canon Source Files**: Markdown lore in `lore_docs/canon/`
-- **99 Draft Source Files**: Markdown source material in `lore_docs/drafts/`
-- **1,185 Canon Episodes**: All 16 canonical database documents are chunked with
-  no excluded episode rows
+- **18 Canon Source Files on Disk**: Markdown lore in `lore_docs/canon/`
+- **18 Draft Source Files**: 17 Markdown sources and one retained text source in
+  `lore_docs/drafts/`
+- **16 Loaded Canon Documents**: The two newly promoted divine documents await
+  the separately authorized ingestion pass
+- **1,185 Canon Episodes**: All currently loaded canonical database documents are
+  chunked with no excluded episode rows
 - **1,185 Active Episode Vectors**: Complete 768-dimensional Nomic coverage in a
   valid HNSW space
 - **1,185 Verified Graph Jobs**: One audited Ollama profile with zero cross-store
@@ -644,5 +647,5 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 ---
 
 **Last Updated**: 2026-08-09
-**Version**: 0.7.30
+**Version**: 0.7.31
 **Status**: Production Ready

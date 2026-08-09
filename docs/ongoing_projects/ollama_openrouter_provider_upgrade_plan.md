@@ -3,18 +3,19 @@
 | Field                 | Value                                                                                                  |
 | --------------------- | ------------------------------------------------------------------------------------------------------ |
 | Status                | Active phased implementation                                                                           |
-| Implementation        | Durable Ollama data plane activated; OpenRouter cutover and reviewed quality gates remain               |
-| Last updated          | 2026-08-08                                                                                             |
+| Implementation        | Durable Ollama data plane activated; OpenRouter cutover and reviewed quality gates remain              |
+| Last updated          | 2026-08-09                                                                                             |
 | Scope                 | Text generation, embeddings, Graphiti, configuration, storage migrations, deployment, and tests        |
 | Compatibility target  | Preserve current Ollama model behavior while adding OpenRouter as an independently selectable provider |
 | Supporting workstream | [Local LLM and Graph Pipeline Improvements](./local_llm_graph_pipeline_improvements.md)                |
 
-> **Current live state:** The replacement canon corpus is complete under one audited
-> Ollama sync/embedding profile: 16 documents, 1,185 embedded episodes, and 1,185
-> verified graph jobs with zero cross-store drift. Migrations are current through
-> `0008`, and a verified completion backup protects the result. Every earlier
-> 611/305 count below is historical evidence for the rejected predecessor corpus.
-> Durable local findings are summarized in the
+> **Current live state:** The loaded 16-document canon snapshot is complete under
+> one audited Ollama sync/embedding profile: 1,185 embedded episodes and 1,185
+> verified graph jobs with zero cross-store drift. Two divine documents promoted
+> on 2026-08-09 remain intentionally uningested. Migrations are current through
+> `0008`, and a verified completion backup protects the loaded snapshot. Every
+> earlier 611/305 count below is historical evidence for the rejected predecessor
+> corpus. Durable local findings are summarized in the
 > [supporting workstream](./local_llm_graph_pipeline_improvements.md).
 
 The 2026-08-07 checkpoints below are retained as implementation history. Their

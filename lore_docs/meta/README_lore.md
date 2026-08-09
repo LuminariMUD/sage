@@ -82,20 +82,20 @@ The world of Lumia exists across three interconnected layers:
 ## Current Lore Structure
 
 ### ✅ Established Core Lore
-- **Deities**: Complete pantheon with 40+ gods, domains, relationships, and divine conflicts (DEITIES.md)
+- **Deities**: ✅ **CANON** - `canon/factions/DEITIES.md` establishes forty gods, their worship, divine relationships, and the public and esoteric patron constellations of the Knight Orders
 - **Knight Orders**: Six sacred orders + Lost Seventh with divine concordance (KNIGHTS.md, DIVINE_KNIGHT_CONCORDANCE.md)
 - **The Forgotten Tide**: Pirate faction led by the Black Bitch of Void's Wake, halfling-drow hybrid commanding Shadow's Laugh (THE_FORGOTTEN_TIDE.md)
 - **The Loom**: Central metaphysical concept with Memory/Will/Possibility forces
 - **Timeline**: Complete chronology from Primordial Era to present (TIMELINE.md)
 - **Ages**: Seven distinct eras with detailed descriptions (AGES.md)
 - **The Prisoner**: Core antagonist restrained by the canonical Locks of Memory, Identity, Time, Space, and Will (`canon/timeline/the_shattered_truth.md`)
-- **Gods and Titans**: 🔧 **DRAFT RECONCILIATION** - `drafts/factions/THE_TWO_ORDERS_OF_DIVINITY.md` distinguishes Loom-anchored gods from dominion-anchored Titans while preserving both canon systems
+- **Gods and Titans**: ✅ **CANON** - `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md` distinguishes Loom-anchored Woven Gods from dominion-anchored Deep Titans and defines the two roads of divine magic
 - **The Luminari**: Heroes marked to oppose the Prisoner (only Serane remains)
 - **Darklings**: Souls corrupted by the Prisoner's Touch, organized hierarchy from touched mortals to the Five Fingers
 - **The Shadowmoon**: A recurring manifestation that weakens the barriers between individual and collective; its physical behavior remains unresolved
 - **Swiftpath Network**: Approved mysterious transit network documented in `canon/locations/the_swiftpaths.md`
 - **The Forgers**: Development roles as cosmic positions mirroring creation itself (THE_FORGERS_PROPHECY.md)
-- **Magic Systems**: 🔧 **NEEDS CANON REVIEW** - `drafts/world/Magic in Lumia.md` preserves the primary source account; `drafts/factions/THE_TWO_ORDERS_OF_DIVINITY.md` proposes compatible god-granted and Titan-granted paths
+- **Magic Systems**: 🔧 **PARTIAL CANON** - `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md` establishes god-granted and Titan-granted divine magic; `drafts/world/Magic in Lumia.md` remains the primary Arcane source pending a unified canon treatment
 - **Races & Origins**: ✅ COMPLETE - All playable races with origins, cultures, and magical relationships (RACES_OF_LUMIA.md)
 - **Tales & Legends**: ✅ COMPLETE - Living stories, artifacts, and quest traditions (TALES_AND_LEGENDS.md)
 - **Cultures & Traditions**: ✅ COMPLETE - Five Great Cultural Spheres with languages, festivals, economies, and daily life (CULTURES_OF_LUMIA.md)
@@ -117,10 +117,10 @@ The world of Lumia exists across three interconnected layers:
 - `adventure_hooks/` - ✅ **COMPLETE**: TALES_AND_LEGENDS.md with living stories, artifacts, and quest traditions
 - `ages_and_cataclysms/` - ✅ **COMPLETE**: AGES.md, TIMELINE.md + backstory documents
 - `cultures_and_traditions/` - ✅ **COMPLETE**: CULTURES_OF_LUMIA.md with Five Great Cultural Spheres, languages, festivals, trade
-- `factions_and_orders/` - ✅ **COMPLETE**: DEITIES.md, KNIGHTS.md, DIVINE_KNIGHT_CONCORDANCE.md, THE_FORGOTTEN_TIDE.md (pirate faction)
+- `factions_and_orders/` - ✅ **COMPLETE**: DEITIES.md, THE_TWO_ORDERS_OF_DIVINITY.md, KNIGHTS.md, DIVINE_KNIGHT_CONCORDANCE.md, THE_FORGOTTEN_TIDE.md (pirate faction)
 - `geography_and_realms/` - 🔧 **ACTIVE DEVELOPMENT**: approved Five Nations, Thirteen Homelands, and Swiftpath documents
 - `legendary_locations/` - ✅ **COMPLETE**: LEGENDARY_LOCATIONS.md synthesizing 8 converted docs (cities, dungeons, portals, quest paths)
-- `magic_systems/` - 🔧 **NEEDS CANON REVIEW**: primary Arcane/Divine source model survives in `Magic in Lumia.md`
+- `magic_systems/` - 🔧 **PARTIAL CANON**: the two divine roads are canonical; the primary Arcane source in `Magic in Lumia.md` still requires consolidation
 - `mysteries_and_secrets/` - 🔧 **NEEDS DEVELOPMENT**: canonical Locks and Shadowmoon context survive in `the_shattered_truth.md`
 - `prophecies_and_fate/` - ✅ **COMPLETE**: THE_FORGERS_PROPHECY.md, THE_FIVE_LOCKS_PARALLEL.md + manifesto/release docs
 - `races_and_bloodlines/` - ✅ **COMPLETE**: RACES_OF_LUMIA.md with all races, origins, and cultural depth
@@ -142,7 +142,7 @@ The world of Lumia exists across three interconnected layers:
 1. **Cultures**: ✅ Five Great Cultural Spheres with languages, festivals, trade, daily life
 2. **Threats**: ✅ Three-tier villain hierarchy from mortal to cosmic threats
 3. **Mysteries**: 🔧 Canonical Five Locks and Shadowmoon context established; detailed physical models remain open
-4. **Magic**: 🔧 Primary Arcane/Divine source model requires canon review
+4. **Magic**: 🔧 The two divine roads are canonical; the Arcane source model still requires canon review
 
 ### Phase 3: Playability (Medium-term)
 1. **Adventures**: Create location-based and faction-based quest hooks

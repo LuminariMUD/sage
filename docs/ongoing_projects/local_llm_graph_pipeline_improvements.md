@@ -2,17 +2,20 @@
 
 | Field            | Value                                                                                                     |
 | ---------------- | --------------------------------------------------------------------------------------------------------- |
-| Status           | Canon population complete; reviewed relationship-quality evaluation remains                              |
-| Last updated     | 2026-08-08                                                                                                |
+| Status           | Sixteen-document loaded snapshot complete; two promoted sources await authorized ingestion                |
+| Last updated     | 2026-08-09                                                                                                |
 | Observed         | 2026-08-06 during the full local-development bootstrap                                                    |
 | Scope            | Ollama, Graphiti, PostgreSQL-to-Neo4j synchronization, local observability, and browser chat verification |
 | Umbrella program | [Ollama and OpenRouter Provider Upgrade Plan](./ollama_openrouter_provider_upgrade_plan.md)               |
 
-> **Current live state:** All 16 canon sources produced 1,185 episodes. Every episode
-> has a 768-dimensional Nomic embedding and a verified Graphiti sync job under one
-> Ollama profile; the final cross-store audit is clean. Migration `0008` is applied,
-> and `backups/canon-ollama-complete-20260807T222000Z` is the verified completion
-> backup. Earlier 611/305 counts below describe the rejected predecessor corpus.
+> **Current live state:** The 16 currently loaded canon sources produced 1,185
+> episodes. Every loaded episode has a 768-dimensional Nomic embedding and a
+> verified Graphiti sync job under one Ollama profile; the cross-store audit for
+> that snapshot is clean. Two divine sources promoted on 2026-08-09 remain
+> intentionally uningested. Migration `0008` is applied, and
+> `backups/canon-ollama-complete-20260807T222000Z` is the verified completion
+> backup for the 16-document snapshot. Earlier 611/305 counts below describe the
+> rejected predecessor corpus.
 
 ## Relationship to the umbrella program
 

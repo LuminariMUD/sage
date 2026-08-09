@@ -5,6 +5,46 @@ This document tracks all completed work on the LuminariMUD world-building projec
 
 ---
 
+## [2026-08-09] - Divine Concordances Promoted to Canon
+
+### ✨ The Gods of Lumia
+
+- ✅ **`canon/factions/DEITIES.md`** - Official forty-name divine concordance
+  - Establishes nineteen previously named gods in full religious context and
+    twenty-one regional powers approved through this promotion
+  - Reconciles the public and esoteric patron constellations of all seven Knight
+    Orders
+  - Preserves rites, temple schools, pilgrimages, relics, heralds, prophecies,
+    alliances, and conflicts in lore-only form
+  - Excludes mechanical mappings, imported names, code schemas, and balance rules
+
+### 🕯️ The Two Orders of Divinity
+
+- ✅ **`canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md`** - Official divine taxonomy
+  - Establishes Loom-anchored Woven Gods and dominion-anchored Deep Titans as
+    separate orders under the shared term *divine*
+  - Establishes the Woven and Deep roads of divine magic
+  - Reconciles Iluai with Nethris, Fea with the False Fea, the Twenty with the
+    Twenty-First Titan, Jal'Kara with Orolro, and the ambiguous Elemental
+    Primarchs
+  - Preserves uncertainty where the evidence remains theological rather than
+    historical
+
+### 📚 Promotion and Corpus State
+
+- ✅ Both documents moved from `lore_docs/drafts/factions/` to
+  `lore_docs/canon/factions/`; the draft copies were removed
+- ✅ Lore README, audit, TODO, draft review, provenance, and repository source
+  counts updated to reflect the approval
+- ✅ `tests/test_divine_canon.py` now guards canon-only placement, the forty-name
+  roster, adopted terminology, source links, and the lore/runtime boundary
+- ⏸️ Ingestion deliberately deferred: no document loading, episode creation,
+  embedding generation, or graph synchronization was performed in this promotion
+- ✅ The derived stores remain at the verified prior snapshot: 16 loaded canon
+  documents and 1,185 embedded, graph-synchronized episodes
+
+---
+
 ## [2026-07-29] - Character Creation Lore Completed
 
 ### 🧭 Major Addition: The Character's Compass

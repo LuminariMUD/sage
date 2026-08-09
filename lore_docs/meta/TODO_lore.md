@@ -22,7 +22,8 @@ This document tracks all pending tasks for the LuminariMUD world-building projec
 - [x] Core Cosmology & Universal Rules (COMPLETE)
   - [x] The Loom of Aether formalized with Memory/Will/Possibility
   - [x] Five Locks mechanism documented with cosmic parallels
-  - [x] Draft reconciliation distinguishes gods from Titans without changing canon
+  - [x] Establish the canonical distinction between Woven Gods and Deep Titans
+  - [x] Publish `canon/factions/DEITIES.md` as the lore-only divine concordance
   
 - [x] ✅ Legendary Locations & Quest Networks (COMPLETE)
   - [x] All major cities documented (Ashenport, Mosswood, Graven Hollow)
@@ -37,8 +38,8 @@ This document tracks all pending tasks for the LuminariMUD world-building projec
   
 - [ ] Develop Magic Systems & Sources of Power
   - [x] Preserve the primary Arcane/Divine source account in `drafts/world/Magic in Lumia.md`
-  - [x] Draft a reconciliation with approved canon in `drafts/factions/THE_TWO_ORDERS_OF_DIVINITY.md`
-  - [ ] Review and approve the proposed two-order divine model
+  - [x] Reconcile divine sources in `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md`
+  - [x] Review and approve the two-order divine model
   - [ ] Define canon costs and limitations for each accepted magical tradition
   - [ ] Establish the canon relationship between magic and the Loom
 
@@ -159,8 +160,9 @@ This document tracks all pending tasks for the LuminariMUD world-building projec
   - [ ] Connect planes to existing lore (Titans, Prisoner, etc.)
 
 ### Lore Consistency
-- [x] Draft a Titans-vs.-Deities reconciliation in `drafts/factions/THE_TWO_ORDERS_OF_DIVINITY.md`
-- [ ] Approve, revise, or reject the proposed two-order model
+- [x] Establish the Titans-vs.-Deities reconciliation in `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md`
+- [x] Approve and promote `canon/factions/DEITIES.md`
+- [x] Approve the two-order model
 - [ ] Clarify Luminari vs. Titans power levels
 - [ ] Establish why only one Luminari (Serane) remains
 - [ ] Define limits of the Mark of the Luminari
