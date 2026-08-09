@@ -1,245 +1,336 @@
-# Luminari Lore Audit Report
+# Lore Canonization Audit
 
-## Established Core Elements
+- **Audit date:** 2026-08-10
+- **Scope:** Every file formerly under `lore_docs/drafts`
+- **Style authority:** `lore_docs/meta/STYLE.md`
+- **Foundational authority:** All records under `lore_docs/canon`
+- **Result:** Complete, subject to the verification record at the end of this
+  document
 
-### 1. Cosmology & Metaphysics
-✅ **The Loom of Aether** - Central metaphysical concept binding reality
-✅ **Three Forces**: Memory (past), Will (present), Possibility (future)
-✅ **The Feyveil** - Boundary between material world and Otherworld
-✅ **The Otherworld** - Parallel realm where concepts become tangible
-✅ **The Shadowmoon** - Canonically weakens barriers between individual and collective; its physical behavior remains unresolved
-✅ **Swiftpaths** - Approved transit lore documented in `canon/locations/the_swiftpaths.md`
-✅ **The Five Locks** - Canonically defined as Memory, Identity, Time, Space, and Will in `canon/timeline/the_shattered_truth.md`
-✅ **The Forgers** - Development roles as cosmic positions mirroring creation (THE_FORGERS_PROPHECY.md)
+## Objective and Evidence
 
-### 2. Divine Structure
-✅ **Complete Pantheon** - `canon/factions/DEITIES.md` establishes forty deities in lore-only form
-✅ **Divine Conflicts** - The Dawn Sundering, Memory Wars, etc.
-✅ **Divine Heralds** - Best-attested celestial and elemental servants preserved in the canonical deity concordance
-✅ **The Loom Connection** - Gods bound to and pulling at the Loom
-✅ **Knight-Deity Concordance** - Public and esoteric patron records are reconciled in `canon/factions/DEITIES.md`
+The migration had four requirements.
 
-### 3. Knight Orders & Factions
-✅ **Six Sacred Orders** - Complete progression system
-  - Order of Light: Crimson Loom → Sundered Dawn → Ember Throne
-  - Order of Shadow: Howling Moon → Shattered Mirror/Pale Throne
-✅ **Lost Seventh Order** - Knights of the Void Crown (fallen)
-✅ **Order Strongholds** - Each has unique headquarters
-✅ **The Forgotten Tide** - Pirate faction using Void's Wake as base
-  - Led by Black Bitch of Void's Wake (halfling-drow hybrid)
-  - The Shadow's Laugh flagship with mushroom-treated hull
-  - Fleet of overlooked and forgotten sailors
+| Requirement | Evidence |
+| --- | --- |
+| Read and preserve the established canon | Foundational constraints below; targeted reconciliations recorded in the canon diff |
+| Adjudicate every draft | Fourteen-row source ledger below, matching the complete pre-migration draft inventory |
+| Promote only material fit for canon | Eight new canon concordances plus narrow reconciliations to four existing records |
+| Leave nothing in `lore_docs/drafts` | Completion command verifies the directory no longer exists and no draft file remains |
 
-### 4. Races & Origins
-✅ **Crystal Dwarves** - Approved culture, transformed physiology, harmonic castes, and Arcanite dependence
-✅ **Arcana Golems** - Soul vessels seeking purpose, building city of Apparatus
-✅ **Elves** - Dreams refusing to wake, born from Otherworld through Pools of Twilight
-✅ **Half-Orcs** - Divine rage given flesh, created during First Darkling Wars
-✅ **Humans** - Reality's error-correction mechanism, emerged from cracks between creation
-✅ **Dragons** - Living possibility, breathing pure chance
-✅ **Halflings** - The overlooked, resistant to prophecy and divine attention
-✅ **Vampires** - Hyper-life requiring consumption, Courts of Hunger
-✅ **Liches** - Mathematics wearing corpses, existence proofs
-✅ **Changelings** - Pure potential, never finishing becoming
-✅ **Genasi** - Elemental leaks that learned to think
-✅ **All Races** - Complete origins, cultures, and magical relationships documented (RACES_OF_LUMIA.md)
+The absence of a draft file is not, by itself, evidence of successful migration.
+The source ledger names what was promoted, where it now lives, and what was
+deliberately retired.
 
-### 5. Geography & Nations
-✅ **Planet**: Lumia (established)
-✅ **Moons**: Andros, Delos, and the recurring Shadowmoon; the Shadowmoon's exact motion remains unresolved
-✅ **Swiftpath Network**: Approved portal lore documented in `canon/locations/the_swiftpaths.md`
-✅ **Five Lock Principles**: Memory, Identity, Time, Space, and Will; physical locations are not established
-✅ **World Structure**: Three-layer reality documented (THE_WORLD.md, WILD_KB.md)
-  - Surface: 2048x2048 procedural wilderness with 723 landmasses
-  - Zones: 592 detailed areas (240 disconnected, 111 WildLinked, 30 Underworld, 22 Planar)
-  - Networks: 19 Swiftpaths, 41 carriage stops, 35 sea ports
-✅ **Five Nations**: Complete political geography (THE_FIVE_NATIONS.md)
-  - New Anteria (necrocracy), Crystal Reaches, Mosswood Federation, Magocracy of Chulan, Free Cities of Kohn
-✅ **Thirteen Homelands**: Complete character-origin geography
-  (THE_THIRTEEN_HOMELANDS.md)
-  - All 13 runtime values have stable IDs, place kinds, parent relationships,
-    political spheres, approved lore, and media anchors
-  - Onduis/Ondius, Ashenport/Hir, Hir/Pesh, and Sanctus's Silence are resolved
-✅ **Homeland Heart Tongues**: Complete language map
-  (LANGUAGES_OF_THE_HOMELANDS.md)
-  - Twelve real Heart Tongues cover every Homeland in addition to Common
-🔧 **Zone Integration**: 240 Forgotten Realms zones need Luminari lore conversion
-🔧 **Coordinate Reconciliation**: Zone coordinates don't match -1024 to +1024 grid
-🔧 **Planar Connections**: 22 planes exist but lack clear access methods
+## Foundational Constraints Preserved
 
-### 6. Historical Timeline
-✅ **Complete Timeline Established**:
-  - Seven distinct ages from Primordial Era to present
-  - Major cataclysms documented
-  - The Last War fully detailed
-  - Crystal Dwarf 500-year isolation explained
-  - Current year: Fifth Age of the Eternal Loom
-✅ **Age Structure** - Formal ages with transitions defined
-✅ **Cataclysms** - Each age-ending event documented
+### Cosmology
 
-### 7. Magic Systems
-🔧 **Partial Canon Consolidation** - The two sources of divine magic are established; a unified treatment of Arcane magic remains pending
-✅ **Primary Source Preserved** - `drafts/world/Magic in Lumia.md` describes Arcane power from the Primal Realm and Divine power from Titan planes
-✅ **Canon Metaphysical Context** - `canon/timeline/the_shattered_truth.md` describes magic as will manipulating a reality made mutable by separation
-✅ **Divine Source Model** - `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md` establishes the Woven and Deep roads of divine magic
-❓ **Open Work** - Accepted traditions, costs, limitations, interactions, and Shadowmoon effects require canon review
+- The world is **Lumia**.
+- The Loom of Aether carries **Memory, Will, and Possibility**.
+- The Otherworld is a parallel realm where concepts may become tangible; the
+  Feyveil is its boundary and overlap with Lumia.
+- The moons Andros and Delos are established.
+- The Shadowmoon weakens distinctions, especially between individual and
+  collective consciousness. Its body, conventional orbit, and ultimate origin
+  remain unresolved.
 
-### 8. Threats & Antagonists
-✅ **The Prisoner** - Fully defined as unity-seeker turned oblivion-bringer
-✅ **The Darklings** - Complete hierarchy from touched souls to Five Fingers, corruption mechanics explained
-✅ **The Luminari** - Serane as last hero, Mark mechanics defined
-✅ **Five Locks** - Canonically defined as Memory, Identity, Time, Space, and Will
-✅ **Villain Hierarchy** - Complete three-tier threat system documented (THE_VILLAIN_HIERARCHY.md)
-✅ **Mortal Threats** - Arcanite Syndicate, Vitalist Revolution, Reality Cabal, Silent Throne
-✅ **Supernatural Threats** - Void Crown Remnants, Titan Heretics, Awakened Arcana, Darklings of the Touch
-🔧 **Cosmic Threats** - The Prisoner and approved Shadowmoon effects remain; additional threats require review
-✅ **Divine Terminology** - `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md` establishes the distinction between Woven Gods and Deep Titans, with the shared terminology reflected in `canon/factions/DEITIES.md`
-✅ **Darkling Details** - First Darkling Wars, Five Fingers extensions, Shadowmoon empowerment documented
+### The Luminari and the Prisoner
 
-## Gap Analysis
+- Aeon Luminous and Khadhu Coshek collided, giving rise to the Luminari and the
+  being later called the Prisoner.
+- The Prisoner seeks unity through the end of separated existence.
+- The Luminari imprisoned it in Arcanite and later sacrificed themselves to
+  restore the failing Prison.
+- **Serane** is the last Luminari and has resumed marking mortals.
+- The Five Locks are **Memory, Identity, Time, Space, and Will**. Early records
+  speak of distributed locks and hidden keys, but no material object or mapped
+  site is established as one of the Locks.
 
-### Critical Missing Elements
+### Arcanite and Magic
 
-1. **TIMELINE & AGES** ✅ COMPLETE
-   - Seven ages fully defined with transitions
-   - All major cataclysms documented
-   - Complete chronology established
-   - Current year: Fifth Age of the Eternal Loom
+- Arcanite is crystallized Aeonic residue, a substance of the Prison, the
+  material of Crystal Dwarf hearts, and an exceptionally capable magical vessel.
+- Mining Arcanite weakens the Prison and threatens Crystal Dwarf survival.
+- The Luminari taught the common grammar through which mortals call magic.
+- Arcane magic calls first forms from the Primal Reach.
+- Divine magic has two distinct sources: the Woven road of gods and the Deep
+  road of Titans.
+- Primal and psionic practice remain accepted disciplines with distinct costs.
+- Magic always carries consequence; no promoted tradition grants costless or
+  consequence-free reality revision.
 
-2. **WORLD MAP & GEOGRAPHY** 🔧 ACTIVE DEVELOPMENT
-   - ✅ Three-layer world structure documented (wilderness, zones, planes)
-   - ✅ 592 zones catalogued across all realms (THE_WORLD.md)
-   - ✅ 2048x2048 procedural wilderness with 723 landmasses (WILD_KB.md)
-   - ✅ Five Nations with boundaries and politics (THE_FIVE_NATIONS.md)
-   - ✅ Thirteen character Homelands reconciled with the Five Nations
-     (THE_THIRTEEN_HOMELANDS.md)
-   - ✅ Every character Homeland has approved lore, parentage, provenance,
-     language, and media direction
-   - ✅ Major cities and landmarks (LEGENDARY_LOCATIONS.md)
-   - ✅ Transportation networks mapped (Swiftpaths, carriages, sea routes)
-   - 🔧 240 zones need conversion from Forgotten Realms to Luminari lore
-   - 🔧 Coordinate system reconciliation needed (zone coords vs grid coords)
-   - 🔧 Planar access methods undefined
-   - 🔧 Visual world map exists but needs lore integration
+### Peoples, Powers, and Place
 
-3. **THE PRISONER & LUMINARI** ✅ MOSTLY COMPLETE
-   - The Prisoner: Entity seeking unity through oblivion
-   - Serane: Last Luminari after others fell
-   - Conflict: Creation vs. Oblivion
-   - Mark/Touch mechanics documented
-   - ❓ Still need: Details on fallen Luminari
+- The Woven Gods and Deep Titans remain different orders of divinity.
+- The Forty recognized divine names, Twenty-Titan tradition, six Knight Orders,
+  and lost Void Crown retain their existing meanings.
+- The Five Nations remain New Anteria, the Crystal Reaches, the Mosswood
+  Federation, the Magocracy of Chulan, and the Free Cities of Kohn.
+- The Thirteen Homelands retain their stable identities, political parents, and
+  Heart Tongues. Ashenport is a charter city within Onduis and is not Hir/Pesh.
+- The approved Swiftpath origin remains unresolved.
+- The Crystal Dwarves' transformation, caste structure, gilding, Arcanite
+  dependence, Tal, and eighty-year re-emergence remain intact.
 
-4. **CURRENT POLITICAL STATE** ✅ COMPLETE
-   - Five Nations detailed (THE_FIVE_NATIONS.md)
-   - Active conflicts: Arcanite wars brewing, Sanctus Incident
-   - Trade relationships mapped
-   - Political powder keg ready to explode
+## Draft Source Ledger
 
-5. **MAGIC SYSTEM DETAILS** 🔧 NEEDS CANON CONSOLIDATION
-   - Primary Arcane/Divine source account preserved in `drafts/world/Magic in Lumia.md`
-   - Canon metaphysical context preserved in `canon/timeline/the_shattered_truth.md`
-   - Two divine source roads established in `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md`
-   - Accepted traditions, costs, limitations, and interactions remain to be decided
+### Cultures
 
-6. **ACTIVE THREATS** ✅ COMPLETE
-   - Complete villain hierarchy established (THE_VILLAIN_HIERARCHY.md)
-   - Mortal Level: Economic warfare, political revolution, reality revision
-   - Supernatural and cosmic tiers require re-audit against the approved corpus
-   - Five Nations conflict fully mapped with specific antagonists
-   - All threats interconnected in corruption cascade
+#### `cultures/CULTURES_OF_LUMIA.md`
 
-7. **CULTURAL DETAILS** ✅ COMPLETE
-   - Five Great Cultural Spheres fully documented (CULTURES_OF_LUMIA.md)
-   - Languages: Three Tongue Theory with Heart Tongues for each culture
-   - Trade goods: Five Trade Foundations (Arcanite, Dreamwood, Memory Silk, etc.)
-   - Customs and festivals: Universal and culture-specific observances detailed
-   - Daily life: Complete day-in-the-life narratives for each culture
+- **Disposition:** Substantially rewritten and promoted.
+- **Canon destinations:**
+  - `canon/cultures/living_customs_of_lumia.md`
+  - `canon/cultures/languages_of_the_homelands.md` (prior promotion retained)
+- **Promoted:** Anterean continuance, Crystal restructuring and Great Tuning,
+  seasonal courts, Apparatus unpurposed making, necessary error, tide-sworn
+  custom, shared observances, signature goods, and the disputes over permanence,
+  memory, and souls.
+- **Retired:** Five editorial “cultural spheres” as exhaustive peoples, exact
+  biological cultural rules, contradicted language grants, fixed salt currency,
+  and universal claims that every custom mechanically wards the Loom.
 
-8. **ADVENTURE HOOKS** ✅ COMPLETE
-   - Living stories documented (TALES_AND_LEGENDS.md)
-   - Artifact system with narrative hunger defined
-   - Wandering quests that hunt heroes
-   - Regional story traditions established
-   - Forbidden tales and story magic systems
+#### `cultures/Vampire Race!.md`
 
-9. **TREASURES & REWARDS** ✅ COMPLETE
-   - Five-tier progression system: Mundane → Exceptional → Mystical → Legendary → Artifacts
-   - Arcanite enhancement ladder: 5 stages from Preparation to Apotheosis
-   - Three Schools of Making: Forge (transformation), Growth (cultivation), Binding (sacrifice)
-   - Complete slot-based power distribution preventing overstacking
-   - Comprehensive resistance web covering all damage types
-   - Food & drink temporary enhancement system
-   - Material hierarchies from common iron to legendary Loom Thread
-   - Hidden vaults and legendary artifacts seeded throughout world
-   - Philosophy of treasure: Memory, Purpose, and Destiny
+- **Disposition:** Reconceived and promoted.
+- **Canon destination:** `canon/cultures/the_courts_of_hunger.md`.
+- **Promoted:** The ethical initiation, displaced elder, survivor testimony,
+  mortal heirloom, descendant encounter, last sunrise, daylight mantle, and
+  final informed choice. These became the Five Farewells.
+- **Retired:** Borrowed zones, vnums, level gates, kill lists, safe-room and token
+  mechanics, and the implication that an elder can perform the aspirant's final
+  act of vampiric refusal.
 
-## Strengths to Build On
+### Factions
 
-1. **The Loom Concept** - Brilliant unifying metaphysic
-2. **Crystal Dwarves** - Unique and fully realized race
-3. **Knight Orders** - Clear progression with philosophical depth
-4. **Divine Politics** - Complex pantheon with real tensions
-5. **The Otherworld** - Great potential for weird adventures
-6. **Soul Mechanics** - Mark/Touch/corruption system is compelling
+#### `factions/Faction Overview.md`
 
-## Recommended Next Steps
+- **Disposition:** Rewritten and promoted.
+- **Canon destination:** `canon/factions/the_three_embers.md`.
+- **Promoted:** Valariella Woodthimble and her refuge, Halden Alfarth and his
+  broken inherited sword, Professor Filindel and the threatened archive, their
+  competing uses for Arcanite, and their ability to cooperate under crisis.
+- **Retired:** Alignment labels, staff-controlled leaders, event cadence,
+  mechanical benefits, reputation algorithms, predetermined moral outcomes,
+  and a conventional joinable Darkling faction.
 
-### Phase 1: Foundation (Immediate)
-1. Create comprehensive timeline with 5 ages
-2. Draw/describe world map with major regions
-3. Define the Unmaker/Luminari conflict clearly
-4. Establish current year and political situation
+### Locations and Adventure Material
 
-### Phase 2: Connections (Short-term)
-1. Place all races on the map with homelands
-2. Connect knight orders to specific locations
-3. Link deities to geographic regions
-4. Establish trade routes and barriers
+#### `locations/02_10_2021  Notes.md`
 
-### Phase 3: Threats (Medium-term)
-1. Create 3-4 major villain factions
-2. Design sleeping threats (titans, ancient evils)
-3. Develop political conspiracies
-4. Plant prophecy seeds
+- **Disposition:** Partly promoted; partly confirmed as prior canon coverage.
+- **Canon destinations:**
+  - `canon/world/the_feyveil_and_the_otherworld.md`
+  - `canon/cultures/races_of_lumia.md`
+  - `canon/cultures/the_crystal_dwarves_of_nagburim.md`
+  - `canon/cultures/the_trelux.md`
+- **Promoted or retained:** Pools of Twilight tradition, elven return, embodied
+  Crystal resonance, Tal, Trelux nonverbal collectivity, and vertical forest
+  layers.
+- **Retired:** XP, feats, harvesting data structures, resource-node algorithms,
+  unqualified soul editing, and fixed reincarnation mechanics.
 
-### Phase 4: Playability (Long-term)
-1. Write adventure hooks for each region ✅ COMPLETE
-2. Create faction quest lines
-3. Design legendary locations ✅ COMPLETE
-4. Develop treasure/artifact list ✅ COMPLETE
+#### `locations/Ashenport Region Main Quest.md`
 
-## File Organization Status
+- **Disposition:** Substantially rewritten and promoted.
+- **Canon destination:** `canon/locations/the_ashenport_road.md`.
+- **Promoted:** The Lenadrian family, Ulerion's murder, Alerion at the Jade Jug,
+  Gahrn and Yahg, Lady Raven and Veralis, Graven Hollow, Tahgoth, Flamewake,
+  Blindbreak Rest, the Dollhouse, Mosaic Cave, wayfinder, Meelka, Gnar
+  custodians, Runic Gauntlet, Swinton and Fenton Goldwater, the agent network,
+  Ghalaerd, Underways glyph, and curved Arcanite lattice.
+- **Retired or corrected:** Physical Five-Key endgame, a Prison in Avernus,
+  Ashenport as Hir/Pesh, mandatory killing of altered children and Gnar
+  custodians, generic imported cities, fixed coordinates, levels, kill quotas,
+  vnums, command strings, and undifferentiated fetch errands.
 
-### Fully Documented Directories
-- ✅ `adventure_hooks/` - TALES_AND_LEGENDS.md synthesizing 10 converted docs
-- ✅ `ages_and_cataclysms/` - AGES.md, TIMELINE.md + 3 converted docs
-- ✅ `cultures_and_traditions/` - CULTURES_OF_LUMIA.md with Five Great Cultural Spheres
-- ✅ `factions_and_orders/` - DEITIES.md, THE_TWO_ORDERS_OF_DIVINITY.md, KNIGHTS.md, DIVINE_KNIGHT_CONCORDANCE.md, THE_FORGOTTEN_TIDE.md
-- 🔧 `magic_systems/` - Divine source roads are canonical; Arcane consolidation remains pending
-- 🔧 `mysteries_and_secrets/` - Canonical Locks and Shadowmoon context preserved; further development pending
-- ✅ `prophecies_and_fate/` - THE_FORGERS_PROPHECY.md, THE_FIVE_LOCKS_PARALLEL.md + 2 converted docs
-- ✅ `races_and_bloodlines/` - RACES_OF_LUMIA.md synthesizing 5 converted docs
-- 🔧 `villains_and_threats/` - Approved villain hierarchy; further threat development pending
+#### `locations/LEGENDARY_LOCATIONS.md`
 
-### Fully Documented Directories (Continued)
-- ✅ `legendary_locations/` - LEGENDARY_LOCATIONS.md synthesizing 8 converted docs (cities, dungeons, portals, quest paths)
-- ✅ `treasures_and_rewards/` - TREASURES.md synthesizing 8 converted docs (gear stats, crafting, armor notes)
+- **Disposition:** Rewritten into the Ashenport adventure framework; prior
+  Swiftpath canon retained.
+- **Canon destinations:**
+  - `canon/locations/the_ashenport_road.md`
+  - `canon/locations/the_swiftpaths.md`
+- **Promoted:** Regional sites and their narrative relationships.
+- **Retired or corrected:** Level bands, the Prison's asserted planar address,
+  Five Keys as collectible components, tutorial-soul metaphysics, and builder
+  placeholders.
 
-### Directories Actively Being Developed
-- 🔧 `geography_and_realms/` - Core structure complete, zone conversion in progress
-  - ✅ THE_WORLD.md - 592 zones catalogued
-  - ✅ WILD_KB.md - Procedural world documented
-  - ✅ `canon/locations/the_swiftpaths.md` - Approved transit lore
-  - ✅ THE_FIVE_NATIONS.md - Political geography complete
-  - 🔧 240 zones need Luminari lore conversion
-  - 🔧 16 converted docs contain additional regional details
+#### `locations/TREASURES.md`
 
-## Conclusion
+- **Disposition:** Lore extracted, mechanics retired.
+- **Canon destination:** `canon/world/relics_and_the_art_of_making.md`.
+- **Promoted:** Memory/Purpose/Possibility, four degrees of wonder, Forge/Growth/
+  Binding schools, five non-numeric stages of Arcanite craft, artifact hunger,
+  singularity, Strife, legacy pieces, and three reconciled artifact accounts.
+- **Retired or corrected:** Level tiers, stat bonuses, resistance percentages,
+  slot allocation, currency formulas, loot probabilities, borrowed geographic
+  names, and Five Locks as items.
 
-The foundation is remarkably complete with unique elements (Crystal Dwarves, the Loom, Knight Orders) that set Luminari apart. The timeline is established, the metaphysics are solid, and the political landscape is rich with tension.
+#### `locations/Worldbuilding.md`
 
-The primary remaining challenge is **geographic integration**: converting 240 Forgotten Realms zones to Luminari lore while maintaining the three-layer world structure (wilderness grid, detailed zones, planar realms). The infrastructure exists—592 zones across all realms, sophisticated transportation networks, and a massive procedural world. 
+- **Disposition:** Foundational facts retained where already canonical;
+  compatible gaps promoted.
+- **Canon destinations:**
+  - `canon/world/the_feyveil_and_the_otherworld.md`
+  - `canon/locations/the_ashenport_road.md`
+  - existing race, Crystal Dwarf, Homeland, Swiftpath, and timeline records
+- **Promoted or retained:** Lumia, Andros, Delos, Serane, Nagburim, Crystal
+  transformation, Arcana Golem soul-vessels, Pools of Twilight, Otherworld,
+  Feyveil, root-cities, Mosswood, Ashenport, and the Lenadrian family.
+- **Retired:** Racial stat blocks, combat abilities, adamantine punishment
+  mechanics, guaranteed Crystal reincarnation, raw builder placeholders,
+  external inspiration links, and unqualified Shadowmoon astronomy.
 
-What's needed now is the transformation of borrowed geography into unique Luminari mythology, ensuring every location serves the greater narrative of the Prisoner, the Luminari, and the cosmic conflict at the heart of creation.
+### Timeline and Secret History
 
-The world has excellent bones and most of its meat—now it needs the final seasoning of integrated geography to make it truly sing.
+#### `timeline/Luminari Back story.md`
+
+- **Disposition:** Fully covered by earlier canon; duplicate retired.
+- **Canon destinations:**
+  - `canon/timeline/timeline.md`
+  - `canon/timeline/the_shattered_truth.md`
+  - `canon/cultures/the_crystal_dwarves_of_nagburim.md`
+- **Coverage:** Luminari arrival, Arcanite Prison, mortal teaching, Mark, Last
+  War, Darklings, sacrifice, Serane, Crystal Dwarves, and renewed Marking.
+- **Correction retained:** The spelling is **Serane**, not Sarene; material keys
+  remain unverified interpretations of metaphysical Locks.
+
+#### `timeline/luminari-aeon-and-prisoner-lore.txt`
+
+- **Disposition:** Fully covered by earlier canon; conversational duplicate
+  retired.
+- **Canon destinations:** `canon/timeline/timeline.md` and
+  `canon/timeline/the_shattered_truth.md`.
+- **Coverage:** Shattered Aeon, Luminari fragments, the Prisoner's unity motive,
+  absorption, Arcanite prison, mining, Last War, and Luminari reseeding.
+
+#### `timeline/The Secret History + Storbuilding Questbuilding GameDesign Brainstorming.md`
+
+- **Disposition:** Secret-history account retained through prior canon;
+  brainstorming retired.
+- **Canon destinations:**
+  - `canon/timeline/the_shattered_truth.md`
+  - `canon/timeline/timeline.md`
+  - `canon/cultures/the_trelux.md`
+  - `canon/world/the_roads_of_magic.md`
+- **Promoted or retained:** Aeon Luminous, Khadhu Coshek, Creation versus
+  Oblivion, Arcanite as Aeonic essence, the Prisoner's tailored persuasion,
+  Trelux interest, and magic depletion stakes.
+- **Retired:** Repetitive generated summaries, PvP zones, reward tokens, quest
+  points, supermob strategy, staff event operation, content cadence, and other
+  game-design notes with no lore claim.
+
+### World Systems and Story
+
+#### `world/Magic in Lumia.md`
+
+- **Disposition:** Substantially rewritten and promoted.
+- **Canon destination:** `canon/world/the_roads_of_magic.md`.
+- **Promoted:** Primal source of Arcane calling, Luminari instruction, dragon
+  precedence, arcane reconstruction, casting interference, patron-shaped divine
+  power, and the difficulty of crossing roads.
+- **Corrected:** Divine magic follows both Woven and Deep roads, not Titans
+  alone; Arcanite is Aeonic residue rather than condensed Primal magic.
+
+#### `world/How artifacts will work.md`
+
+- **Disposition:** Lore principles promoted; administration retired.
+- **Canon destination:** `canon/world/relics_and_the_art_of_making.md`.
+- **Promoted:** Artifact singularity, trial/bestowal/taking, ongoing Hunger,
+  dangerous co-possession, surrender, and memorial legacy items.
+- **Retired:** Staff schedules, player-killing approval, offline penalties,
+  screenshots and emails, fixed playerbase percentages, exact real-world timers,
+  mandatory alignment changes, and guaranteed explosion phrased as a universal
+  mechanic.
+
+#### `world/TALES_AND_LEGENDS.md`
+
+- **Disposition:** Rewritten as canon tradition rather than literal history.
+- **Canon destinations:**
+  - `canon/cultures/tales_told_against_the_dark.md`
+  - `canon/world/relics_and_the_art_of_making.md`
+- **Promoted:** First Lie, fire tellings, Glassborn accounts, First Forest,
+  Hundred Heroes, half-orc Choosing, regional story forms, wandering patterns,
+  forbidden tales, bardic resonance, and storied artifacts.
+- **Retired or reframed:** Automatic reality control by story, physical journal
+  volumes beside the Locks, unqualified Cassis/Keridur deity status, fixed
+  artifact rotation, and consequence-free narrative weapons.
+
+## Canon Documents Added
+
+1. `canon/world/the_roads_of_magic.md`
+2. `canon/world/relics_and_the_art_of_making.md`
+3. `canon/world/the_feyveil_and_the_otherworld.md`
+4. `canon/cultures/living_customs_of_lumia.md`
+5. `canon/cultures/the_courts_of_hunger.md`
+6. `canon/cultures/tales_told_against_the_dark.md`
+7. `canon/factions/the_three_embers.md`
+8. `canon/locations/the_ashenport_road.md`
+
+## Existing Canon Reconciled
+
+Five narrow corrections were required so promoted material did not sit beside
+contradictory objective claims:
+
+- `canon/timeline/timeline.md` now distinguishes early material-key chronicles
+  from the canonical metaphysical Locks and removes a claim of known
+  Shadowmoon orbit.
+- `canon/timeline/ages.md` treats recurrence estimates as old chronology rather
+  than resolved orbital fact.
+- `canon/cultures/races_of_lumia.md` reconciles the Chulani and sacred half-orc
+  origin accounts, qualifies Shadowmoon “proximity,” and corrects Lumia's name.
+- `canon/factions/the_villian_hierarchy.md` uses the canonical Five Locks and
+  reframes the Shadowmoon egg as a dangerous doctrine rather than settled fact.
+- `canon/cultures/the_crystal_dwarves_of_nagburim.md` corrects Lumia's name.
+
+These changes preserve story testimony while preventing testimony from
+overriding the more specific concordances.
+
+## Completion Verification
+
+The completion audit must establish all of the following from the current
+worktree:
+
+1. `lore_docs/drafts` is absent and contains no file.
+2. All eight promoted canon documents exist and are non-empty.
+3. No promoted canon file asserts Avernus as the Prison's location.
+4. No promoted canon file treats a material item as one of the Five Locks.
+5. Shadowmoon references in promoted or reconciled material preserve its
+   unresolved physical nature.
+6. The canonical spelling `Lumia` is used for the world and `Serane` for the last
+   Luminari.
+7. Current metadata no longer describes a surviving draft as authoritative.
+8. Migration-authored changes are confined to the adjudicated lore and metadata;
+   unrelated worktree changes remain untouched.
+
+### Recorded results
+
+- `test ! -d lore_docs/drafts` — passed.
+- Eight expected promotions — present and non-empty, totaling 2,622 lines.
+- Canon corpus after promotion — 26 Markdown documents.
+- `git diff --check -- lore_docs` — passed; separate `--no-index --check`
+  checks passed for all eight untracked promotion files.
+- Full canonical Markdown references — resolved.
+- `Lumina` and `Sarene` typo scan across canon — no matches.
+- Lock/key, Shadowmoon, and Prison-location scans — only qualified, rejected, or
+  explicitly unresolved mentions remained.
+- `pytest -q tests/test_character_creation_lore.py tests/test_divine_canon.py` —
+  16 passed.
+- `tests/test_canon_corpus_boundary.py` — not collected because the current
+  environment lacks the `neo4j` Python package; collection failed before any
+  lore assertion ran.
+- The pre-existing user modification to
+  `lore_docs/meta/convert_all_docs.py` was present before this migration and was
+  preserved without alteration.
+
+The shell verification and final diff review are also summarized in the
+2026-08-10 entry of `CHANGELOG.md`.
+
+---
+
+_Canon is not every surviving sentence._
+
+_It is every surviving sentence for which the world is now willing to accept
+the consequences._

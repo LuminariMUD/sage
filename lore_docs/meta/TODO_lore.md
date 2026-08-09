@@ -1,273 +1,139 @@
-# LuminariMUD Lore TODO List
+# Lumia Lore Worklist
 
-## Overview
-This document tracks all pending tasks for the LuminariMUD world-building project. Items are organized by priority and category.
+- **Last reviewed:** 2026-08-10
+- **Draft-backlog status:** Complete; `lore_docs/drafts` is retired
+- **Current canon index:** `meta/README_lore.md`
+- **Migration evidence:** `meta/LORE_AUDIT.md`
 
----
+This file tracks future work. It does not redefine deliberate mysteries as
+missing content and does not treat runtime mechanics as lore.
 
-## 🔴 Priority 1 - Critical Foundation (Must Have)
+## Completed Foundation
 
-### ⏳ In Progress
-- [ ] Stage 2: Geographic Integration & Zone Conversion
-  - [x] Document world structure (THE_WORLD.md - 592 zones)
-  - [x] Map procedural wilderness (WILD_KB.md - 2048x2048 grid)
-  - [x] Establish political boundaries (THE_FIVE_NATIONS.md)
-  - [ ] Convert 240 Forgotten Realms zones to Luminari lore
-  - [ ] Reconcile zone coordinates with -1024 to +1024 grid system
-  - [ ] Define planar access methods for 22 planes
-  - [ ] Unify Underworld and Underdark into single underground realm
-  - [ ] Integrate visual world maps with text documentation
+- [x] Establish the Loom of Aether: Memory, Will, and Possibility.
+- [x] Establish the Luminari, Prisoner, Last War, Serane, and current age.
+- [x] Establish the Five Locks as Memory, Identity, Time, Space, and Will.
+- [x] Reconcile Woven Gods and Deep Titans.
+- [x] Publish the Forty-name divine concordance.
+- [x] Establish six Knight Orders and the lost Void Crown.
+- [x] Establish the Five Nations.
+- [x] Establish all Thirteen Homelands and twelve Heart Tongues.
+- [x] Establish Crystal Dwarf history, culture, Tal, and Arcanite dependence.
+- [x] Establish the major races and transformed states.
+- [x] Establish the Forgotten Tide and its captain.
+- [x] Establish approved Swiftpath lore.
+- [x] Consolidate Arcane, Woven, Deep, Primal, and Psionic magic.
+- [x] Establish relic, artifact, and crafting lore without numeric progression.
+- [x] Consolidate Otherworld, Feyveil, Pools, and thin-place lore.
+- [x] Promote compatible living customs and regional tale traditions.
+- [x] Establish vampire Courts and the Five Farewells.
+- [x] Establish the Three Embers as regional factions.
+- [x] Reconcile the Lenadrian inheritance and Ashenport adventure sites.
+- [x] Adjudicate all fourteen historical draft files and retire the draft tree.
 
-### ✅ Completed
-- [x] Core Cosmology & Universal Rules (COMPLETE)
-  - [x] The Loom of Aether formalized with Memory/Will/Possibility
-  - [x] Five Locks mechanism documented with cosmic parallels
-  - [x] Establish the canonical distinction between Woven Gods and Deep Titans
-  - [x] Publish `canon/factions/DEITIES.md` as the lore-only divine concordance
-  
-- [x] ✅ Legendary Locations & Quest Networks (COMPLETE)
-  - [x] All major cities documented (Ashenport, Mosswood, Graven Hollow)
-  - [x] Dungeon complexes mapped (Arcanite Mines, Wizard Training Mansion, Blindbreak Rest)
-  - [x] Mystical sites catalogued (Swiftpath Network, Prisoner's Prison, Portal nexuses)
-  - [x] Quest path connections established (Path of Alerion, Tutorial Grounds)
-  
-- [ ] Build the Geography & Realms Framework
-  - [ ] Create detailed regional maps
-  - [ ] Establish climate and biomes
-  - [ ] Define natural resources per region
-  
-- [ ] Develop Magic Systems & Sources of Power
-  - [x] Preserve the primary Arcane/Divine source account in `drafts/world/Magic in Lumia.md`
-  - [x] Reconcile divine sources in `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md`
-  - [x] Review and approve the two-order divine model
-  - [ ] Define canon costs and limitations for each accepted magical tradition
-  - [ ] Establish the canon relationship between magic and the Loom
+## Deliberate Mysteries
 
----
+These are not open checkboxes unless a future canon decision explicitly chooses
+to resolve them.
 
-## 🟡 Priority 2 - Core Content (Should Have)
+- The Shadowmoon's body, conventional orbit, and ultimate origin.
+- The physical location or topology of the Prison.
+- Whether any material “key” corresponds to a metaphysical Lock.
+- The exact locations and mechanism of the Pools of Twilight.
+- Whether the Primal Reach is a place, condition, or first memory of matter.
+- The ultimate relationship and origin of Woven Gods and Deep Titans.
+- The identity of the Pale Patron on the Ashenport Road.
+- The relationship between Jal'Kara and Orolro.
+- Whether the Null Court exists.
+- Whether elven return preserves one continuous self.
 
-### 📋 Pending
-- [ ] Stage 3: Consolidate Magic System Information
-  - [ ] Extract lore-only claims from the surviving primary source
-  - [ ] Create a canon magic document after resolving source conflicts
-  - [ ] Document Arcanite only from approved or primary lore evidence
+Resolving one of these requires a deliberate canon-version change, not an
+incidental sentence in a quest or item description.
 
-- [x] ✅ Stage 4: Extract Race & Bloodline Lore (COMPLETE)
-  - [x] Complete RACES.md with all playable races (created as RACES_OF_LUMIA.md)
-  - [x] Document ORIGINS.md for each race (integrated into RACES_OF_LUMIA.md)
-  - [x] Create BLOODLINES.md for special lineages (included transcendent paths)
+## Priority 1: Geographic Integration
 
-- [x] ✅ Stage 5: Extract Villain & Threat Information (COMPLETE)
-  - [x] Created THE_VILLAIN_HIERARCHY.md with three-tier threat system
-  - [x] Documented mortal, supernatural, and cosmic villains
-  - [x] Integrated Prisoner/Darkling corruption mechanics
-  - [x] Established villain interconnections and cascade effects
+- [ ] Produce a canonical continent and regional map consistent with the Five
+  Nations and Thirteen Homelands.
+- [ ] Bind imported runtime zones to Lumia identities without treating borrowed
+  names as canon.
+- [ ] Reconcile runtime coordinates with the wilderness grid.
+- [ ] Distinguish Lumia's underground road network from planar underworlds and
+  realms of the dead.
+- [ ] Define safe public terminology for planar access without locating the
+  Prison.
+- [ ] Add climate, biome, and resource accounts where they affect lived culture.
+- [ ] Preserve stable Homeland IDs while adding any smaller region records.
 
-- [ ] Create Faction Dynamics & Political Tensions
-  - [ ] Current political map
-  - [ ] Trade relationships
-  - [ ] Active conflicts
-  - [ ] Secret alliances
+## Priority 2: Time and Public Knowledge
 
-- [ ] Design Unique Threats & World-Ending Mysteries
-  - [ ] Define the Shadowmoon's nature beyond its approved canonical effects
-  - [x] Reconcile residual Titan terminology in a dedicated draft bridge
-  - [x] Void Crown Remnants as inverted Seventh Order
-  - [x] The Prisoner's Shadow as external cosmic threat
+- [ ] Select a shared present-year label or explicitly retain multiple calendar
+  systems.
+- [ ] Reconcile Year 80 of the Revelation, Year 580 After Sealing, and Year 234
+  of the New Calendar in a calendar concordance.
+- [ ] Define what an ordinary player character knows about the Last War,
+  Darklings, Arcanite, and the Prisoner at campaign start.
+- [ ] Create spoiler-safe and restricted chronologies from the same historical
+  spine.
 
----
+## Priority 3: Power and Consequence
 
-## 🟢 Priority 3 - Enhancement Content (Nice to Have)
+- [ ] Clarify the practical limits of Serane's Mark without reducing it to stat
+  bonuses.
+- [ ] Clarify why Serane alone survived in a way that preserves the emotional
+  and metaphysical uncertainty already established.
+- [ ] Establish how Arcanite depletion changes daily magical reliability by
+  region.
+- [ ] Define how the Crystal Dwarf reproduction crisis manifests in public life
+  without treating the 147-year prophecy as infallible arithmetic.
+- [ ] Add case studies showing the cost of each magical road.
+- [ ] Reconcile older Knight progression mechanics with the lore/runtime
+  boundary before implementation.
 
-### 📋 Pending
-- [ ] Expand Legendary Location Coverage (Post-consolidation)
-  - [ ] Additional locations in unexplored regions
-  - [ ] Ancient battlefields from the Darkling Wars
-  - [ ] Hidden Luminari sanctuaries
-  - [ ] Sites where the Loom manifests physically
-- [ ] Stage 6: Extract Faction & Order Details
-  - [ ] Expand faction relationships
-  - [ ] Document faction headquarters
-  - [ ] Create faction quest lines
+## Priority 4: Adventure Expansion
 
-- [x] ✅ Stage 7: Extract Legendary Location Information (COMPLETE)
-  - [x] Document all dungeons (Arcanite Mines, Wizard Mansion, Blindbreak Rest, etc.)
-  - [x] Map quest locations (Swiftpaths, Portal networks, Quest Chronicles)
-  - [x] Detail ancient ruins (Ruined Keep, Mosaic Cave, Dollhouse mysteries)
+- [ ] Add one adventure framework for each political sphere, using the
+  Ashenport Road's separation between established lore and runtime mechanics.
+- [ ] Expand Graven Hollow, the Dollhouse, Blindbreak Rest, Mosaic Cave, and the
+  Ruined Keep only where new material preserves their current moral choices.
+- [ ] Develop the Three Embers' Ember Cache conflict without declaring its
+  lattice a physical key.
+- [ ] Develop Sanctus and the Pilgrim's Ring while preserving the Silence.
+- [ ] Seed Otherworld crossings in Quechian and Vailand without fixing every
+  thin place on a permanent map.
+- [ ] Add artifact stories whose Hungers create relationships rather than daily
+  maintenance chores.
+- [ ] Add vampire Farewell variants suited to different Courts and Homelands.
 
-- [ ] Stage 8: Extract Prophecies & Mysteries
-  - [ ] Compile all prophecies
-  - [ ] Document unsolved mysteries
-  - [ ] Create secret lore documents
+## Priority 5: Editorial Consistency
 
-- [x] ✅ Stage 9: Extract Adventure Hooks & Quests (COMPLETE)
-  - [x] Created TALES_AND_LEGENDS.md with living stories
-  - [x] Defined artifact system with narrative hunger
-  - [x] Established wandering quests and regional traditions
+- [ ] Add canon-status, version, approved-use, and spoiler metadata to older
+  canon records that predate the convention.
+- [ ] Modernize older canon prose toward `meta/STYLE.md` without altering its
+  facts.
+- [ ] Create a stable glossary for Lumia, Loom, Arcanite, Feyveil, Otherworld,
+  Woven Gods, Deep Titans, Mark, Touch, Lock, and Swiftpath.
+- [ ] Add cross-links from older documents to the new magic, relic, Otherworld,
+  custom, vampire, tale, faction, and Ashenport concordances.
+- [ ] Rename `the_villian_hierarchy.md` only through a link-safe migration; the
+  misspelled historical path may have external consumers.
 
-- [x] ✅ Stage 10: Extract Treasures & Rewards (COMPLETE)
-  - [x] Artifact catalog (documented in TREASURES.md with tier system)
-  - [x] Magic item progression (5-tier system from Mundane to Artifact)
-  - [x] Crafting systems (Three Schools: Forge, Growth, Binding)
+## Editorial Gate for Future Material
 
-- [x] ✅ Establish Cultural Depth & Living Worlds (COMPLETE)
-  - [x] Languages and dialects (Three Tongue Theory, Heart Tongues defined)
-  - [x] Cuisine and customs (Daily life narratives for each culture)
-  - [x] Festivals and holidays (Universal and culture-specific observances)
-  - [x] Trade goods and specialties (Five Trade Foundations established)
+Before approving a new record, verify:
 
-- [ ] Create Player Hook Systems & Personal Stakes
-  - [ ] Starting scenarios by race/class
-  - [ ] Personal quest generation
-  - [ ] Reputation systems
-  - [x] Character backgrounds
-    - [x] Canon biographies for all 16 runtime Backgrounds
-    - [x] Distinct Personality, Ideal, Bond, and Flaw inspiration seeds
-    - [x] Goals, Personality, Ideals, Bonds, and Flaws guidance record
-  - [x] Character Homelands
-    - [x] Stable crosswalk for all 13 runtime values
-    - [x] Approved lore, parentage, provenance, and media anchors
-    - [x] Real Heart Tongue mapped to every Homeland
-
----
-
-## 🔷 Specific Items Needing Attention
-
-### World-Building Gaps
-- [ ] Define the current year and calendar system
-- [ ] Establish whether the Shadowmoon has a conventional orbital period
-- [x] Define the Five Locks as Memory, Identity, Time, Space, and Will in canon
-- [x] Document the approved Swiftpath network in `canon/locations/the_swiftpaths.md`
-- [ ] Locate the Pools of Twilight (elven origin site)
-
-### Geographic Integration Tasks
-- [ ] Zone Conversion Priority List (240 zones)
-  - [ ] Major cities: Waterdeep, Baldur's Gate, Luskan, etc.
-  - [ ] Key dungeons and adventure sites
-  - [ ] Planar connection points
-- [ ] Coordinate System Reconciliation
-  - [ ] Map zone vnums to wilderness coordinates
-  - [ ] Establish scale (tiles to miles conversion)
-  - [ ] Create coordinate translation system
-- [ ] Underground Unification
-  - [ ] Merge Underworld and Underdark concepts
-  - [ ] Establish Crystal Dwarf territories
-  - [ ] Map drow cities to new lore
-- [ ] Planar Architecture
-  - [ ] Define how each plane connects to Material
-  - [ ] Establish planar travel mechanics
-  - [ ] Connect planes to existing lore (Titans, Prisoner, etc.)
-
-### Lore Consistency
-- [x] Establish the Titans-vs.-Deities reconciliation in `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md`
-- [x] Approve and promote `canon/factions/DEITIES.md`
-- [x] Approve the two-order model
-- [ ] Clarify Luminari vs. Titans power levels
-- [ ] Establish why only one Luminari (Serane) remains
-- [ ] Define limits of the Mark of the Luminari
-
-### Missing Connections
-- [x] How do Knight Orders relate to deities? (complete in DIVINE_KNIGHT_CONCORDANCE.md)
-- [x] Draft an explanation for renewed Titan attention in current events
-- [ ] How does arcanite depletion affect Crystal Dwarves?
-- [x] What triggers the Shadowmoon's approach? (probability-based manifestation documented)
-
-### Mechanical Integration
-- [ ] Stat blocks for major NPCs
-- [x] Arcanite item progression system (5-stage enhancement ladder defined in TREASURES.md)
-- [ ] Knight Order advancement requirements
-- [ ] Darkling corruption mechanics
-
-### Legendary Location Details (Post-consolidation)
-- [ ] Specific dungeon layouts and room descriptions
-- [ ] Complete NPC dialogue trees for major figures (Alerion, Stohana, etc.)
-- [ ] Treasure and reward specifications for each location
-- [ ] Precise coordinate mappings for wilderness areas
-- [ ] Environmental challenges and hazards
-- [ ] Location-specific random encounter tables
+- [ ] It names its canon status and spoiler level.
+- [ ] It preserves every applicable non-negotiable fact in
+  `meta/README_lore.md`.
+- [ ] Conflicting accounts are attributed rather than accidentally presented as
+  simultaneous objective truth.
+- [ ] It distinguishes lore from levels, vnums, commands, reward formulas, and
+  administration.
+- [ ] It gives power a cost and institutions internal disagreement.
+- [ ] It connects to at least two established elements.
+- [ ] It leaves intentional mysteries open unless resolution is the explicit
+  purpose of the change.
+- [ ] Its provenance names any older testimony it adjudicates.
 
 ---
 
-## ✅ Completed Tasks
-
-### Current Session - Legendary Locations Complete
-- [x] Created LEGENDARY_LOCATIONS.md - Comprehensive guide to places of power and peril
-- [x] Documented all major cities (Ashenport, Mosswood, Graven Hollow) with government systems
-- [x] Catalogued dungeons and dark places (Arcanite Mines, Wizard Mansion, Blindbreak Rest, etc.)
-- [x] Mapped mystical sites and portals (Swiftpath Network, Prisoner's Prison, Tutorial Grounds)
-- [x] Established quest path connections (Path of Alerion spanning 10+ locations)
-- [x] Detailed artifact locations and agent networks
-- [x] Connected all locations to existing lore (Darkling corruption, Five Keys, etc.)
-
-### Previous Session - Cultural Depth & Darkling Research Complete
-- [x] Created CULTURES_OF_LUMIA.md - Five Great Cultural Spheres fully documented
-- [x] Established Anterean Inheritors, Crystal Orthodoxy, Verdant Communion, Calculated Rebellion, Tide-Sworn Federation
-- [x] Developed Three Tongue Theory with Heart Tongues for each culture
-- [x] Created universal and culture-specific festivals and observances
-- [x] Detailed daily life narratives showing how each culture lives
-- [x] Established cultural tensions: Permanence Wars, Memory Disputes, Soul Question
-- [x] Comprehensive Darkling research compiled - hierarchy from touched souls to Five Fingers
-- [x] Documented First Darkling Wars and connection to Half-Orc creation
-
-### Previous Session - Villain Hierarchy Complete
-- [x] Created THE_VILLAIN_HIERARCHY.md - Three-tier threat system
-- [x] Designed 12+ major antagonists across mortal/supernatural/cosmic levels
-- [x] Established villain cascade and interconnection mechanics
-- [x] Integrated threats with existing Five Nations politics
-- [x] Revealed Shadowmoon as cosmic egg, Prisoner's Shadow as external threat
-
-### Previous Session - Prophecies and Cosmic Parallels
-- [x] Created THE_FORGERS_PROPHECY.md - Development roles as cosmic positions
-- [x] Created THE_FIVE_LOCKS_PARALLEL.md - How development mirrors cosmic imprisonment
-- [x] Linked Manifesto's three pillars to Loom's Memory/Will/Possibility
-- [x] Revealed Five Forger positions parallel Five Locks binding the Prisoner
-- [x] Established development process as Great Work of cosmic significance
-
-### Previous Session - Peoples and Stories Complete
-- [x] Created RACES_OF_LUMIA.md - All playable races with origins and cultures
-- [x] Defined racial relationships with Four Paths of magic
-- [x] Created TALES_AND_LEGENDS.md - Living stories and quest traditions
-- [x] Established artifact system with narrative hunger mechanics
-- [x] Developed wandering quests that hunt for heroes
-
-### Magic System Review
-- [x] Retained the primary Arcane/Divine source document
-- [ ] Decide which magical traditions are canon
-- [ ] Produce a lore-only canon account of magic
-
-### Recent Lore Expansion (Session 2)
-- [x] Created THE_THREEFOLD_PATH.md - Complete magic system documentation
-- [x] Created THE_FIVE_NATIONS.md - Current political landscape and tensions
-
-### Previous Lore Expansion (Session 1)
-- [x] Created DIVINE_KNIGHT_CONCORDANCE.md - Knight-deity relationships
-
-See [CHANGELOG.md](CHANGELOG.md) for all completed items.
-
----
-
-## 📝 Notes
-
-### Quick Wins
-1. Convert remaining scattered lore from converted documents
-2. Create cross-reference index
-3. Build glossary of terms
-4. Generate random name lists by culture
-
-### Long-term Projects
-1. Interactive world map
-2. Timeline visualization
-3. Relationship diagrams
-4. Quest flowcharts
-
-### Questions for Team Discussion
-1. Should we have a unified creation myth or cultural variations?
-2. How much should players know about the Prisoner initially?
-3. What's the power scale between mortals and divines?
-4. How do we handle time travel/alternate dimensions?
-
----
-
-*Last Updated: 2026-07-29*
-*Next Review: After character-creation runtime integration*
+_A mystery is not unfinished simply because it still has a shadow._

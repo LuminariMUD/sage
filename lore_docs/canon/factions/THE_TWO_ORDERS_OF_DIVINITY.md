@@ -404,8 +404,10 @@ This concordance reconciles the divine claims established in:
 
 ### Historical evidence adjudicated
 
-- `lore_docs/drafts/world/Magic in Lumia.md` preserves the primary account of
-  Titan-granted magic passing through a patron's pocket dominion.
+- The retired `lore_docs/drafts/world/Magic in Lumia.md` supplied the primary
+  account of Titan-granted magic passing through a patron's pocket dominion.
+  Its accepted Arcane and divine claims are now also restated in
+  `lore_docs/canon/world/the_roads_of_magic.md`.
 - The retired `lore_docs/drafts/factions/Titans abstract.md` supplied the oldest
   surviving account of Titans, worship, pocket dominions, and their attention
   after the Prison was made.

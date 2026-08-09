@@ -102,13 +102,15 @@ Its cult, the Heretics, worship "pure" versions of all twenty Titans—versions 
 **Threat Level**: Existential
 **Base**: The Wound Beneath Old Anteria
 
-Not all Darklings are created equal. While most are merely corrupted souls, five beings serve as the Prisoner's direct extensions into reality—one for each Lock. The Finger, representing the First Lock of Elevation, works to corrupt the concept of hierarchy itself.
+Not all Darklings are created equal. While most are corrupted souls, five beings are claimed to serve as the Prisoner's most direct extensions into reality—one associated with each canonical Lock: **Memory, Identity, Time, Space, and Will**. Whether they are truly pieces of the Prisoner or Darkling sovereigns arranging themselves around a useful doctrine remains unresolved.
 
-Under its influence, promotion becomes demotion, climbing becomes falling, and achievement becomes failure. Three nations have already had their command structures mysteriously invert, with janitors giving orders to generals.
+The best-attested of them is called **the Finger**. It attacks Identity through assigned place: office consumes person, title replaces name, and hierarchy becomes so absolute that no one inside it can remember choosing obedience. Three command structures have already inverted or ossified under its influence, leaving generals unable to act without orders issued by offices that no longer have occupants.
+
+Early threat reports called this power “the First Lock of Elevation” and placed it at Mount Aetherspine. The restricted concordance rejects that terminology as a mistaken attempt to turn metaphysical Locks into geographic dungeons. Elevation survives as the Finger cult's code word, not as a sixth principle or canonical Lock.
 
 **Methods**: Conceptual corruption, hierarchy inversion, achievement negation
 **Forces**: 5,000 touched Darklings, reality-corrupting presence
-**Current Plot**: Corrupting Mount Aetherspine to make "up" become "down"
+**Current Plot**: Seeding identity-stripping command rites in military, temple, and civic promotion ceremonies
 
 ### The Awakened Arcana
 **Leader**: Resonance Prime, the Discordant Song
@@ -145,18 +147,18 @@ Some theorize it's the Prisoner assuming a new form. Others believe it's what th
 **Forces**: No cultists (worship would negate its nature)
 **Current Plot**: Existing more with each moment of doubt
 
-### The Shadowmoon's True Nature
-**Identity**: The Egg of Unmaking
+### The Egg of Unmaking Doctrine
+**Identity**: An unproven interpretation of the Shadowmoon
 **Threat Level**: Apocalyptic
-**Location**: Irregular orbit around Lumia
+**Location**: The recurring Shadowmoon manifestation; its physical location and motion remain unresolved
 
-The Shadowmoon isn't a moon—it's an egg, and something inside is beginning to hatch. Each closer approach is a contraction. The pattern storms it causes are birth pangs. The creatures it spawns are antibodies.
+The Silent Throne and several apocalyptic schools teach that the Shadowmoon is not a moon but an egg, and that something inside is beginning to hatch. In their doctrine, each closer-seeming approach is a contraction, pattern storms are birth pangs, and altered creatures are antibodies.
 
-Crystal Dwarf deep-time calculations show it's been orbiting since before Lumia existed, waiting for the right conditions. Those conditions are nearly met: sufficient despair, adequate chaos, and most importantly, enough cracks in reality for the hatching creature to squeeze through.
+They cite disputed Crystal Dwarf deep-time calculations claiming the manifestation predates Lumia. Nagburim's accredited archives do not endorse that conclusion. The doctrine remains dangerous because its adherents are actively producing the conditions they believe an emergence requires: despair, chaos, and cracks in the boundaries between individual minds.
 
-**Methods**: Pattern storms, probability cascade, reality labour pains
-**Forces**: Every shadow it casts, every pattern storm it creates
-**Current Plot**: Approaching final orbit before hatching
+**Attributed Methods**: Pattern storms, probability cascades, and collective nightmares
+**Forces**: Cults, compromised researchers, and whatever agency the Shadowmoon itself may possess
+**Current Plot**: Turning each manifestation into a coordinated rite intended to make the Egg Doctrine true
 
 ### The Prisoner's Shadow
 **Identity**: What The Prisoner Cast Off to Fit in the Prison
@@ -208,7 +210,7 @@ Synthesis has infected 30% of Crystal Dwarf networks. At 51%, it gains democrati
 The Cabal is one component away from completing their device. That component exists in someone's pocket, unrecognized.
 
 ### The Shadowmoon Approach
-Next orbit brings it close enough to touch Lumia's atmosphere. The egg-tooth is already visible to those who know how to look.
+The Shadowmoon manifests more frequently. Egg adherents claim an “egg-tooth” is already visible; astronomers, psions, and dream-readers disagree on both the observation and what _visible_ means in this context.
 
 ### The Knight War
 Three Knight Orders prepare to declare the Void Crown reformed and heretical. This civil war will shatter the orders' strength when it's needed most.

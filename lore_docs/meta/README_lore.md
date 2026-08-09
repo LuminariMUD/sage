@@ -1,218 +1,128 @@
-# LuminariMUD World Lore & World-Building Project
+# Lumia Lore Repository
 
-## Vision Statement
-To create the most epic D&D-inspired world by combining the absolute best elements from legendary settings like Dragonlance, Forgotten Realms, Greyhawk, Dark Sun, Ravenloft, Mystara, Birthright, Al-Qadim, Kara-Tur, Maztica, and the Neverwinter/Baldur's Gate game series.
+This tree contains the approved narrative foundation for Lumia.
 
-## Core World-Building Pillars
+## Authority
 
-### 1. The Cosmic Spine (The Loom of Aether)
-**Inspiration**: Dragonlance's balance, Planescape's interconnectedness
-- **The Loom**: A metaphysical weave binding gods, magic, memory, and reality itself
-- **Three Forces**: Memory (past), Will (present), Possibility (future)
-- **Breaking Points**: When the Loom frays, reality shifts (cataclysms, wild magic, divine silence)
-- **Personal Connection**: Every oath, spell, and prayer is a thread in the Loom
+1. **`canon/` is binding lore.** New work may extend its gaps, introduce
+   explicitly attributed disagreement, or clarify an old account. It may not
+   silently replace an established fact.
+2. **More specific concordances interpret broad chronicles.** For example,
+   `timeline/the_shattered_truth.md` establishes the Five Locks as Memory,
+   Identity, Time, Space, and Will. An older chronicle's “hidden keys” is
+   testimony about how people described the Locks, not authority to turn them
+   into five lootable objects.
+3. **Attributed belief is canon as belief.** A culture may truly teach something
+   that is not objectively true. Documents must make that distinction legible.
+4. **`meta/STYLE.md` governs narrative voice.** Metadata, implementation
+   contracts, and audits should favor precision over ornament.
 
-### 2. Historical Weight & Lost Glory
-**Inspiration**: Forgotten Realms' deep history, Greyhawk's fallen empires
-- **The Ages**: Define 3-5 world-shaping eras (Age of Woven Crowns, The Great Sundering, etc.)
-- **Fallen Empires**: Ancient civilizations whose ruins hold power and danger
-- **Lost Magic**: Techniques and artifacts from when the Loom was stronger/different
-- **Living Memory**: Recent cataclysms that current NPCs survived and remember
+## Current Structure
 
-### 3. Geographic Personality & Realm Diversity
-**Inspiration**: Dark Sun's harsh survival, Birthright's domain rules, Ravenloft's domains of dread
-- **Distinct Regions**: Each area has unique magical rules, threats, and opportunities
-- **Natural Boundaries**: Mountains, seas, and magical barriers that shaped civilizations
-- **Frontier Zones**: Contested borders where cultures clash and blend
-- **Broken Lands**: Places where reality itself is wounded or different
+### Characters
 
-### 4. The Faction Web
-**Inspiration**: Planescape's factions, Ravenloft's darklords, Birthright's bloodlines
-- **Knight Orders**: Six sacred orders with opposing philosophies and divine patrons
-- **Divine Politics**: Gods bound by the Loom but pulling it in different directions
-- **Secret Societies**: Groups pursuing world-shaping agendas in shadow
-- **Power Sources**: Bloodlines, oaths, pacts, and other paths to supernatural might
+- `canon/characters/the_black_bitch_of_voids_wake.md` — the captain at the
+  center of the Forgotten Tide.
 
-### 5. Mystery Boxes & Existential Threats
-**Inspiration**: Neverwinter Nights' ancient evils, Baldur's Gate's divine conspiracies
-- **The Sleeping Threats**: 3-4 world-ending dangers at various stages of awakening
-- **Lost Seventh Order**: The Knights of the Void Crown and their forbidden knowledge
-- **Titan Prisons**: Ancient beings imprisoned in the landscape itself
-- **Prophecies**: Multiple interpretations, all partially true, none complete
+### Cultures and Peoples
 
-### 6. Cultural Tapestry & Living Worlds
-**Inspiration**: Al-Qadim's Arabian fantasy, Kara-Tur's Eastern mythology, Maztica's Mesoamerican themes
-- **Diverse Cultures**: Non-European fantasy with equal depth and agency
-- **Trade & Exchange**: Silk roads, spice routes, and cultural collision points
-- **Magical Traditions**: Different approaches to channeling the Loom's power
-- **Daily Life**: Foods, festivals, customs that make each culture feel real
+- `canon/cultures/races_of_lumia.md` — racial origins and transformed states.
+- `canon/cultures/the_crystal_dwarves_of_nagburim.md` — Nagburim's foundational
+  account.
+- `canon/cultures/the_trelux.md` — Lumia's ancient collective consciousness.
+- `canon/cultures/the_courts_of_hunger.md` — vampire culture and the Five
+  Farewells.
+- `canon/cultures/living_customs_of_lumia.md` — cross-border practices,
+  observances, goods, and cultural disputes.
+- `canon/cultures/tales_told_against_the_dark.md` — established folklore whose
+  internal claims may remain unreliable.
+- `canon/cultures/languages_of_the_homelands.md` — stable Heart Tongues.
+- `canon/cultures/the_characters_compass.md` — character identity and background
+  guidance.
 
-## World Structure
+### Factions, Gods, and Orders
 
-### The Three-Layer Reality
-The world of Lumia exists across three interconnected layers:
+- `canon/factions/DEITIES.md` — the Forty recognized Woven Gods.
+- `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md` — Woven Gods, Deep Titans, and
+  their distinct roads of power.
+- `canon/factions/KNIGHTS.md` and
+  `canon/factions/divine_knight_concordance.md` — the six Knight Orders, lost
+  seventh, and divine relationships.
+- `canon/factions/the_forgotten_tide.md` — the pirate federation.
+- `canon/factions/the_three_embers.md` — the Freehands, Civic Guard, and Lantern
+  Atlas along the Ashenport road.
+- `canon/factions/the_villian_hierarchy.md` — present threat taxonomy. The
+  historical filename is retained despite its spelling.
 
-1. **The Wilderness Grid** (WILD_KB.md)
-   - 2048x2048 procedural world (-1024 to +1024 coordinates)
-   - 723 landmasses from continent to islet
-   - 25 mountain ranges, 5 climate zones
-   - Dynamic terrain generation with Perlin noise
-   - Resources distributed by biome
+### Locations and Political Geography
 
-2. **The Zone Network** (THE_WORLD.md)
-   - 592 total zones across all layers
-   - 240 disconnected zones awaiting integration
-   - 111 WildLinks connecting zones to wilderness
-   - 30 Underworld zones (traditional MUD navigation)
-   - 22 Planar realms (elemental, outer, transitive)
+- `canon/locations/the_five_nations.md` — current political powers.
+- `canon/locations/the_thirteen_homelands.md` — stable character-origin
+  geography and public regional identities.
+- `canon/locations/the_swiftpaths.md` — the approved transit mystery.
+- `canon/locations/the_ashenport_road.md` — the Lenadrian regional adventure
+  framework and reconciled legendary sites.
 
-3. **The Transportation Web**
-   - 19 Swiftpaths for instant travel
-   - 41 carriage route stops
-   - 35 sea ports (future maritime system)
-   - 42 SubLinks for zone-to-zone connections
-   - Portal networks and planar gates
+### History and Metaphysics
 
-### Geographic Integration Status
-- **Active Conversion**: 240 Forgotten Realms zones being adapted to Luminari lore
-- **Coordinate System**: Zones connect to wilderness at specific coordinates
-- **Underground Divide**: Traditional Underworld vs newer Underdark areas need unification
-- **Planar Access**: Connection methods between Material and Planar realms need definition
+- `canon/timeline/timeline.md` — chronological spine.
+- `canon/timeline/ages.md` — cultural and metaphysical age structure.
+- `canon/timeline/the_shattered_truth.md` — restricted interpretation of the
+  Luminari, Prisoner, Arcanite, and Five Locks.
 
-## Current Lore Structure
+### World Systems
 
-### ✅ Established Core Lore
-- **Deities**: ✅ **CANON** - `canon/factions/DEITIES.md` establishes forty gods, their worship, divine relationships, and the public and esoteric patron constellations of the Knight Orders
-- **Knight Orders**: Six sacred orders + Lost Seventh with divine concordance (KNIGHTS.md, DIVINE_KNIGHT_CONCORDANCE.md)
-- **The Forgotten Tide**: Pirate faction led by the Black Bitch of Void's Wake, halfling-drow hybrid commanding Shadow's Laugh (THE_FORGOTTEN_TIDE.md)
-- **The Loom**: Central metaphysical concept with Memory/Will/Possibility forces
-- **Timeline**: Complete chronology from Primordial Era to present (TIMELINE.md)
-- **Ages**: Seven distinct eras with detailed descriptions (AGES.md)
-- **The Prisoner**: Core antagonist restrained by the canonical Locks of Memory, Identity, Time, Space, and Will (`canon/timeline/the_shattered_truth.md`)
-- **Gods and Titans**: ✅ **CANON** - `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md` distinguishes Loom-anchored Woven Gods from dominion-anchored Deep Titans and defines the two roads of divine magic
-- **The Luminari**: Heroes marked to oppose the Prisoner (only Serane remains)
-- **Darklings**: Souls corrupted by the Prisoner's Touch, organized hierarchy from touched mortals to the Five Fingers
-- **The Shadowmoon**: A recurring manifestation that weakens the barriers between individual and collective; its physical behavior remains unresolved
-- **Swiftpath Network**: Approved mysterious transit network documented in `canon/locations/the_swiftpaths.md`
-- **The Forgers**: Development roles as cosmic positions mirroring creation itself (THE_FORGERS_PROPHECY.md)
-- **Magic Systems**: 🔧 **PARTIAL CANON** - `canon/factions/THE_TWO_ORDERS_OF_DIVINITY.md` establishes god-granted and Titan-granted divine magic; `drafts/world/Magic in Lumia.md` remains the primary Arcane source pending a unified canon treatment
-- **Races & Origins**: ✅ COMPLETE - All playable races with origins, cultures, and magical relationships (RACES_OF_LUMIA.md)
-- **Tales & Legends**: ✅ COMPLETE - Living stories, artifacts, and quest traditions (TALES_AND_LEGENDS.md)
-- **Cultures & Traditions**: ✅ COMPLETE - Five Great Cultural Spheres with languages, festivals, economies, and daily life (CULTURES_OF_LUMIA.md)
-- **Villain Hierarchy**: ✅ COMPLETE - Three-tier threat system from mortal to cosmic antagonists (THE_VILLAIN_HIERARCHY.md)
-- **Current Politics**: Five Nations on brink of war (THE_FIVE_NATIONS.md)
-- **Character's Compass**: ✅ COMPLETE - Canon guidance for Goals, Personality,
-  Ideals, Bonds, Flaws, and all 16 Background inspiration themes
-  (THE_CHARACTERS_COMPASS.md)
-- **Thirteen Homelands**: ✅ COMPLETE - All runtime Homelands have stable IDs,
-  resolved parentage, approved player lore, provenance, and media anchors
-  (THE_THIRTEEN_HOMELANDS.md)
-- **Homeland Languages**: ✅ COMPLETE - Twelve real Heart Tongues cover every
-  Homeland, including shared Ubdinic registers and established Tal
-  (LANGUAGES_OF_THE_HOMELANDS.md)
-- **Crystal Dwarves**: Approved biological-to-crystalline transformation, harmonic castes, and Arcanite dependence (`canon/cultures/the_crystal_dwarves_of_nagburim.md`)
-- **Treasures & Rewards**: ✅ COMPLETE - Five-tier progression system with Arcanite enhancement ladder (TREASURES.md)
+- `canon/world/the_roads_of_magic.md` — Arcane, Woven, Deep, Primal, and
+  Psionic practice.
+- `canon/world/relics_and_the_art_of_making.md` — relics, artifacts, Arcanite
+  craft, and the three schools of making.
+- `canon/world/the_feyveil_and_the_otherworld.md` — Otherworld, Feyveil, Pools
+  of Twilight, and thin places.
 
-### 📁 Content by Directory
-- `adventure_hooks/` - ✅ **COMPLETE**: TALES_AND_LEGENDS.md with living stories, artifacts, and quest traditions
-- `ages_and_cataclysms/` - ✅ **COMPLETE**: AGES.md, TIMELINE.md + backstory documents
-- `cultures_and_traditions/` - ✅ **COMPLETE**: CULTURES_OF_LUMIA.md with Five Great Cultural Spheres, languages, festivals, trade
-- `factions_and_orders/` - ✅ **COMPLETE**: DEITIES.md, THE_TWO_ORDERS_OF_DIVINITY.md, KNIGHTS.md, DIVINE_KNIGHT_CONCORDANCE.md, THE_FORGOTTEN_TIDE.md (pirate faction)
-- `geography_and_realms/` - 🔧 **ACTIVE DEVELOPMENT**: approved Five Nations, Thirteen Homelands, and Swiftpath documents
-- `legendary_locations/` - ✅ **COMPLETE**: LEGENDARY_LOCATIONS.md synthesizing 8 converted docs (cities, dungeons, portals, quest paths)
-- `magic_systems/` - 🔧 **PARTIAL CANON**: the two divine roads are canonical; the primary Arcane source in `Magic in Lumia.md` still requires consolidation
-- `mysteries_and_secrets/` - 🔧 **NEEDS DEVELOPMENT**: canonical Locks and Shadowmoon context survive in `the_shattered_truth.md`
-- `prophecies_and_fate/` - ✅ **COMPLETE**: THE_FORGERS_PROPHECY.md, THE_FIVE_LOCKS_PARALLEL.md + manifesto/release docs
-- `races_and_bloodlines/` - ✅ **COMPLETE**: RACES_OF_LUMIA.md with all races, origins, and cultural depth
-- `treasures_and_rewards/` - ✅ **COMPLETE**: TREASURES.md with 5-tier system, Arcanite progression, Three Schools of Making
-- `villains_and_threats/` - 🔧 **ACTIVE DEVELOPMENT**: approved villain hierarchy with further threat development pending
+## Non-Negotiable Cross-Document Facts
 
-## Development Priorities
+- The world is **Lumia**.
+- The Loom's three forces are **Memory, Will, and Possibility**.
+- The Five Locks are **Memory, Identity, Time, Space, and Will**.
+- Arcanite is crystallized Aeonic residue and part of the Prison.
+- **Serane** is the last Luminari.
+- Woven Gods and Deep Titans are different orders of divinity.
+- The Shadowmoon's observed effects are canon; its body, conventional orbit,
+  and origin are not settled.
+- Ashenport is a charter city within Onduis and is not Hir/Pesh.
+- Runtime topology and imported production names are evidence, not automatic
+  player-facing canon.
 
-### Phase 1: Foundation ✅ COMPLETE
-1. **Audit**: ✅ Full lore audit completed (LORE_AUDIT.md)
-2. **Timeline**: ✅ Seven ages established with complete chronology
-3. **Map**: 🔧 IN PROGRESS - Three-layer world structure documented:
-   - Surface: 2048x2048 procedural wilderness (WILD_KB.md)
-   - Zones: 592 detailed areas across surface/underworld/planes (THE_WORLD.md)
-   - Networks: Swiftpaths, sea routes, carriage roads mapped
-4. **Connections**: ✅ Deities and knights linked through lore
+## Writing New Canon
 
-### Phase 2: Depth ✅ COMPLETE
-1. **Cultures**: ✅ Five Great Cultural Spheres with languages, festivals, trade, daily life
-2. **Threats**: ✅ Three-tier villain hierarchy from mortal to cosmic threats
-3. **Mysteries**: 🔧 Canonical Five Locks and Shadowmoon context established; detailed physical models remain open
-4. **Magic**: 🔧 The two divine roads are canonical; the Arcane source model still requires canon review
+Before adding a record:
 
-### Phase 3: Playability (Medium-term)
-1. **Adventures**: Create location-based and faction-based quest hooks
-2. **Treasures**: Design artifacts tied to lore and prophecies
-3. **NPCs**: Populate the world with memorable characters
-4. **Secrets**: Hide discoverable lore throughout the world
+1. Read the relevant foundation and `meta/STYLE.md`.
+2. State whether the record is objective concordance, public belief, restricted
+   truth, proposal, or unresolved testimony.
+3. Connect the material to at least two established elements without collapsing
+   a deliberate mystery.
+4. Keep mechanics at the boundary: lore may guide an implementation, but levels,
+   vnums, stat bonuses, admin process, and engine commands are not truths about
+   the world.
+5. Name costs and consequences. Magic, immortality, artifacts, government, and
+   memory all leave someone carrying weight.
+6. Add a provenance section when reconciling prior or imported material.
 
-### Phase 4: Living World (Long-term)
-1. **Events**: Create a calendar of festivals, holy days, and recurring events
-2. **Economics**: Establish trade routes and resource conflicts
-3. **Politics**: Develop ongoing conflicts players can influence
-4. **Evolution**: Plan how the world changes based on player actions
+## Draft Policy
 
-## Design Principles
+The 2026-08-10 canonization retired the entire historical draft backlog. The
+`lore_docs/drafts` directory is intentionally absent.
 
-### The Rule of Three
-- Every major concept has three aspects (Memory/Will/Possibility)
-- Every mystery has at least three possible explanations
-- Every faction has three goals: public, private, and secret
+New unapproved work should not accumulate as an untracked second canon. Use a
+short-lived review branch or an explicitly marked proposal, adjudicate it against
+the foundation, and either promote it promptly or remove it.
 
-### The Connected World
-- No lore exists in isolation; everything connects to something else
-- Player actions have ripple effects through the faction web
-- Ancient history directly impacts current conflicts
-
-### The Personal Stakes
-- Cosmic threats manifest as personal problems
-- Every player can find a faction, deity, or cause to care about
-- Individual choices can shift the balance of power
-
-### The Living Mystery
-- Not everything needs to be defined; leave room for discovery
-- Some questions should have multiple valid answers
-- The world should feel larger than what's documented
-
-## Contributing Guidelines
-
-### When Adding Lore
-1. Check existing documents for contradictions
-2. Connect new lore to at least two existing elements
-3. Consider how it affects different player types (combat, social, exploration)
-4. Leave hooks for future expansion
-5. Include both public knowledge and hidden truths
-
-### File Organization
-- Use clear, descriptive filenames
-- Include a brief summary at the top of each document
-- Cross-reference related documents
-- Mark sections as [ESTABLISHED], [PROPOSED], or [PLACEHOLDER]
-
-### Maintaining Consistency
-- The Loom of Aether is the central metaphysical concept
-- The six Knight Orders represent fundamental philosophical divisions
-- Gods are powerful but bound by cosmic rules
-- Magic always has a cost
-- History repeats in patterns, not copies
-
-## The Ultimate Goal
-
-Create a world that feels:
-- **Ancient**: With weight of history and lost glory
-- **Alive**: With active factions and ongoing conflicts
-- **Mysterious**: With secrets worth discovering
-- **Diverse**: With many cultures and valid viewpoints
-- **Dangerous**: With real threats and consequences
-- **Personal**: Where individual choices matter
-- **Epic**: Where heroes can reshape the world
-
-This is not just another D&D setting. This is the crystallization of what makes D&D great: the sense of wonder, the depth of history, the weight of choice, and the promise that a small group of adventurers can change everything.
+The complete disposition of the retired backlog is recorded in
+`meta/LORE_AUDIT.md`. Historical actions are recorded in `meta/CHANGELOG.md`.
 
 ---
 
-*"Every thread in the Loom demands its price. Heroes pay in advance."*
+_The Loom is not kept by never changing a thread._
+
+_It is kept by knowing which knot the thread was holding before you move it._

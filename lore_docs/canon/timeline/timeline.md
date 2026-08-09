@@ -40,7 +40,11 @@ The history of Lumia spans from the primordial creation through multiple ages of
 - Discover **Lumia**: a world with unique magical properties
 - **Crystalline Arcanite** abundant on the planet creates strong magical fields
 - Luminari sacrifice portions of their essence to create the **Arcanite Prison**
-- **Five Locks** spread across the surface, keys hidden
+- Early warder chronicles describe **Five Locks** as “spread across the
+  surface” and their “keys” as hidden
+- The restricted concordance identifies the Locks themselves as **Memory,
+  Identity, Time, Space, and Will**—metaphysical anchors rather than confirmed
+  sites; whether any material keys ever corresponded to them remains unresolved
 - Prison's creation brings magic into the world
 
 ### The Vigil Begins
@@ -167,7 +171,9 @@ The history of Lumia spans from the primordial creation through multiple ages of
 - **Serane** begins marking new heroes
 - Rising Darkling activity reported
 - Arcanite depletion weakening the prison
-- **The Shadowmoon** approaching (cycles every several thousand years)
+- **The Shadowmoon** manifesting more frequently; older records place its
+  recurrences several thousand years apart, but no conventional orbit is
+  established
 - Aggressive creatures appearing at border regions
 - Titans showing renewed interest in mortal affairs
 
@@ -235,7 +241,7 @@ The history of Lumia spans from the primordial creation through multiple ages of
 - Duration of each age
 - Details of First Darkling Wars
 - Timeline of city foundations
-- The Shadowmoon's orbital period
+- Whether the Shadowmoon possesses any conventional orbital period
 
 ### [PROPOSED]
 - Current year designation (Year of the Marked? After Last War?)
