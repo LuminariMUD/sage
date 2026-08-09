@@ -225,13 +225,14 @@ docker compose up -d
 # Check service health
 docker compose logs -f api
 
-# Run semantic data pipeline (inside container)
-make semantic-pipeline
+# Run semantic data pipeline from the repository root
+make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 # Or run individual steps:
 # make load-canon          # Load markdown documents
 # make create-episodes     # Create semantic chunks
 # make generate-embeddings # Generate vector embeddings
-# make sync-to-graphiti    # Build knowledge graph
+# make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+# Build knowledge graph (provider-backed durable write)
 
 # Test the API
 curl http://localhost:8003/ping

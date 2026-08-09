@@ -116,13 +116,14 @@ docker compose logs -f api
 
 ```bash
 # Complete pipeline (recommended for first deployment)
-make semantic-pipeline
+make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # This runs four steps in sequence:
 # 1. make load-canon          # Load markdown documents → PostgreSQL
 # 2. make create-episodes     # Semantic chunking (200-500 tokens)
 # 3. make generate-embeddings # Vector embeddings
-# 4. make sync-to-graphiti    # Extract entities/relationships → Neo4j
+# 4. make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+#    Extract entities/relationships → Neo4j
 
 # Estimated time: 10-30 minutes depending on corpus size and hardware
 ```
@@ -816,7 +817,8 @@ sleep 30
 # 6. Run data pipeline if schema changed
 # Check CHANGELOG.md for migration notes
 make status
-# If needed: make semantic-pipeline
+# If needed:
+# make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # 7. Verify health
 curl http://localhost:8003/ping

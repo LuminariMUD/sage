@@ -85,18 +85,17 @@ The world of Lumia exists across three interconnected layers:
 - **Deities**: Complete pantheon with 40+ gods, domains, relationships, and divine conflicts (DEITIES.md)
 - **Knight Orders**: Six sacred orders + Lost Seventh with divine concordance (KNIGHTS.md, DIVINE_KNIGHT_CONCORDANCE.md)
 - **The Forgotten Tide**: Pirate faction led by the Black Bitch of Void's Wake, halfling-drow hybrid commanding Shadow's Laugh (THE_FORGOTTEN_TIDE.md)
-- **The Titans**: Twenty aspects of a shattered oversoul, true source of divine magic (THE_TITAN_ENIGMA.md)
 - **The Loom**: Central metaphysical concept with Memory/Will/Possibility forces
 - **Timeline**: Complete chronology from Primordial Era to present (TIMELINE.md)
 - **Ages**: Seven distinct eras with detailed descriptions (AGES.md)
-- **The Prisoner**: Core antagonist imprisoned by Five Locks across Lumia (THE_FIVE_LOCKS.md, THE_FIVE_LOCKS_PARALLEL.md)
+- **The Prisoner**: Core antagonist restrained by the canonical Locks of Memory, Identity, Time, Space, and Will (`canon/timeline/the_shattered_truth.md`)
+- **Gods and Titans**: 🔧 **DRAFT RECONCILIATION** - `drafts/factions/THE_TWO_ORDERS_OF_DIVINITY.md` distinguishes Loom-anchored gods from dominion-anchored Titans while preserving both canon systems
 - **The Luminari**: Heroes marked to oppose the Prisoner (only Serane remains)
 - **Darklings**: Souls corrupted by the Prisoner's Touch, organized hierarchy from touched mortals to the Five Fingers
-- **The Shadowmoon**: Dark satellite orbiting through probability, weakening the prison (THE_SHADOWMOON.md)
-- **Swiftpath Network**: Ancient portal roads converging on mysterious door (THE_SWIFTPATH_NETWORK.md)
-- **The Pattern Beneath**: Mathematical nature of reality revealed (THE_PATTERN_BENEATH.md)
+- **The Shadowmoon**: A recurring manifestation that weakens the barriers between individual and collective; its physical behavior remains unresolved
+- **Swiftpath Network**: Approved mysterious transit network documented in `canon/locations/the_swiftpaths.md`
 - **The Forgers**: Development roles as cosmic positions mirroring creation itself (THE_FORGERS_PROPHECY.md)
-- **Magic Systems**: ✅ COMPLETE - Unified theory of four magical paths documented (MAGIC_COMPENDIUM.md, THE_THREEFOLD_PATH.md)
+- **Magic Systems**: 🔧 **NEEDS CANON REVIEW** - `drafts/world/Magic in Lumia.md` preserves the primary source account; `drafts/factions/THE_TWO_ORDERS_OF_DIVINITY.md` proposes compatible god-granted and Titan-granted paths
 - **Races & Origins**: ✅ COMPLETE - All playable races with origins, cultures, and magical relationships (RACES_OF_LUMIA.md)
 - **Tales & Legends**: ✅ COMPLETE - Living stories, artifacts, and quest traditions (TALES_AND_LEGENDS.md)
 - **Cultures & Traditions**: ✅ COMPLETE - Five Great Cultural Spheres with languages, festivals, economies, and daily life (CULTURES_OF_LUMIA.md)
@@ -111,7 +110,7 @@ The world of Lumia exists across three interconnected layers:
 - **Homeland Languages**: ✅ COMPLETE - Twelve real Heart Tongues cover every
   Homeland, including shared Ubdinic registers and established Tal
   (LANGUAGES_OF_THE_HOMELANDS.md)
-- **Crystal Dwarf Crisis**: Silicon prophecy and arcanite depletion (THE_SILICON_PROPHECY.md)
+- **Crystal Dwarves**: Approved biological-to-crystalline transformation, harmonic castes, and Arcanite dependence (`canon/cultures/the_crystal_dwarves_of_nagburim.md`)
 - **Treasures & Rewards**: ✅ COMPLETE - Five-tier progression system with Arcanite enhancement ladder (TREASURES.md)
 
 ### 📁 Content by Directory
@@ -119,14 +118,14 @@ The world of Lumia exists across three interconnected layers:
 - `ages_and_cataclysms/` - ✅ **COMPLETE**: AGES.md, TIMELINE.md + backstory documents
 - `cultures_and_traditions/` - ✅ **COMPLETE**: CULTURES_OF_LUMIA.md with Five Great Cultural Spheres, languages, festivals, trade
 - `factions_and_orders/` - ✅ **COMPLETE**: DEITIES.md, KNIGHTS.md, DIVINE_KNIGHT_CONCORDANCE.md, THE_FORGOTTEN_TIDE.md (pirate faction)
-- `geography_and_realms/` - 🔧 **ACTIVE DEVELOPMENT**: THE_WORLD.md (592 zones), WILD_KB.md (2048x2048 grid), THE_SWIFTPATH_NETWORK.md, THE_FIVE_NATIONS.md
+- `geography_and_realms/` - 🔧 **ACTIVE DEVELOPMENT**: approved Five Nations, Thirteen Homelands, and Swiftpath documents
 - `legendary_locations/` - ✅ **COMPLETE**: LEGENDARY_LOCATIONS.md synthesizing 8 converted docs (cities, dungeons, portals, quest paths)
-- `magic_systems/` - ✅ **COMPLETE**: MAGIC_COMPENDIUM.md, THE_THREEFOLD_PATH.md + 7 converted docs fully synthesized
-- `mysteries_and_secrets/` - ✅ **COMPLETE**: THE_PATTERN_BENEATH.md, THE_FIVE_LOCKS.md, THE_SHADOWMOON.md + 9 converted docs
+- `magic_systems/` - 🔧 **NEEDS CANON REVIEW**: primary Arcane/Divine source model survives in `Magic in Lumia.md`
+- `mysteries_and_secrets/` - 🔧 **NEEDS DEVELOPMENT**: canonical Locks and Shadowmoon context survive in `the_shattered_truth.md`
 - `prophecies_and_fate/` - ✅ **COMPLETE**: THE_FORGERS_PROPHECY.md, THE_FIVE_LOCKS_PARALLEL.md + manifesto/release docs
 - `races_and_bloodlines/` - ✅ **COMPLETE**: RACES_OF_LUMIA.md with all races, origins, and cultural depth
 - `treasures_and_rewards/` - ✅ **COMPLETE**: TREASURES.md with 5-tier system, Arcanite progression, Three Schools of Making
-- `villains_and_threats/` - ✅ **COMPLETE**: THE_VILLAIN_HIERARCHY.md, THE_TITAN_ENIGMA.md + 2 converted docs
+- `villains_and_threats/` - 🔧 **ACTIVE DEVELOPMENT**: approved villain hierarchy with further threat development pending
 
 ## Development Priorities
 
@@ -142,8 +141,8 @@ The world of Lumia exists across three interconnected layers:
 ### Phase 2: Depth ✅ COMPLETE
 1. **Cultures**: ✅ Five Great Cultural Spheres with languages, festivals, trade, daily life
 2. **Threats**: ✅ Three-tier villain hierarchy from mortal to cosmic threats
-3. **Mysteries**: ✅ Five Locks, Shadowmoon, Pattern Beneath, Forgers' Prophecy
-4. **Magic**: ✅ Four Paths unified theory with costs, limitations, and Loom integration
+3. **Mysteries**: 🔧 Canonical Five Locks and Shadowmoon context established; detailed physical models remain open
+4. **Magic**: 🔧 Primary Arcane/Divine source model requires canon review
 
 ### Phase 3: Playability (Medium-term)
 1. **Adventures**: Create location-based and faction-based quest hooks

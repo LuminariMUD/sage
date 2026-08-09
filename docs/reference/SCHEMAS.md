@@ -50,10 +50,12 @@ Luminari Sage uses a hybrid database architecture that leverages the strengths o
 graph LR
     MD[Markdown Files] --> LOAD[load_documents.py]
     LOAD --> PG[PostgreSQL]
-    PG --> EXTRACT[extract_entities.py]
+    PG --> EPISODES[create_episodes_from_documents.py]
+    EPISODES --> EMBED[generate_embeddings.py]
+    EPISODES --> EXTRACT[sync_episodes_to_graphiti.py]
     EXTRACT --> GRAPHITI[Graphiti]
     GRAPHITI --> N4J[Neo4j]
-    PG --> |Embeddings| SEARCH[Hybrid Search]
+    EMBED --> |pgvector| SEARCH[Hybrid Search]
     N4J --> |Graph Context| SEARCH
 ```
 

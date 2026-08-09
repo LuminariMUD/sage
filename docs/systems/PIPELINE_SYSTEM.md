@@ -1,8 +1,8 @@
 # Pipeline System
 
-**Version**: 0.7.29
+**Version**: 0.7.30
 **Status**: Production Ready
-**Last Updated**: 2026-08-08
+**Last Updated**: 2026-08-09
 
 A fail-closed ingestion pipeline that processes Markdown files exclusively from
 `lore_docs/canon` into the hybrid Graph RAG system. Drafts, meta documentation,
@@ -27,15 +27,48 @@ text files, PDFs, and reference material are outside the production corpus.
 ## Quick Start
 
 ```bash
-# Process the canon corpus
-make pipeline-canon
+# Process newly added canon documents through PostgreSQL, embeddings, and Neo4j.
+# The exact confirmation is required because graph sync can call the configured
+# provider and mutate durable graph state.
+make pipeline-canon CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # Resume interrupted processing
-make resume
+make resume CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # For detailed output, add VERBOSE=1
-make pipeline-canon VERBOSE=1
+make pipeline-canon CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC VERBOSE=1
 ```
+
+### Adding a new canon document
+
+The current pipeline has a clean additive path for a brand-new Markdown file:
+
+1. Add the file beneath `lore_docs/canon/`, normally in the matching category
+   directory such as `characters/`, `factions/`, or `locations/`.
+2. Run the confirmed full pipeline:
+
+   ```bash
+   make pipeline-canon CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+   ```
+
+3. Verify the relational, embedding, and graph stages:
+
+   ```bash
+   make status
+   make embedding-status
+   make graph-sync-status
+   ```
+
+The loader skips unchanged files, episode creation selects unprocessed documents,
+embedding generation selects episodes without vectors, and the durable graph worker
+selects unsynchronized episodes. Re-running the command is therefore safe for the
+additive case.
+
+This guarantee does **not** extend to editing, shortening, renaming, or deleting an
+existing canon file. The loader notices an edit, but the current episode and graph
+state is not fully reconciled. See the
+[incremental canon sync plan](../ongoing_projects/incremental_canon_sync_plan.md)
+for the proposed full lifecycle.
 
 ---
 
@@ -49,16 +82,16 @@ The pipeline consists of three main stages:
    - Tracks changes via content hashing
    - Stores in PostgreSQL with metadata
 
-2. **Entity Extraction** (`extract_entities.py`)
-   - Processes documents with pending `graphiti_status`
-   - Uses Graphiti to extract entities and relationships
-   - Chunks large documents intelligently
-   - Stores knowledge graph in Neo4j
+2. **Episode Creation and Embeddings**
+   - Splits newly loaded documents into semantic episodes
+   - Generates vectors only for canon episodes missing embeddings
+   - Enforces the active embedding profile and physical vector-space preflight
 
-3. **Supporting Processes**
-   - Episode creation and embedding generation
-   - Incremental processing and resume capability
-   - Status tracking and error handling
+3. **Durable Graph Sync** (`sync_episodes_to_graphiti.py`)
+   - Selects eligible canon episodes that have not been synchronized
+   - Requires explicit operator confirmation before provider calls or graph writes
+   - Uses Graphiti to extract entities and relationships into Neo4j
+   - Records durable attempts and supports bounded retry/resume
 
 ### Architecture Diagram
 
@@ -66,12 +99,14 @@ The pipeline consists of three main stages:
 graph TB
     A[Markdown Files<br/>lore_docs/canon only] --> B[load_documents.py]
     B --> C[PostgreSQL<br/>lore_documents table]
-    C --> D[extract_entities.py]
-    D --> E[Graphiti<br/>Entity Extraction]
-    E --> F[Neo4j<br/>Knowledge Graph]
+    C --> D[create_episodes_from_documents.py]
+    D --> E[PostgreSQL<br/>episodes table]
+    E --> F[generate_embeddings.py<br/>pgvector]
+    E --> H[sync_episodes_to_graphiti.py]
+    H --> I[Graphiti<br/>Entity Extraction]
+    I --> J[Neo4j<br/>Knowledge Graph]
     F --> G[RAG API<br/>Search & Generation]
-    C --> H[Embeddings<br/>pgvector]
-    H --> G
+    J --> G
 ```
 
 ---
@@ -88,10 +123,12 @@ graph TB
 
 #### Robust Processing
 
-- **Incremental updates**: Only processes new/changed documents
-- **Restartable**: Use `make resume` to continue after interruption
+- **Incremental additions**: New documents flow through only their missing stages;
+  unchanged inputs are skipped
+- **Restartable**: Use the confirmed `make resume` command to continue after interruption
 - **Error recovery**: Failed documents can be retried on next run
-- **Change detection**: Content hashing prevents unnecessary reprocessing
+- **Change detection**: Content hashing prevents unnecessary reloads, but edits,
+  renames, and deletions are not yet fully reconciled downstream
 
 #### Clean Output
 
@@ -104,7 +141,7 @@ graph TB
 The pipeline expects this repository structure:
 
 ```
-lore/
+<repository>/lore_docs/
 ├── canon/              # Approved lore (empty initially)
 │   ├── world/
 │   ├── cultures/
@@ -147,25 +184,30 @@ Documents are automatically categorized by directory:
 - **Input**: Markdown files beneath `lore_docs/canon`
 - **Process**: `load_documents.py` scans canon recursively and rejects path escapes
 - **Output**: Documents stored in PostgreSQL `lore_documents` table
-- **Change Detection**: SHA-256 content hashing prevents reprocessing unchanged files
+- **Change Detection**: SHA-256 content hashing prevents reloading unchanged files
 
-### 2. Entity Extraction
+### 2. Episode Creation
 
-- **Input**: Canon episodes with eligible durable graph-sync jobs
-- **Process**: `sync_episodes_to_graphiti.py` uses the confirmed durable Graphiti worker
-- **Chunking**: Canon documents are split into overlapping semantic episodes first
-- **Output**: Entities and relationships in Neo4j knowledge graph
+- **Input**: Newly loaded canon documents whose `processing_status` is not complete
+- **Process**: `create_episodes_from_documents.py` applies semantic chunking
+- **Output**: Ordered episode rows in PostgreSQL
 
 ### 3. Embedding Generation
 
-- **Input**: Episode text missing an embedding
+- **Input**: Canon episode text missing an embedding
 - **Process**: The explicitly configured application embedding profile after a
   clean profile/dimension/index preflight
-- **Output**: 768-dimensional vectors in the active PostgreSQL episode space
+- **Output**: Profile-specific vectors in the active PostgreSQL episode space
 - **Safety**: A configured/stored/physical profile mismatch blocks before adapter
   construction or any provider request
 
-### 4. RAG Integration
+### 4. Durable Graph Sync
+
+- **Input**: Canon episodes with eligible durable graph-sync jobs
+- **Process**: `sync_episodes_to_graphiti.py` uses the confirmed durable Graphiti worker
+- **Output**: Entities and relationships in Neo4j knowledge graph
+
+### 5. RAG Integration
 
 - **Hybrid Search**: Combines vector similarity and graph traversal
 - **Context Assembly**: Uses both document content and entity relationships
@@ -180,11 +222,11 @@ def calculate_content_hash(self, content: str) -> str:
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
 ```
 
-When content changes:
-
-- Hash comparison detects changes
-- Document status resets to `pending`
-- Previous graph entities are updated/replaced
+For a new file, the hash is stored with the new document and every downstream
+artifact is created normally. For an existing file, the hash comparison updates
+the document row and legacy `graphiti_status`, but it does not currently invalidate
+or retire all previously created episodes, embeddings, and graph facts. Do not
+interpret the detected hash change as end-to-end reconciliation.
 
 ### Chunking Strategy
 
@@ -238,14 +280,21 @@ Graphiti manages the Neo4j schema automatically with:
 
 ### Processing States
 
-Documents progress through these states:
+There is no single four-state document lifecycle for the complete pipeline. Each
+stage has its own eligibility signal:
 
-1. **`pending`**: New or changed, needs processing
-2. **`processing`**: Currently being processed (temporary)
-3. **`completed`**: Successfully processed
-4. **`failed`**: Processing failed, needs attention
+1. **Episode creation** uses `lore_documents.processing_status`; new documents are
+   eligible until marked `completed`.
+2. **Embedding generation** selects active canon episodes whose `embedding` is
+   `NULL`.
+3. **Durable graph sync** uses authoritative `graph_sync_jobs` states:
+   `pending`, `leased`, `retry_wait`, `quarantined`, and `synced`.
+4. `lore_documents.graphiti_status` is legacy, while `episodes.graphiti_synced` is
+   a compatibility projection; neither is the durable graph job authority.
 
-The `make resume` command processes all `pending` and `failed` documents.
+The confirmed `make resume` command runs episode creation, embedding generation,
+and durable graph sync for already loaded documents; it does not scan the
+filesystem. Use the full `pipeline-canon` command after adding a new file.
 
 ### Entity Types
 
@@ -294,11 +343,15 @@ The system recognizes 13 entity types optimized for fantasy lore:
 ### Basic Pipeline Operations
 
 ```bash
-make pipeline-canon    # Process canon only (recommended)
+make pipeline-canon CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+# Process canon through all stages (recommended for new documents)
 
-make resume            # Continue interrupted processing
-make rebuild           # Full reset + pipeline-canon
+make resume CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+# Continue interrupted episode, embedding, and graph processing
 ```
+
+Both commands reach durable graph sync and therefore require the exact confirmation
+token. They may call the configured LLM provider and write to Neo4j.
 
 ### Document Loading Only
 
@@ -312,19 +365,24 @@ explicit failure targets so stale automation cannot widen the corpus.
 ### Maintenance Operations
 
 ```bash
-make status            # Show system status
-make clear-graph       # Clear Neo4j (with confirmation)
-make reset-all         # Reset all processing flags
+make status             # Overall service and processing status
+make embedding-status   # Episode embedding coverage
+make graph-sync-status  # Durable graph queue/status
+make graph-rebuild-plan # Read-only plan for a controlled graph rebuild
 ```
+
+The legacy `clear-graph`, `reset-all`, and `reset-sync` targets are retired and
+fail closed. Use the backup-gated graph rebuild workflow described below when a
+whole-graph replacement is actually required.
 
 ### Verbose Mode
 
 Add `VERBOSE=1` to any command for detailed output:
 
 ```bash
-make pipeline-canon VERBOSE=1
+make pipeline-canon CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC VERBOSE=1
 make load-canon VERBOSE=1
-make resume VERBOSE=1
+make resume CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC VERBOSE=1
 ```
 
 #### Verbose Output Includes:
@@ -487,12 +545,12 @@ When some documents fail but others succeed:
 3. Try processing again (often transient issues):
 
    ```bash
-   make resume
+   make resume CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
    ```
 
 4. For persistent failures, try verbose mode:
    ```bash
-   make resume VERBOSE=1
+   make resume CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC VERBOSE=1
    ```
 
 #### LLM Processing Issues
@@ -507,22 +565,15 @@ When Graphiti entity extraction fails:
    - Very large documents may timeout
    - Malformed markdown may cause issues
 
-3. Reset specific documents:
-   ```bash
-   # Reset processing status for specific file
-   docker exec luminari-sage-api-1 python -c "
-   import asyncio
-   from src.db import get_postgres_db
+3. Inspect the durable graph state before retrying:
 
-   async def reset():
-       db = await get_postgres_db()
-       await db.execute(
-           \"UPDATE lore_documents SET graphiti_status = 'pending' WHERE source_file = %s\",
-           'specific/file/path.md'
-       )
-   asyncio.run(reset())
-   "
+   ```bash
+   make graph-sync-status
+   make graph-sync-run-summary
    ```
+
+Do not repair Graphiti failures by manually changing legacy document flags. The
+durable worker owns job state, attempts, retries, and quarantine evidence.
 
 ---
 
@@ -535,46 +586,38 @@ When Graphiti entity extraction fails:
 If the pipeline is interrupted (Ctrl+C, system restart, etc.):
 
 ```bash
-make resume
+make resume CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 ```
 
 This will:
 
-- Process any documents marked as 'pending' or 'failed'
-- Skip already completed documents
-- Continue entity extraction for loaded documents
+- Create episodes for eligible unprocessed canon documents
+- Generate embeddings for canon episodes missing vectors
+- Continue eligible durable graph jobs
+- Skip work whose stage is already complete
 
-#### Full Reset and Rebuild
+#### Controlled Graph Rebuild
 
-For a completely fresh start:
-
-```bash
-make rebuild
-```
-
-This will:
-
-1. Clear the Neo4j graph
-2. Reset all processing flags in PostgreSQL
-3. Run the complete pipeline from scratch
-
-#### Partial Resets
-
-Reset just the graph (keep loaded documents):
+`make rebuild` is a backup-gated replacement of the durable Neo4j graph. It is not
+a general document/embedding reset and should not be routine maintenance. First
+create and verify a current combined backup, then provide all three exact gates:
 
 ```bash
-make clear-graph
-make sync-to-graphiti
+make backup-provider-upgrade \
+  BACKUP_REFERENCE=backups/provider-upgrade-<timestamp>
+
+make rebuild \
+  BACKUP_REFERENCE=backups/provider-upgrade-<timestamp> \
+  CONFIRM_GRAPH_REBUILD=PREPARE_DURABLE_GRAPH_REBUILD \
+  CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC \
+  CONFIRM_GRAPH_REBUILD_FINALIZE=FINALIZE_DURABLE_GRAPH_REBUILD
 ```
 
-Reset just the processing flags:
+For the auditable step-by-step form, use `graph-rebuild-plan`,
+`graph-rebuild-prepare`, confirmed `sync-to-graphiti`, and
+`graph-rebuild-finalize`. The legacy direct graph/reset targets fail closed.
 
-```bash
-make reset-all
-make sync-to-graphiti
-```
-
-Reset just embeddings:
+Clear and regenerate embeddings only when the active profile remains unchanged:
 
 ```bash
 make reset-embeddings
@@ -590,40 +633,44 @@ documented migration/cutover workflow; do not overwrite the active space.
 
 **Daily** (if actively developing):
 
-- Run `make resume` to process new/changed files
+- Run `make pipeline-canon CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC` after adding
+  new canon files
 - Check `make status` for any failures
+- Treat edits, renames, and deletions as unsupported incremental operations until
+  the reconciliation project is implemented
 
 **Weekly**:
 
-- Run the canon pipeline on significant changes: `make pipeline-canon`
+- Review `make graph-sync-status` and `make embedding-status`
 - Review logs for recurring errors: `make logs`
 
 **Monthly**:
 
-- Full rebuild for cleanup: `make rebuild`
-- Review and clean up old logs
+- Run read-only graph and embedding audits appropriate to the deployment
+- Rebuild only for a separately justified, backup-backed migration or repair
 
 ### Performance Optimization
 
-**For faster processing:**
+There is no `pipeline-bulk` target. Episode embedding already uses configured
+batches; graph ingestion remains the confirmed durable worker.
 
 ```bash
-# Use bulk mode (fewer API calls)
-make pipeline-bulk
-
 # Process the production corpus
-make pipeline-canon
+make pipeline-canon CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 ```
 
 **For debugging:**
 
 ```bash
 # Use verbose mode
-make pipeline-canon VERBOSE=1
+make pipeline-canon CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC VERBOSE=1
 
 # Process documents individually
 make load-canon
-make sync-to-graphiti VERBOSE=1
+make create-episodes
+make embedding-preflight
+make generate-embeddings
+make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC VERBOSE=1
 ```
 
 ### Performance Monitoring
@@ -632,7 +679,7 @@ Monitor processing speed:
 
 ```bash
 # Time a full pipeline run
-time make pipeline-canon
+time make pipeline-canon CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # Monitor resource usage
 docker stats
@@ -642,7 +689,7 @@ Track progress in real-time:
 
 ```bash
 # In one terminal
-make pipeline-canon
+make pipeline-canon CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # In another terminal
 watch -n 5 "make status"
@@ -656,9 +703,10 @@ watch -n 5 "make status"
 
 #### Incremental Processing
 
-- Only processes changed documents
-- Maintains processing state in database
-- Supports interruption and resume
+- Cleanly processes brand-new documents and skips unchanged documents
+- Maintains per-stage processing state in PostgreSQL
+- Supports interruption and confirmed resume
+- Does not yet fully reconcile edits, renames, or deletions of existing files
 
 #### Parallel Processing
 
@@ -688,8 +736,9 @@ watch -n 5 "make status"
 
 #### Recovery
 
-- `make resume` continues from last successful state
-- `make rebuild` provides full reset option
+- `make resume CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC` continues eligible work
+  from the last successful stage
+- `make rebuild` is a separately confirmed, backup-gated whole-graph operation
 - Status tracking enables targeted troubleshooting
 
 ### Manual Database Operations
@@ -755,7 +804,8 @@ docker compose -p luminari-sage start neo4j
 
 Key environment variables:
 
-- `OPENAI_API_KEY`: Required for embeddings and entity extraction
+- Provider credentials: Required only for the configured remote embedding and
+  Graphiti providers; local providers use their corresponding service settings
 - `NEO4J_URI`: Neo4j connection string
 - `NEO4J_USER/NEO4J_PASSWORD`: Neo4j authentication
 - `POSTGRES_*`: PostgreSQL connection settings

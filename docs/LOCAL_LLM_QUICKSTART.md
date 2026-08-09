@@ -168,13 +168,15 @@ If you need to process lore documents:
 
 ```bash
 # Complete pipeline
-make semantic-pipeline
+make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # Or step by step:
 make load-canon              # Load lore documents
 make create-episodes         # Create semantic chunks
+make embedding-preflight     # Verify the configured vector space
 make generate-embeddings     # Generate embeddings (uses LLM)
-make sync-to-graphiti        # Extract entities to Neo4j
+make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+# Extract entities to Neo4j
 ```
 
 ### Performance Testing
@@ -322,10 +324,10 @@ docker compose stop  # (optional)
 ### Processing New Lore
 
 ```bash
-# Add new markdown files to lore_docs/
+# Add new Markdown files beneath lore_docs/canon/
 
 # Run pipeline
-make semantic-pipeline
+make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # Validate
 ./scripts/validate_migration.sh

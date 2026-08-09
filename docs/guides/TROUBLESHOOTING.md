@@ -63,7 +63,7 @@ This guide provides solutions to common issues when working with Luminari Sage.
    docker compose down -v
    docker compose up -d
    # Wait 10 seconds for initialization
-   make semantic-pipeline
+   make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
    ```
 
 5. **Check pgvector extension:**
@@ -379,9 +379,9 @@ This guide provides solutions to common issues when working with Luminari Sage.
    docker exec -it luminari-api python src/scripts/create_episodes_from_documents.py --verbose
    ```
 
-3. **Clear processing flags and retry:**
+3. **Reset document episode-processing status and retry:**
    ```bash
-   make reset-all
+   make reset-documents
    make create-episodes
    ```
 
@@ -436,17 +436,22 @@ This guide provides solutions to common issues when working with Luminari Sage.
    docker exec -it luminari-postgres psql -U luminari -d luminari_lore -c "SELECT COUNT(*) FROM episodes WHERE embedding IS NOT NULL;"
    ```
 
-3. **Check Graphiti logs:**
+3. **Check durable graph state and logs:**
 
    ```bash
-   docker exec -it luminari-api python src/scripts/extract_entities.py --verbose --limit 10
+   make graph-sync-status
+   make graph-sync-run-summary
+   docker compose logs api
    ```
 
-4. **Clear Neo4j and retry:**
+4. **Preview a controlled graph repair:**
+
    ```bash
-   make clear-graph
-   make sync-to-graphiti
+   make graph-rebuild-plan
    ```
+
+Direct graph clearing is retired. If the plan shows a rebuild is necessary, use
+the backup-gated workflow in [Local deployment](../deploy-local.md#controlled-graph-rebuild).
 
 ---
 
@@ -874,7 +879,7 @@ This guide provides solutions to common issues when working with Luminari Sage.
 1. **Load test data:**
 
    ```bash
-   make semantic-pipeline
+   make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
    ```
 
 2. **Skip data-dependent tests:**
@@ -935,10 +940,10 @@ docker system prune -a  # Clean unused images
 make status             # Check system health
 make logs               # Review logs for errors
 
-# Monthly tasks
-docker compose down -v  # Full reset
-docker compose up -d
-make semantic-pipeline  # Rebuild from scratch
+# Periodic data checks
+make embedding-status
+make graph-sync-status
+make graph-rebuild-plan  # Read-only; rebuild only with a verified backup
 ```
 
 ### Backup Before Changes

@@ -30,24 +30,28 @@ The data pipeline processes markdown lore documents into a queryable knowledge g
 
 ```bash
 # Complete pipeline (recommended)
-make semantic-pipeline        # Load canon docs → create episodes → embeddings → sync to Neo4j
+make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+# Loads canon docs → creates episodes → embeds → syncs to Neo4j
 
 # Individual steps
 make load-canon              # Load canonical lore into PostgreSQL
 make create-episodes         # Create semantic chunks (200-500 tokens)
+make embedding-preflight     # Verify the active vector space before embedding
 make generate-embeddings     # Generate vector embeddings
-make sync-to-graphiti        # Extract entities/relationships to Neo4j via Graphiti
+make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+# Extract entities/relationships to Neo4j via Graphiti
 
-# Reset operations
-make clear-all              # Clear all processed data
-make reset-all              # Reset processing flags
-make rebuild                # Full rebuild from scratch
+# Read-only operational checks
+make graph-sync-status      # Durable graph queue/status
+make graph-rebuild-plan     # Plan a backup-gated graph rebuild
 
 # Monitoring
 make status                 # System health and statistics
 ```
 
-**Important**: The data pipeline is resource-intensive and separate from API deployment. Run it after deploying services.
+**Important**: The data pipeline is resource-intensive and separate from API
+deployment. Graph sync requires the exact confirmation shown above because it can
+call the configured provider and mutate durable Neo4j state.
 
 ### Testing
 ```bash
@@ -95,7 +99,7 @@ Markdown Lore Files
     ↓
 [generate_embeddings.py] → Add vector embeddings to episodes
     ↓
-[extract_entities.py] → Neo4j graph via Graphiti (entities + relationships)
+[sync_episodes_to_graphiti.py] → durable Graphiti worker → Neo4j graph
     ↓
 FastAPI serves hybrid RAG: PostgreSQL vectors + Neo4j graph
 ```
@@ -172,7 +176,7 @@ src/
 │   ├── load_documents.py             # Step 1: Load markdown → PostgreSQL
 │   ├── create_episodes_from_documents.py  # Step 2: Semantic chunking
 │   ├── generate_embeddings.py        # Step 3: Vector embeddings
-│   └── extract_entities.py           # Step 4: Graphiti → Neo4j
+│   └── sync_episodes_to_graphiti.py  # Step 4: Durable Graphiti → Neo4j
 └── auth/            # API key authentication middleware
 
 schemas/             # SQL and Cypher schemas

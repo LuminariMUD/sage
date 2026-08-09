@@ -158,19 +158,20 @@ export DISABLE_AUTH=true
 
 ```
 luminari-sage/
-├── scripts/              # Data processing scripts
-│   ├── load_documents.py    # Load markdown files
-│   ├── extract_entities.py  # Extract entities with Graphiti
-│   └── generate_chunks.py   # Create embeddings
 ├── src/
 │   ├── api/             # FastAPI application
 │   │   └── main.py         # Complete API endpoints
 │   ├── db/              # Database connections
 │   │   ├── postgres.py     # PostgreSQL with pgvector
 │   │   └── neo4j_db.py     # Neo4j manager
+│   ├── scripts/         # Canon ingestion and durable sync scripts
+│   │   ├── load_documents.py
+│   │   ├── create_episodes_from_documents.py
+│   │   ├── generate_embeddings.py
+│   │   └── sync_episodes_to_graphiti.py
 │   └── graphiti/        # Knowledge graph
-│       ├── __init__.py     # Graphiti integration
-│       └── entity_extractor.py  # Pattern extraction
+│       ├── sync_worker.py  # Durable graph worker
+│       └── sync_state.py   # Durable graph job state
 ├── schemas/             # Database schemas
 │   ├── postgresql_schema.sql
 │   └── neo4j_schema.cypher
@@ -250,11 +251,12 @@ df -h
 docker stats
 
 # Resume pipeline from last successful step
-make resume
+make resume CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
-# Clear and restart pipeline
-make clear-all
-make semantic-pipeline
+# Inspect the stage that is still incomplete
+make status
+make embedding-status
+make graph-sync-status
 ```
 
 ### Out of Memory During Embeddings
@@ -297,7 +299,7 @@ docker compose restart api
 ```bash
 # Step 1: Load canonical lore documents
 make load-canon
-# Loads markdown files from lore_docs/ into PostgreSQL
+# Loads Markdown files from lore_docs/canon/ into PostgreSQL
 
 # Step 2: Create semantic episodes
 make create-episodes
@@ -320,21 +322,23 @@ make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 make status
 
 # Resume interrupted pipeline
-make resume
+make resume CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
-# Reset processing flags (keeps data)
-make reset-all
+# Inspect durable graph progress
+make graph-sync-status
 
-# Clear all processed data
-make clear-all
-
-# Full rebuild from scratch
-make rebuild
+# Preview the separately authorized, backup-gated graph rebuild workflow
+make graph-rebuild-plan
 ```
+
+The legacy `reset-all` and direct graph-clearing targets are retired. See
+[Pipeline System](../systems/PIPELINE_SYSTEM.md#adding-a-new-canon-document) for
+the supported new-file workflow and its current edit/delete limitations.
 
 ### Pipeline Notes
 
-- **Idempotent**: Safe to re-run; skips already-processed items
+- **Additive reruns**: New files advance through missing stages; unchanged files
+  and completed artifacts are skipped
 - **Resource-Intensive**: Uses significant CPU/memory for embeddings
 - **Time Required**: 10-30 minutes for full corpus
 - **Separate from Deployment**: Run after services are up

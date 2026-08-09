@@ -97,7 +97,7 @@ chmod 600 .env
 docker compose up -d
 
 # Run data pipeline
-make semantic-pipeline
+make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # Test
 curl http://localhost:8003/ping
@@ -331,31 +331,33 @@ docker exec -it luminari-api python src/scripts/load_documents.py --path lore_do
 
 ### What if the pipeline fails partway through?
 
-The pipeline is **idempotent** with processing flags. You can resume:
+For additive ingestion, completed stages are skipped. You can resume:
 
 ```bash
-make resume  # Continues from where it stopped
+make resume CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+# Continues eligible work from where it stopped
 ```
 
-Or clear and restart:
+Inspect individual stage status if it does not converge:
 
 ```bash
-make reset-all
-make semantic-pipeline
+make status
+make embedding-status
+make graph-sync-status
 ```
 
 ### How do I add new lore documents?
 
-1. **Add markdown file** to `lore_docs/canon/` or `lore_docs/draft/`
+1. **Add a new Markdown file** beneath `lore_docs/canon/`. Drafts are outside
+   the production corpus.
 2. **Run pipeline**:
    ```bash
-   make load-canon
-   make create-episodes
-   make generate-embeddings
-   make sync-to-graphiti
+   make pipeline-canon CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
    ```
 
-The system automatically processes new files.
+The system cleanly processes new files and skips unchanged files. Editing,
+renaming, or deleting an existing file is not yet a fully reconciled incremental
+operation; see [Pipeline System](../systems/PIPELINE_SYSTEM.md#adding-a-new-canon-document).
 
 ---
 

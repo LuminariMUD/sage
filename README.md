@@ -1,6 +1,6 @@
 # Luminari Sage - Intelligent Lore Management System
 
-**Version**: 0.7.29
+**Version**: 0.7.30
 **Status**: Production Deployed
 **Deployment**: luminarimud.com:8003
 **Repository**: https://github.com/LuminariMUD/sage
@@ -331,7 +331,7 @@ The data pipeline processes markdown lore documents into a queryable knowledge g
 
 ```bash
 # Complete pipeline (recommended)
-make semantic-pipeline
+make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # Individual steps (run in order)
 make load-canon              # Load canonical lore into PostgreSQL
@@ -344,9 +344,12 @@ make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 make status                  # System health and statistics
 ```
 
+For the supported new-file workflow and current limitations around edits, renames,
+and deletions, see [Pipeline System](docs/systems/PIPELINE_SYSTEM.md#adding-a-new-canon-document).
+
 **Pipeline Features:**
 
-- Idempotent operations (safe to re-run)
+- Additive reruns skip unchanged files and completed artifacts
 - Processing flags track completion
 - Resume capability after interruption
 - Resource-intensive (run separately from deployment)
@@ -640,6 +643,6 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ---
 
-**Last Updated**: 2026-08-08
-**Version**: 0.7.29
+**Last Updated**: 2026-08-09
+**Version**: 0.7.30
 **Status**: Production Ready

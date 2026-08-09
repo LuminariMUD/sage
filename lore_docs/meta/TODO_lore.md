@@ -22,7 +22,7 @@ This document tracks all pending tasks for the LuminariMUD world-building projec
 - [x] Core Cosmology & Universal Rules (COMPLETE)
   - [x] The Loom of Aether formalized with Memory/Will/Possibility
   - [x] Five Locks mechanism documented with cosmic parallels
-  - [x] Divine limitations established through Titan connection
+  - [x] Draft reconciliation distinguishes gods from Titans without changing canon
   
 - [x] ✅ Legendary Locations & Quest Networks (COMPLETE)
   - [x] All major cities documented (Ashenport, Mosswood, Graven Hollow)
@@ -35,22 +35,22 @@ This document tracks all pending tasks for the LuminariMUD world-building projec
   - [ ] Establish climate and biomes
   - [ ] Define natural resources per region
   
-- [x] ✅ Develop Magic Systems & Sources of Power (COMPLETE)
-  - [x] Arcanite mining and refinement process (documented as frozen possibility)
-  - [x] Different magical traditions by culture (Four Paths defined)
-  - [x] Costs and limitations of each magic type (fully detailed in MAGIC_COMPENDIUM.md)
-  - [x] Connection between magic and the Loom (all paths interact with Memory/Will/Possibility)
+- [ ] Develop Magic Systems & Sources of Power
+  - [x] Preserve the primary Arcane/Divine source account in `drafts/world/Magic in Lumia.md`
+  - [x] Draft a reconciliation with approved canon in `drafts/factions/THE_TWO_ORDERS_OF_DIVINITY.md`
+  - [ ] Review and approve the proposed two-order divine model
+  - [ ] Define canon costs and limitations for each accepted magical tradition
+  - [ ] Establish the canon relationship between magic and the Loom
 
 ---
 
 ## 🟡 Priority 2 - Core Content (Should Have)
 
 ### 📋 Pending
-- [x] ✅ Stage 3: Consolidate Magic System Information (COMPLETE)
-  - [x] Synthesize 7 converted magic docs (done in MAGIC_COMPENDIUM.md)
-  - [x] Create unified MAGIC_THEORY.md (created as MAGIC_COMPENDIUM.md)
-  - [x] Document ARCANITE.md from converted content (integrated into compendium)
-  - [x] Integrate spells, psionics, and poison systems (psionics as fourth path)
+- [ ] Stage 3: Consolidate Magic System Information
+  - [ ] Extract lore-only claims from the surviving primary source
+  - [ ] Create a canon magic document after resolving source conflicts
+  - [ ] Document Arcanite only from approved or primary lore evidence
 
 - [x] ✅ Stage 4: Extract Race & Bloodline Lore (COMPLETE)
   - [x] Complete RACES.md with all playable races (created as RACES_OF_LUMIA.md)
@@ -69,9 +69,9 @@ This document tracks all pending tasks for the LuminariMUD world-building projec
   - [ ] Active conflicts
   - [ ] Secret alliances
 
-- [x] ✅ Design Unique Threats & World-Ending Mysteries (COMPLETE)
-  - [x] The Shadowmoon revealed as cosmic egg preparing to hatch
-  - [x] Twenty-First Titan as unborn god of paradox
+- [ ] Design Unique Threats & World-Ending Mysteries
+  - [ ] Define the Shadowmoon's nature beyond its approved canonical effects
+  - [x] Reconcile residual Titan terminology in a dedicated draft bridge
   - [x] Void Crown Remnants as inverted Seventh Order
   - [x] The Prisoner's Shadow as external cosmic threat
 
@@ -135,9 +135,9 @@ This document tracks all pending tasks for the LuminariMUD world-building projec
 
 ### World-Building Gaps
 - [ ] Define the current year and calendar system
-- [x] Establish the Shadowmoon's exact orbital period (probability-based, documented in THE_SHADOWMOON.md)
-- [x] Detail the Five Locks of the prison (complete in THE_FIVE_LOCKS.md)
-- [x] Map the Swiftpath portal network (complete in THE_SWIFTPATH_NETWORK.md)
+- [ ] Establish whether the Shadowmoon has a conventional orbital period
+- [x] Define the Five Locks as Memory, Identity, Time, Space, and Will in canon
+- [x] Document the approved Swiftpath network in `canon/locations/the_swiftpaths.md`
 - [ ] Locate the Pools of Twilight (elven origin site)
 
 ### Geographic Integration Tasks
@@ -159,14 +159,15 @@ This document tracks all pending tasks for the LuminariMUD world-building projec
   - [ ] Connect planes to existing lore (Titans, Prisoner, etc.)
 
 ### Lore Consistency
-- [ ] Reconcile Titans vs. Deities relationship
+- [x] Draft a Titans-vs.-Deities reconciliation in `drafts/factions/THE_TWO_ORDERS_OF_DIVINITY.md`
+- [ ] Approve, revise, or reject the proposed two-order model
 - [ ] Clarify Luminari vs. Titans power levels
 - [ ] Establish why only one Luminari (Serane) remains
 - [ ] Define limits of the Mark of the Luminari
 
 ### Missing Connections
 - [x] How do Knight Orders relate to deities? (complete in DIVINE_KNIGHT_CONCORDANCE.md)
-- [ ] What role do Titans play in current events?
+- [x] Draft an explanation for renewed Titan attention in current events
 - [ ] How does arcanite depletion affect Crystal Dwarves?
 - [x] What triggers the Shadowmoon's approach? (probability-based manifestation documented)
 
@@ -228,24 +229,16 @@ This document tracks all pending tasks for the LuminariMUD world-building projec
 - [x] Established artifact system with narrative hunger mechanics
 - [x] Developed wandering quests that hunt for heroes
 
-### Previous Session - Magic System Unification
-- [x] Created MAGIC_COMPENDIUM.md - Complete unified theory of all magic
-- [x] Synthesized all 7 magic system documents into coherent whole
-- [x] Defined Four Paths: Arcane, Divine, Primal, and Psionic
-- [x] Documented costs, limitations, and interactions between paths
-- [x] Revealed ultimate secret: Magic is absence of Prisoner's influence
+### Magic System Review
+- [x] Retained the primary Arcane/Divine source document
+- [ ] Decide which magical traditions are canon
+- [ ] Produce a lore-only canon account of magic
 
 ### Recent Lore Expansion (Session 2)
-- [x] Created THE_TITAN_ENIGMA.md - Twenty aspects of shattered oversoul
 - [x] Created THE_THREEFOLD_PATH.md - Complete magic system documentation
 - [x] Created THE_FIVE_NATIONS.md - Current political landscape and tensions
-- [x] Created THE_SILICON_PROPHECY.md - Crystal Dwarf crisis detailed
 
 ### Previous Lore Expansion (Session 1)
-- [x] Created THE_PATTERN_BENEATH.md - Mathematical nature of reality
-- [x] Created THE_FIVE_LOCKS.md - Complete prison mechanism with guardians
-- [x] Created THE_SHADOWMOON.md - Probability orbit and pattern storms
-- [x] Created THE_SWIFTPATH_NETWORK.md - Portal network mapping
 - [x] Created DIVINE_KNIGHT_CONCORDANCE.md - Knight-deity relationships
 
 See [CHANGELOG.md](CHANGELOG.md) for all completed items.

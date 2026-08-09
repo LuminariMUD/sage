@@ -651,7 +651,7 @@ This installation checklist breaks down the deployment into manageable phases. C
 
 - [ ] Start complete semantic pipeline
   ```bash
-  make semantic-pipeline
+  make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
   ```
   **Note**: This runs 4 steps sequentially:
   1. Load documents → PostgreSQL (~2-5 min)
@@ -902,13 +902,13 @@ docker compose restart api
 
 ```bash
 # Complete pipeline
-make semantic-pipeline
+make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # Check status
 make status
 
-# Rebuild from scratch
-make rebuild
+# Preview the separately authorized, backup-gated graph rebuild
+make graph-rebuild-plan
 ```
 
 **Testing**:

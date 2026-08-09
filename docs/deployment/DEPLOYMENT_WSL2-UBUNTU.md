@@ -803,13 +803,14 @@ docker compose exec api python -c "from src.db.postgres import test_connection; 
 
 ```bash
 # Run full semantic pipeline (recommended for first deployment)
-make semantic-pipeline
+make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # This executes four steps in sequence:
 # 1. make load-canon          # Load markdown → PostgreSQL (~2-5 min)
 # 2. make create-episodes     # Semantic chunking (~3-5 min)
 # 3. make generate-embeddings # Vector embeddings (~5-15 min, varies by mode)
-# 4. make sync-to-graphiti    # Extract entities → Neo4j (~5-30 min, varies by mode)
+# 4. make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
+#    Extract entities → Neo4j (~5-30 min, varies by mode)
 ```
 
 **Monitor Progress**:
@@ -833,11 +834,12 @@ make create-episodes
 # Output: Created Y episodes from X documents
 
 # Step 3: Generate embeddings
+make embedding-preflight
 make generate-embeddings
 # Output: Generated embeddings for Y episodes
 
 # Step 4: Sync to Graphiti (Neo4j)
-make sync-to-graphiti
+make sync-to-graphiti CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 # Output: Extracted entities and relationships to Neo4j
 ```
 
@@ -926,7 +928,7 @@ make status
 
 ```bash
 # Terminal 1: Run pipeline
-make semantic-pipeline
+make semantic-pipeline CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
 # Terminal 2: Monitor GPU in real-time
 watch -n 1 nvidia-smi
@@ -961,23 +963,21 @@ The pipeline tracks processing status. If interrupted:
 
 ```bash
 # Resume from last completed step
-make semantic-pipeline
+make resume CONFIRM_GRAPH_SYNC=RUN_DURABLE_GRAPH_SYNC
 
-# Or reset processing flags and start fresh
-make reset-all
-make semantic-pipeline
+# Inspect incomplete stages if resume does not converge
+make status
+make embedding-status
+make graph-sync-status
 ```
 
 ### Clear and Rebuild
 
-```bash
-# Clear all processed data (keeps documents)
-make clear-all
-
-# Full rebuild from scratch
-make rebuild
-# Equivalent to: make reset-all && make semantic-pipeline
-```
+Direct graph clearing and the legacy combined reset are retired. `make rebuild`
+is a separately authorized, backup-gated whole-graph replacement—not an alias for
+the ingestion pipeline. Preview it with `make graph-rebuild-plan`, then follow the
+[controlled graph rebuild workflow](../deploy-local.md#controlled-graph-rebuild)
+only when a rebuild is actually required.
 
 ### Troubleshooting Pipeline Issues
 

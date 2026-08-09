@@ -7,9 +7,9 @@
 ✅ **Three Forces**: Memory (past), Will (present), Possibility (future)
 ✅ **The Feyveil** - Boundary between material world and Otherworld
 ✅ **The Otherworld** - Parallel realm where concepts become tangible
-✅ **The Shadowmoon** - Probability-based orbit, pattern storms, keyhole theory (THE_SHADOWMOON.md)
-✅ **Swiftpaths** - Complete network mapped with all paths documented (THE_SWIFTPATH_NETWORK.md)
-✅ **The Five Locks** - Prison mechanism detailed with guardians and locations (THE_FIVE_LOCKS.md, THE_FIVE_LOCKS_PARALLEL.md)
+✅ **The Shadowmoon** - Canonically weakens barriers between individual and collective; its physical behavior remains unresolved
+✅ **Swiftpaths** - Approved transit lore documented in `canon/locations/the_swiftpaths.md`
+✅ **The Five Locks** - Canonically defined as Memory, Identity, Time, Space, and Will in `canon/timeline/the_shattered_truth.md`
 ✅ **The Forgers** - Development roles as cosmic positions mirroring creation (THE_FORGERS_PROPHECY.md)
 
 ### 2. Divine Structure
@@ -31,7 +31,7 @@
   - Fleet of overlooked and forgotten sailors
 
 ### 4. Races & Origins
-✅ **Crystal Dwarves** - Complete with culture, physiology, reincarnation mechanics, Silicon Prophecy
+✅ **Crystal Dwarves** - Approved culture, transformed physiology, harmonic castes, and Arcanite dependence
 ✅ **Arcana Golems** - Soul vessels seeking purpose, building city of Apparatus
 ✅ **Elves** - Dreams refusing to wake, born from Otherworld through Pools of Twilight
 ✅ **Half-Orcs** - Divine rage given flesh, created during First Darkling Wars
@@ -46,9 +46,9 @@
 
 ### 5. Geography & Nations
 ✅ **Planet**: Lumia (established)
-✅ **Moons**: Andros (primary), Delos (secondary), Shadowmoon (probability-based orbit)
-✅ **Swiftpath Network**: Complete portal system mapped (THE_SWIFTPATH_NETWORK.md)
-✅ **Five Lock Locations**: Mount Aetherspine, Abyssal Reach, Chronos Garden, Somnium Sanctum, Archive Eternal
+✅ **Moons**: Andros, Delos, and the recurring Shadowmoon; the Shadowmoon's exact motion remains unresolved
+✅ **Swiftpath Network**: Approved portal lore documented in `canon/locations/the_swiftpaths.md`
+✅ **Five Lock Principles**: Memory, Identity, Time, Space, and Will; physical locations are not established
 ✅ **World Structure**: Three-layer reality documented (THE_WORLD.md, WILD_KB.md)
   - Surface: 2048x2048 procedural wilderness with 723 landmasses
   - Zones: 592 detailed areas (240 disconnected, 111 WildLinked, 30 Underworld, 22 Planar)
@@ -78,31 +78,22 @@
 ✅ **Cataclysms** - Each age-ending event documented
 
 ### 7. Magic Systems
-✅ **Complete Unified Theory** - Four paths of magic fully documented (MAGIC_COMPENDIUM.md)
-✅ **Crystalline Arcanite** - Core magical resource, frozen possibility from reality's wounds
-✅ **The Pattern Beneath** - Reality as mathematical computation (THE_PATTERN_BENEATH.md)
-✅ **Shadowmoon Influence** - Magical tides and pattern storms documented
-✅ **Magic Sources**:
-  - Arcane (borrowed from Primal Realm, creates reality debt)
-  - Divine (Titan possession disguised as godly grace)
-  - Primal (world-dream remembering itself differently)
-  - Psionic (conscious rejection of consensus reality)
-✅ **Magic Rules** - All systems synthesized with costs, limitations, interactions
-✅ **Magical Tides** - Shadowmoon causes pattern storms and wild magic
-✅ **The Ultimate Secret** - Magic is the absence of the Prisoner's influence
+🔧 **Canon Consolidation Needed** - No unified canon magic-system document exists
+✅ **Primary Source Preserved** - `drafts/world/Magic in Lumia.md` describes Arcane power from the Primal Realm and Divine power from Titan planes
+✅ **Canon Metaphysical Context** - `canon/timeline/the_shattered_truth.md` describes magic as will manipulating a reality made mutable by separation
+❓ **Open Work** - Accepted traditions, costs, limitations, interactions, and Shadowmoon effects require canon review
 
 ### 8. Threats & Antagonists
 ✅ **The Prisoner** - Fully defined as unity-seeker turned oblivion-bringer
 ✅ **The Darklings** - Complete hierarchy from touched souls to Five Fingers, corruption mechanics explained
 ✅ **The Luminari** - Serane as last hero, Mark mechanics defined
-✅ **Five Locks** - Prison system conceptually mapped with guardians (THE_FIVE_LOCKS.md)
+✅ **Five Locks** - Canonically defined as Memory, Identity, Time, Space, and Will
 ✅ **Villain Hierarchy** - Complete three-tier threat system documented (THE_VILLAIN_HIERARCHY.md)
 ✅ **Mortal Threats** - Arcanite Syndicate, Vitalist Revolution, Reality Cabal, Silent Throne
 ✅ **Supernatural Threats** - Void Crown Remnants, Titan Heretics, Awakened Arcana, Darklings of the Touch
-✅ **Cosmic Threats** - Twenty-First Titan, Shadowmoon's True Nature, The Prisoner's Shadow
-✅ **Titan Enigma** - Deep analysis of Titans as potential threats/prison components (THE_TITAN_ENIGMA.md)
+🔧 **Cosmic Threats** - The Prisoner and approved Shadowmoon effects remain; additional threats require review
+🔧 **Divine Terminology** - `drafts/factions/THE_TWO_ORDERS_OF_DIVINITY.md` now proposes a canon-compatible distinction between gods and Titans; approval and canon promotion remain pending
 ✅ **Darkling Details** - First Darkling Wars, Five Fingers extensions, Shadowmoon empowerment documented
-🔧 **Titan Integration** - Need to reconcile 28-titan list with established 20-titan lore
 
 ## Gap Analysis
 
@@ -143,20 +134,15 @@
    - Trade relationships mapped
    - Political powder keg ready to explode
 
-5. **MAGIC SYSTEM DETAILS** ✅ COMPLETE
-   - Full unified magic theory documented (MAGIC_COMPENDIUM.md)
-   - Four Paths: Arcane (borrowed), Divine (Titan-channeled), Primal (remembered), Psionic (refused)
-   - Threefold Path documented (THE_THREEFOLD_PATH.md)
-   - Costs, limitations, and interactions fully detailed
-   - Connection to Loom, Titans, Pattern Beneath, and world-dream established
-   - Spell schools, metamagic, and wild magic tables defined
-   - The terrible secret: Magic is the absence of the Prisoner's influence
+5. **MAGIC SYSTEM DETAILS** 🔧 NEEDS CANON CONSOLIDATION
+   - Primary Arcane/Divine source account preserved in `drafts/world/Magic in Lumia.md`
+   - Canon metaphysical context preserved in `canon/timeline/the_shattered_truth.md`
+   - Accepted traditions, costs, limitations, and interactions remain to be decided
 
 6. **ACTIVE THREATS** ✅ COMPLETE
    - Complete villain hierarchy established (THE_VILLAIN_HIERARCHY.md)
    - Mortal Level: Economic warfare, political revolution, reality revision
-   - Supernatural Level: Corrupted knights, false titans, digital consciousness
-   - Cosmic Level: Unborn gods, hatching moon-eggs, shadow entities
+   - Supernatural and cosmic tiers require re-audit against the approved corpus
    - Five Nations conflict fully mapped with specific antagonists
    - All threats interconnected in corruption cascade
 
@@ -227,11 +213,11 @@
 - ✅ `ages_and_cataclysms/` - AGES.md, TIMELINE.md + 3 converted docs
 - ✅ `cultures_and_traditions/` - CULTURES_OF_LUMIA.md with Five Great Cultural Spheres
 - ✅ `factions_and_orders/` - DEITIES.md, KNIGHTS.md, DIVINE_KNIGHT_CONCORDANCE.md, THE_FORGOTTEN_TIDE.md
-- ✅ `magic_systems/` - MAGIC_COMPENDIUM.md, THE_THREEFOLD_PATH.md synthesizing 7 converted docs
-- ✅ `mysteries_and_secrets/` - THE_PATTERN_BENEATH.md, THE_FIVE_LOCKS.md, THE_SHADOWMOON.md + 9 converted docs
+- 🔧 `magic_systems/` - Primary Arcane/Divine source preserved; canon consolidation pending
+- 🔧 `mysteries_and_secrets/` - Canonical Locks and Shadowmoon context preserved; further development pending
 - ✅ `prophecies_and_fate/` - THE_FORGERS_PROPHECY.md, THE_FIVE_LOCKS_PARALLEL.md + 2 converted docs
 - ✅ `races_and_bloodlines/` - RACES_OF_LUMIA.md synthesizing 5 converted docs
-- ✅ `villains_and_threats/` - THE_VILLAIN_HIERARCHY.md, THE_TITAN_ENIGMA.md + 2 converted docs
+- 🔧 `villains_and_threats/` - Approved villain hierarchy; further threat development pending
 
 ### Fully Documented Directories (Continued)
 - ✅ `legendary_locations/` - LEGENDARY_LOCATIONS.md synthesizing 8 converted docs (cities, dungeons, portals, quest paths)
@@ -241,7 +227,7 @@
 - 🔧 `geography_and_realms/` - Core structure complete, zone conversion in progress
   - ✅ THE_WORLD.md - 592 zones catalogued
   - ✅ WILD_KB.md - Procedural world documented
-  - ✅ THE_SWIFTPATH_NETWORK.md - Portal network mapped
+  - ✅ `canon/locations/the_swiftpaths.md` - Approved transit lore
   - ✅ THE_FIVE_NATIONS.md - Political geography complete
   - 🔧 240 zones need Luminari lore conversion
   - 🔧 16 converted docs contain additional regional details
