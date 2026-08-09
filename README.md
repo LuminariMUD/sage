@@ -10,6 +10,17 @@ of his private project published with his permission.
 
 ---
 
+## LuminariMUD Eco-System
+
+What we call the "Lumiverse":
+
+- [LuminariMUD game server](https://github.com/LuminariMUD/Luminari-Source)
+- [Luminari web client](https://github.com/LuminariMUD/luminariweb)
+- [InterMUD-3 client](https://github.com/LuminariMUD/Intermud3)
+- [Discord bridge](https://github.com/LuminariMUD/discord-mud-chat)
+- [Wilderness editor](https://github.com/LuminariMUD/wildeditor)
+- [Mudlet interface](https://github.com/LuminariMUD/LuminariGUI)
+
 ## Vision
 
 Luminari Sage transforms the vast lore of LuminariMUD into an intelligent, queryable knowledge system that understands context, relationships, and narrative possibilities. It serves as both a reference tool and a creative assistant for players, dungeon masters, and content creators.
