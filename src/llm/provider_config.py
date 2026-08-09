@@ -19,19 +19,17 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import Literal, TypeAlias, cast
+from typing import Literal, cast
 from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import SecretStr
 
 logger = logging.getLogger(__name__)
 
-ProviderName: TypeAlias = Literal["ollama", "openrouter", "openai"]
-EmbeddingProviderName: TypeAlias = Literal[
-    "ollama", "openrouter", "openai", "sentence-transformers"
-]
-TextTask: TypeAlias = Literal["chat", "creative", "reasoning", "extraction", "tools"]
-FailureClassName: TypeAlias = Literal[
+type ProviderName = Literal["ollama", "openrouter", "openai"]
+type EmbeddingProviderName = Literal["ollama", "openrouter", "openai", "sentence-transformers"]
+type TextTask = Literal["chat", "creative", "reasoning", "extraction", "tools"]
+type FailureClassName = Literal[
     "transport",
     "authentication",
     "authorization",

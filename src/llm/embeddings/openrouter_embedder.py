@@ -91,15 +91,14 @@ class OpenRouterEmbedder(BaseEmbedder):
         self.last_estimated_cost_usd = None
         self.last_actual_model = None
         self.last_transport_attempts = 0
-        request = {
-            "model": self.model,
-            "input": texts,
-            "dimensions": self.dimension,
-            "encoding_format": "float",
-            "extra_body": self._extra_body(),
-        }
         response = await execute_with_transport_retry(
-            lambda: self.client.embeddings.create(**request),
+            lambda: self.client.embeddings.create(
+                model=self.model,
+                input=texts,
+                dimensions=self.dimension,
+                encoding_format="float",
+                extra_body=self._extra_body(),
+            ),
             self.retry_policy,
             on_attempt=self._record_transport_attempt,
         )
@@ -112,7 +111,11 @@ class OpenRouterEmbedder(BaseEmbedder):
             vector = getattr(item, "embedding", None)
             if not isinstance(index, int) or index in indexed:
                 raise EmbeddingValidationError("Embedding response indices are invalid")
-            indexed[index] = vector
+            if not isinstance(vector, list) or any(
+                isinstance(value, bool) or not isinstance(value, (int, float)) for value in vector
+            ):
+                raise EmbeddingValidationError("Embedding response vector is invalid")
+            indexed[index] = [float(value) for value in vector]
         if set(indexed) != set(range(len(texts))):
             raise EmbeddingValidationError("Embedding response indices do not match request order")
         usage = getattr(response, "usage", None)
@@ -129,7 +132,7 @@ class OpenRouterEmbedder(BaseEmbedder):
                 parsed_cost = float(cost)
                 if math.isfinite(parsed_cost) and parsed_cost >= 0:
                     self.last_estimated_cost_usd = parsed_cost
-        self.last_actual_model = actual_model
+        self.last_actual_model = actual_model if isinstance(actual_model, str) else None
         return validate_embedding_batch(
             (indexed[index] for index in range(len(texts))),
             expected_count=len(texts),

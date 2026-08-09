@@ -129,8 +129,8 @@ async def search_lore(query: str) -> dict[str, Any]:
     queries: list[str] = [query]
     queries.extend(_generate_followup_queries(query))
     # Deduplicate while preserving order
-    seen_queries = set()
-    ordered_queries = []
+    seen_queries: set[str] = set()
+    ordered_queries: list[str] = []
     for q in queries:
         q_norm = q.strip()
         if q_norm and q_norm.lower() not in seen_queries:
@@ -145,14 +145,13 @@ async def search_lore(query: str) -> dict[str, Any]:
     }
 
     aggregated_chunks: list[dict[str, Any]] = []
-    aggregated_context: list[str] = []
     aggregated_entities: list[dict[str, Any]] = []
     aggregated_relationships: list[dict[str, Any]] = []
     graph_entity_by_uuid: dict[str, dict[str, Any]] = {}
-    graph_relationship_seen: set = set()
-    chunk_text_seen = set()
+    graph_relationship_seen: set[tuple[Any, ...]] = set()
+    chunk_text_seen: set[str] = set()
 
-    aggregated_raw = {
+    aggregated_raw: dict[str, Any] = {
         "queries": ordered_queries,
         "chunks": [],
         "entities": [],
@@ -226,9 +225,9 @@ async def search_lore(query: str) -> dict[str, Any]:
         aggregated_raw.pop("metadata")
 
     ordered_context: list[str] = []
-    seen_texts = set()
+    seen_texts: set[str] = set()
 
-    def add_context_block(text: str):
+    def add_context_block(text: str) -> None:
         trimmed = text.strip()
         if trimmed and trimmed not in seen_texts and len(ordered_context) < 40:
             ordered_context.append(trimmed)
@@ -414,10 +413,10 @@ async def search_lore(query: str) -> dict[str, Any]:
 
         if tasks:
             relationship_results = await asyncio.gather(*tasks, return_exceptions=True)
-            for result in relationship_results:
-                if isinstance(result, Exception):
+            for relationship_result in relationship_results:
+                if isinstance(relationship_result, BaseException):
                     continue
-                relationship_summary_blocks.extend(result)
+                relationship_summary_blocks.extend(relationship_result)
 
     for block in relationship_summary_blocks[:15]:
         add_context_block(block)
@@ -425,10 +424,10 @@ async def search_lore(query: str) -> dict[str, Any]:
     # Surface top entity summaries so the agent has direct access to canonical blurbs
     entity_summary_blocks: list[str] = []
     for ent in aggregated_entities[:6]:
-        name = ent.get("name")
-        summary = ent.get("summary") or ent.get("description")
-        if name and summary:
-            entity_summary_blocks.append(f"ENTITY {name}: {summary}")
+        entity_name = ent.get("name")
+        entity_summary = ent.get("summary") or ent.get("description")
+        if entity_name and entity_summary:
+            entity_summary_blocks.append(f"ENTITY {entity_name}: {entity_summary}")
 
     for block in entity_summary_blocks:
         add_context_block(block)
@@ -460,7 +459,7 @@ async def search_lore(query: str) -> dict[str, Any]:
         ],
         "entity_count": len(aggregated_entities),
         "relationship_count": len(aggregated_relationships),
-        "found": bool(aggregated_context),
+        "found": bool(ordered_context),
         "metadata": {
             "chunks_found": len(aggregated_raw["chunks"]),
             "queries_used": ordered_queries,
@@ -1095,13 +1094,16 @@ async def get_entity_details(entity_name: str) -> str:
     neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
     neo4j_user = os.getenv("NEO4J_USER", "neo4j")
     neo4j_password = os.getenv("NEO4J_PASSWORD")
+    if not neo4j_password:
+        logger.error("NEO4J_PASSWORD is not configured")
+        return public_error_message("Entity lookup")
 
     driver = AsyncGraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
 
     try:
         async with driver.session() as session:
             # Direct Neo4j query to get EVERYTHING about the entity
-            result = await session.run(
+            query_result = await session.run(
                 """
                 // Find the entity (case-insensitive partial match)
                 MATCH (e:Entity)
@@ -1145,17 +1147,17 @@ async def get_entity_details(entity_name: str) -> str:
                 {"entity_name": entity_name},
             )
 
-            record = await result.single()
+            record = await query_result.single()
 
             if record and record["entity"]:
                 # Process the entity data - convert datetime objects to strings
-                entity_props = {}
+                entity_props: dict[str, Any] = {}
                 for k, v in dict(record["properties"]).items():
                     entity_props[k] = str(v) if hasattr(v, "isoformat") else v
                 entity_labels = record["labels"]
 
                 # Process relationships to extract Graphiti custom edge data
-                relationships = []
+                relationships: list[dict[str, Any]] = []
 
                 # Add outgoing relationships
                 for rel in record["outgoing"]:
@@ -1232,13 +1234,13 @@ async def get_entity_details(entity_name: str) -> str:
                 entity_type = entity_labels[0] if entity_labels else "Entity"
                 summary = entity_props.get("summary", "No summary available")
 
-                result = f"# Entity: {entity_name}\n"
-                result += f"Type: {entity_type}\n"
-                result += f"Summary: {summary}\n\n"
-                result += f"## Relationships ({len(relationships)} shown of {record['total_relationships']} total)\n\n"
+                formatted_result = f"# Entity: {entity_name}\n"
+                formatted_result += f"Type: {entity_type}\n"
+                formatted_result += f"Summary: {summary}\n\n"
+                formatted_result += f"## Relationships ({len(relationships)} shown of {record['total_relationships']} total)\n\n"
 
                 # Group relationships by type
-                by_type = {}
+                by_type: dict[str, list[dict[str, Any]]] = {}
                 for rel in relationships:
                     rel_type = rel["type"]
                     if rel_type not in by_type:
@@ -1246,21 +1248,21 @@ async def get_entity_details(entity_name: str) -> str:
                     by_type[rel_type].append(rel)
 
                 for rel_type, rels in by_type.items():
-                    result += f"### {rel_type} ({len(rels)})\n"
+                    formatted_result += f"### {rel_type} ({len(rels)})\n"
                     for rel in rels[:5]:  # Show max 5 per type
                         if rel.get("direction") == "outgoing":
-                            result += f"- → {rel.get('target', 'Unknown')}"
+                            formatted_result += f"- → {rel.get('target', 'Unknown')}"
                         else:
-                            result += f"- ← {rel.get('source', 'Unknown')}"
+                            formatted_result += f"- ← {rel.get('source', 'Unknown')}"
 
                         if rel.get("fact"):
-                            result += f": {rel['fact'][:100]}"
-                        result += "\n"
+                            formatted_result += f": {rel['fact'][:100]}"
+                        formatted_result += "\n"
                     if len(rels) > 5:
-                        result += f"- ... and {len(rels) - 5} more\n"
-                    result += "\n"
+                        formatted_result += f"- ... and {len(rels) - 5} more\n"
+                    formatted_result += "\n"
 
-                return result
+                return formatted_result
             else:
                 return f"No entity found matching '{entity_name}'. Try search_lore first to find exact entity names."
 

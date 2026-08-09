@@ -33,10 +33,7 @@ async def get_graph_stats() -> dict | None:
         node_records = node_stats.records if hasattr(node_stats, "records") else node_stats
         relationship_records = rel_stats.records if hasattr(rel_stats, "records") else rel_stats
 
-        if hasattr(neo4j, "close"):
-            await neo4j.close()
-        elif hasattr(neo4j, "driver") and hasattr(neo4j.driver, "close"):
-            await neo4j.driver.close()
+        await neo4j.disconnect()
 
         return {
             "nodes": node_records,

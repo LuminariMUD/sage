@@ -101,7 +101,7 @@ graph LR
     PA --> |Documents| PG[PostgreSQL]
     PA --> |Chunks| EMB[Embeddings]
     EMB --> PG
-    
+
     N4J --> |Relationships| GR[Graphiti]
     PG --> |Vectors| SEARCH[Search API]
     GR --> SEARCH
@@ -162,7 +162,7 @@ graph LR
    ```python
    # Get semantic matches from PostgreSQL
    chunks = pg.search_chunks(query_embedding)
-   
+
    # Expand with graph context from Neo4j
    for chunk in chunks:
        entities = neo4j.get_entities(chunk.entity_refs)
@@ -224,7 +224,7 @@ SELECT COUNT(*) filter (WHERE embedding IS NULL) as missing,
 FROM chunks;
 
 -- Find validation issues
-SELECT status, COUNT(*) FROM validation_results 
+SELECT status, COUNT(*) FROM validation_results
 GROUP BY status;
 ```
 

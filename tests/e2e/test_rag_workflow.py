@@ -1,9 +1,6 @@
 """End-to-end tests for RAG workflow."""
 
 import pytest
-from fastapi.testclient import TestClient
-
-from src.api.main import app
 
 
 @pytest.mark.e2e
@@ -11,11 +8,9 @@ from src.api.main import app
 class TestRAGWorkflow:
     """End-to-end tests for complete RAG workflow."""
 
-    def test_complete_rag_query(self):
+    def test_complete_rag_query(self, api_client):
         """Test complete RAG query with Ollama."""
-        client = TestClient(app)
-
-        response = client.post(
+        response = api_client.post(
             "/api/v1/rag/query",
             json={"query": "Who are the Crystal Dwarves of Nagburim?", "limit": 5},
         )
@@ -35,8 +30,8 @@ class TestRAGWorkflow:
         # Quality checks on chunks
         first_chunk = data["chunks"][0]
         assert "text" in first_chunk
-        assert "similarity_score" in first_chunk
-        assert first_chunk["similarity_score"] > 0.5, "Similarity should be meaningful"
+        assert "similarity" in first_chunk
+        assert first_chunk["similarity"] > 0.5, "Similarity should be meaningful"
 
         # Check if entities were found
         print("\n✅ RAG Query Results:")
@@ -46,14 +41,12 @@ class TestRAGWorkflow:
         print(f"   Total results: {data['total_results']}")
 
         if data["chunks"]:
-            print(f"   Top chunk similarity: {data['chunks'][0]['similarity_score']:.3f}")
+            print(f"   Top chunk similarity: {data['chunks'][0]['similarity']:.3f}")
             print(f"   Chunk preview: {data['chunks'][0]['text'][:100]}...")
 
-    def test_rag_with_graph_enrichment(self):
+    def test_rag_with_graph_enrichment(self, api_client):
         """Test RAG with Neo4j graph enrichment."""
-        client = TestClient(app)
-
-        response = client.post(
+        response = api_client.post(
             "/api/v1/rag/query", json={"query": "Tell me about the crystal mines", "limit": 5}
         )
 
@@ -67,7 +60,7 @@ class TestRAGWorkflow:
         # If entities found, they should have proper structure
         if data["entities"]:
             entity = data["entities"][0]
-            assert "stable_id" in entity
+            assert "uuid" in entity
             assert "name" in entity
             assert "type" in entity
 
@@ -80,11 +73,9 @@ class TestRAGWorkflow:
             print(f"   Relationships found: {len(data['relationships'])}")
             print(f"   Sample: {data['relationships'][0]}")
 
-    def test_rag_query_empty_results(self):
+    def test_rag_query_empty_results(self, api_client):
         """Test RAG query with no results."""
-        client = TestClient(app)
-
-        response = client.post(
+        response = api_client.post(
             "/api/v1/rag/query", json={"query": "xyzabc123nonexistent", "limit": 5}
         )
 
@@ -97,12 +88,10 @@ class TestRAGWorkflow:
         # Empty results are acceptable
         print("\n📭 Empty query results handled correctly")
 
-    def test_rag_query_with_different_limits(self):
+    def test_rag_query_with_different_limits(self, api_client):
         """Test RAG query respects limit parameter."""
-        client = TestClient(app)
-
         # Test with limit=2
-        response = client.post("/api/v1/rag/query", json={"query": "dwarf", "limit": 2})
+        response = api_client.post("/api/v1/rag/query", json={"query": "dwarf", "limit": 2})
 
         assert response.status_code == 200
         data = response.json()
@@ -115,7 +104,7 @@ class TestRAGWorkflow:
         print(f"   Requested: 2, Got: {len(data['chunks'])}")
 
         # Test with limit=10
-        response = client.post("/api/v1/rag/query", json={"query": "dwarf", "limit": 10})
+        response = api_client.post("/api/v1/rag/query", json={"query": "dwarf", "limit": 10})
 
         assert response.status_code == 200
         data2 = response.json()
@@ -124,11 +113,9 @@ class TestRAGWorkflow:
             assert len(data2["chunks"]) <= 10, "Should respect larger limit"
             print(f"   Requested: 10, Got: {len(data2['chunks'])}")
 
-    def test_rag_query_complex_question(self):
+    def test_rag_query_complex_question(self, api_client):
         """Test RAG with complex multi-part question."""
-        client = TestClient(app)
-
-        response = client.post(
+        response = api_client.post(
             "/api/v1/rag/query",
             json={
                 "query": "What is the relationship between the Crystal Dwarves and their mining traditions?",
@@ -154,18 +141,16 @@ class TestRAGWorkflow:
             if has_relevant_terms:
                 print("   ✓ Results contain relevant terms")
 
-    def test_rag_query_validation(self):
+    def test_rag_query_validation(self, api_client):
         """Test RAG query input validation."""
-        client = TestClient(app)
-
         # Test missing required fields
-        response = client.post("/api/v1/rag/query", json={})
+        response = api_client.post("/api/v1/rag/query", json={})
 
         # Should return validation error
         assert response.status_code == 422, "Should validate required fields"
 
         # Test invalid limit
-        response = client.post("/api/v1/rag/query", json={"query": "test", "limit": -1})
+        response = api_client.post("/api/v1/rag/query", json={"query": "test", "limit": -1})
 
         # May return 422 or handle gracefully
         assert response.status_code in [200, 422]
@@ -175,16 +160,14 @@ class TestRAGWorkflow:
 @pytest.mark.e2e
 @pytest.mark.data_dependent
 @pytest.mark.asyncio
-async def test_rag_performance():
+async def test_rag_performance(api_client):
     """Test RAG query performance characteristics."""
     import time
-
-    client = TestClient(app)
 
     # Measure query time
     start_time = time.time()
 
-    response = client.post(
+    response = api_client.post(
         "/api/v1/rag/query", json={"query": "Tell me about the world", "limit": 5}
     )
 

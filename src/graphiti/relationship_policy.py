@@ -203,8 +203,11 @@ def validate_relationship_response(
         target_name = edge.get("target_entity_name")
         relation_type = edge.get("relation_type")
         fact = edge.get("fact")
-        if not all(
-            isinstance(value, str) for value in (source_name, target_name, relation_type, fact)
+        if (
+            not isinstance(source_name, str)
+            or not isinstance(target_name, str)
+            or not isinstance(relation_type, str)
+            or not isinstance(fact, str)
         ):
             raise RelationshipPolicyError("Relationship proposal fields are invalid")
 

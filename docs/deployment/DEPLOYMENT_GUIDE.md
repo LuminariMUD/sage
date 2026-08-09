@@ -24,7 +24,7 @@ This guide covers deploying Luminari Sage in production environments. The system
 - **Docker Compose** v2.0+ (note: v2 syntax, not v1)
 - **Git** for repository cloning
 - **Make** (optional but recommended for pipeline management)
-- **Python** 3.11+ (only if running scripts outside containers)
+- **Python** 3.13 (only if running scripts outside containers)
 
 ### Required API Keys
 

@@ -61,22 +61,29 @@ def _emit(report: Mapping[str, object], *, as_json: bool, error: bool = False) -
             file=destination,
         )
         actual = report["actual_source_snapshot"]
-        assert isinstance(actual, Mapping)
+        if not isinstance(actual, Mapping):
+            raise ValueError("Retrieval source snapshot is invalid")
         print(
             f"Snapshot: {actual['episode_count']} episodes, "
             f"{actual['document_count']} documents, {actual['fingerprint']}",
             file=destination,
         )
-        for finding in report.get("findings", []):
-            assert isinstance(finding, Mapping)
+        findings = report.get("findings")
+        if not isinstance(findings, list):
+            raise ValueError("Retrieval validation findings are invalid")
+        for finding in findings:
+            if not isinstance(finding, Mapping):
+                raise ValueError("Retrieval validation finding is invalid")
             print(f"- {finding['code']}", file=destination)
         return
 
     if operation == "episode_retrieval_benchmark" and status == "COMPLETED":
         metrics = report["metrics"]
         requests = report["provider_requests"]
-        assert isinstance(metrics, Mapping)
-        assert isinstance(requests, Mapping)
+        if not isinstance(metrics, Mapping):
+            raise ValueError("Retrieval benchmark metrics are invalid")
+        if not isinstance(requests, Mapping):
+            raise ValueError("Retrieval provider-request summary is invalid")
         print("Episode retrieval benchmark: COMPLETED (manual review required)", file=destination)
         print(
             f"Corpus: {report['corpus_id']} ({report['corpus_fingerprint']})",

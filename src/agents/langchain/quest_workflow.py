@@ -64,7 +64,7 @@ class QuestState(TypedDict):
 
     # Input
     requirements: str  # Original user requirements
-    lore_context: list[dict[str, Any]]  # Relevant lore from search
+    lore_context: list[Any]  # Relevant lore from search
 
     # Progressive building
     quest_hook: dict[str, Any]
@@ -143,7 +143,7 @@ class QuestWorkflow:
 
         return graph
 
-    def _format_lore_context(self, lore_context: list) -> str:
+    def _format_lore_context(self, lore_context: list[Any]) -> str:
         """Format lore context for inclusion in prompts."""
         if not lore_context:
             return "No specific lore context available"
@@ -188,7 +188,7 @@ mid_twist, antagonist_reveal, final_confrontation, resolution_hints, specific_de
             # Fallback to basic extraction
             return {"protagonist": "the player", "requirements": requirements}
 
-    async def _create_hook(self, state: QuestState) -> dict[str, Any]:
+    async def _create_hook(self, state: QuestState) -> QuestState:
         """Create the quest hook based on requirements and lore."""
         requirements = state["requirements"]
         lore_context = state.get("lore_context", [])
@@ -249,7 +249,7 @@ Return JSON with:
         state["quest_title"] = hook_data.get("quest_title", "Epic Quest")
         return state
 
-    async def _create_phase_1(self, state: QuestState) -> dict[str, Any]:
+    async def _create_phase_1(self, state: QuestState) -> QuestState:
         """Create Phase 1 based on narrative requirements."""
         requirements = state["requirements"]
         hook = state["quest_hook"]
@@ -310,7 +310,7 @@ Return JSON with:
         state["current_phase"] = 1
         return state
 
-    async def _create_phase_2(self, state: QuestState) -> dict[str, Any]:
+    async def _create_phase_2(self, state: QuestState) -> QuestState:
         """Create Phase 2 based on narrative flow."""
         requirements = state["requirements"]
         hook = state["quest_hook"]
@@ -370,7 +370,7 @@ Return JSON with:
         state["current_phase"] = 2
         return state
 
-    async def _create_phase_3(self, state: QuestState) -> dict[str, Any]:
+    async def _create_phase_3(self, state: QuestState) -> QuestState:
         """Create Phase 3 based on narrative progression."""
         requirements = state["requirements"]
         phase1 = state["phase_1"]
@@ -471,7 +471,7 @@ Return JSON with:
         else:
             return "resolution"
 
-    async def _create_phase_4(self, state: QuestState) -> dict[str, Any]:
+    async def _create_phase_4(self, state: QuestState) -> QuestState:
         """Create Phase 4 if needed by narrative."""
         requirements = state["requirements"]
         phase3 = state["phase_3"]
@@ -531,11 +531,11 @@ Return JSON with:
         state["phase_count"] = 4
         return state
 
-    async def _check_additional_phases(self, state: QuestState) -> dict[str, Any]:
+    async def _check_additional_phases(self, state: QuestState) -> QuestState:
         """Just pass through - routing logic is in conditional edges."""
         return state
 
-    async def _create_phase_5(self, state: QuestState) -> dict[str, Any]:
+    async def _create_phase_5(self, state: QuestState) -> QuestState:
         """Create Phase 5 if needed for complex narratives."""
         requirements = state["requirements"]
 
@@ -578,7 +578,7 @@ Return JSON with:
         state["phase_count"] = 5
         return state
 
-    async def _create_resolution(self, state: QuestState) -> dict[str, Any]:
+    async def _create_resolution(self, state: QuestState) -> QuestState:
         """Create the quest resolution."""
         # Get the last phase that was created
         final_phase = state.get("phase_5") or state.get("phase_4") or state.get("phase_3")
@@ -603,7 +603,7 @@ Write 2-3 paragraphs of resolution narrative."""
         state["resolution"] = response.content
         return state
 
-    async def _create_rewards(self, state: QuestState) -> dict[str, Any]:
+    async def _create_rewards(self, state: QuestState) -> QuestState:
         """Create quest rewards."""
         # Find any key items mentioned in phases
         key_items = []
@@ -659,15 +659,17 @@ Return JSON with:
         state["rewards"] = rewards
         return state
 
-    async def _compile_quest(self, state: QuestState) -> dict[str, Any]:
+    async def _compile_quest(self, state: QuestState) -> QuestState:
         """Compile the complete quest."""
 
         # Build phase list
         phases = [state["phase_1"], state["phase_2"], state["phase_3"]]
-        if state.get("phase_4"):
-            phases.append(state["phase_4"])
-        if state.get("phase_5"):
-            phases.append(state["phase_5"])
+        phase_4 = state.get("phase_4")
+        phase_5 = state.get("phase_5")
+        if phase_4 is not None:
+            phases.append(phase_4)
+        if phase_5 is not None:
+            phases.append(phase_5)
 
         complete_quest = {
             "title": state["quest_title"],
@@ -683,11 +685,11 @@ Return JSON with:
         return state
 
     async def build_quest(
-        self, requirements: str, lore_context: list[dict[str, Any]] | None = None
+        self, requirements: str, lore_context: list[Any] | None = None
     ) -> dict[str, Any]:
         """Build a complete quest with the workflow."""
 
-        initial_state = {
+        initial_state: QuestState = {
             "requirements": requirements,
             "lore_context": lore_context or [],
             "quest_hook": {},
@@ -709,12 +711,10 @@ Return JSON with:
 
         return result["complete_quest"]
 
-    async def build_quest_streaming(
-        self, requirements: str, lore_context: list[dict[str, Any]] | None = None
-    ):
+    async def build_quest_streaming(self, requirements: str, lore_context: list[Any] | None = None):
         """Build quest with streaming updates."""
 
-        initial_state = {
+        initial_state: QuestState = {
             "requirements": requirements,
             "lore_context": lore_context or [],
             "quest_hook": {},

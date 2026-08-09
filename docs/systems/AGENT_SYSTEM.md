@@ -15,6 +15,7 @@ The Luminari Sage agent system consists of multiple specialized AI agents that w
 **Location**: `src/agents/lore_chat_agent_streaming.py`
 
 **Capabilities**:
+
 - Natural language understanding
 - Context-aware responses
 - Tool calling (search_lore)
@@ -22,6 +23,7 @@ The Luminari Sage agent system consists of multiple specialized AI agents that w
 - Conversation memory
 
 **System Prompt**:
+
 ```
 You are the Sage of Luminari, a keeper of ancient knowledge and lore.
 You have access to a vast repository of information about the world.
@@ -30,9 +32,11 @@ Be helpful, accurate, and engaging.
 ```
 
 **Tools**:
+
 - `search_lore(query: str)`: Search the knowledge base
 
 **Usage Example**:
+
 ```python
 agent = StreamingLoreChatAgent(api_key)
 async for event in agent.stream_chat("Tell me about the Sundering"):
@@ -51,6 +55,7 @@ async for event in agent.stream_chat("Tell me about the Sundering"):
 **Location**: `src/agents/langchain/chains/story_development.py`
 
 **Capabilities**:
+
 - Create new characters, locations, events
 - Mark non-canon elements with [STORY] tags
 - Maintain story continuity
@@ -58,6 +63,7 @@ async for event in agent.stream_chat("Tell me about the Sundering"):
 - Track story-specific elements
 
 **Output Schema**:
+
 ```python
 {
     "canon_foundation": ["Referenced lore elements"],
@@ -77,8 +83,9 @@ async for event in agent.stream_chat("Tell me about the Sundering"):
 ```
 
 **Example Prompt**:
+
 ```
-Create a story about a Crystal Dwarf craftsman in Ashenport 
+Create a story about a Crystal Dwarf craftsman in Ashenport
 who is secretly building an Arcana Golem.
 ```
 
@@ -93,6 +100,7 @@ who is secretly building an Arcana Golem.
 **Location**: `src/agents/langchain/chains/quest_planner.py`
 
 **Capabilities**:
+
 - Create multi-phase quest structures
 - Include objectives and risks
 - Reference entities from context
@@ -100,30 +108,32 @@ who is secretly building an Arcana Golem.
 - Generate quest titles and premises
 
 **Output Schema**:
+
 ```json
 {
-    "title": "The Craftsman's Vision",
-    "objective": "Help complete the Arcana Golem",
-    "premise": "A Crystal Dwarf needs rare materials...",
-    "phases": [
-        {
-            "phase": "Hook",
-            "description": "Discover the hidden workshop",
-            "key_entities": ["Crystal Dwarf", "Ashenport"],
-            "risks": ["Discovery by authorities"]
-        },
-        {
-            "phase": "Escalation",
-            "description": "Gather rare components",
-            "key_entities": ["Arcane Crystals"],
-            "risks": ["Rival collectors"]
-        }
-    ],
-    "unresolved_threads": ["The craftsman's true motivation"]
+  "title": "The Craftsman's Vision",
+  "objective": "Help complete the Arcana Golem",
+  "premise": "A Crystal Dwarf needs rare materials...",
+  "phases": [
+    {
+      "phase": "Hook",
+      "description": "Discover the hidden workshop",
+      "key_entities": ["Crystal Dwarf", "Ashenport"],
+      "risks": ["Discovery by authorities"]
+    },
+    {
+      "phase": "Escalation",
+      "description": "Gather rare components",
+      "key_entities": ["Arcane Crystals"],
+      "risks": ["Rival collectors"]
+    }
+  ],
+  "unresolved_threads": ["The craftsman's true motivation"]
 }
 ```
 
 **Phase Structure**:
+
 1. **Hook**: Initial engagement
 2. **Escalation**: Rising action
 3. **Complication**: Unexpected challenges
@@ -141,6 +151,7 @@ who is secretly building an Arcana Golem.
 **Location**: `src/agents/langchain/chains/narrative.py`
 
 **Capabilities**:
+
 - Generate 150-220 word scenes
 - Create narrative outlines (3-7 beats)
 - Track creative embellishments
@@ -148,26 +159,28 @@ who is secretly building an Arcana Golem.
 - Write dramatic prose
 
 **Output Schema**:
+
 ```json
 {
-    "outline": [
-        {
-            "beat": 1,
-            "title": "The Awakening",
-            "purpose": "Set the scene"
-        },
-        {
-            "beat": 2,
-            "title": "First Light",
-            "purpose": "Show the transformation"
-        }
-    ],
-    "scene": "The cavern trembled as ancient crystals began to pulse...",
-    "embellishment_note": "Added sensory details about crystal resonance"
+  "outline": [
+    {
+      "beat": 1,
+      "title": "The Awakening",
+      "purpose": "Set the scene"
+    },
+    {
+      "beat": 2,
+      "title": "First Light",
+      "purpose": "Show the transformation"
+    }
+  ],
+  "scene": "The cavern trembled as ancient crystals began to pulse...",
+  "embellishment_note": "Added sensory details about crystal resonance"
 }
 ```
 
 **Trigger Words**:
+
 - "write a scene"
 - "describe"
 - "narrate"
@@ -184,6 +197,7 @@ who is secretly building an Arcana Golem.
 **Location**: `src/agents/langchain/chains/direct_answer.py`
 
 **Capabilities**:
+
 - Answer factual questions
 - Provide detailed explanations
 - Connect related concepts
@@ -191,15 +205,17 @@ who is secretly building an Arcana Golem.
 - Cite sources from context
 
 **Personality Traits**:
+
 - Warm and conversational
 - Enthusiastic about lore
 - Professional yet approachable
 - Occasionally mystical
 
 **Example Response Style**:
+
 ```
-Ah, the Crystal Dwarves! One of Luminari's most fascinating races. 
-These silicon-based beings emerged during the Age of Crystal, when 
+Ah, the Crystal Dwarves! One of Luminari's most fascinating races.
+These silicon-based beings emerged during the Age of Crystal, when
 the deep caverns resonated with primordial energies...
 ```
 
@@ -214,6 +230,7 @@ the deep caverns resonated with primordial energies...
 **Location**: `src/agents/langchain/chains/retrieval.py`
 
 **Capabilities**:
+
 - Vector similarity search (pgvector)
 - Full-text search (PostgreSQL FTS)
 - Graph entity expansion (Neo4j)
@@ -222,6 +239,7 @@ the deep caverns resonated with primordial energies...
 - Metadata extraction
 
 **Search Process**:
+
 1. Query embedding generation
 2. Vector search in pgvector (episode embeddings)
 3. Full-text search in PostgreSQL
@@ -230,6 +248,7 @@ the deep caverns resonated with primordial energies...
 6. Context assembly with structured blocks
 
 **Usage**:
+
 ```python
 from src.agents.langchain.chains.retrieval import RetrievalChain
 
@@ -253,6 +272,7 @@ chunks = result.get("raw", {}).get("chunks", [])
 **Location**: `src/agents/langchain/chains/direct_answer.py`
 
 **Capabilities**:
+
 - Two-stage answer generation (digest → compose)
 - Context prioritization (prose > entity summaries > graph)
 - Block citation for fact tracing
@@ -282,6 +302,7 @@ chunks = result.get("raw", {}).get("chunks", [])
 3. **Graph Data**: Supporting notes from Neo4j (prefixed "GRAPH ENTITY"/"GRAPH RELATIONSHIP")
 
 **System Prompt Highlights**:
+
 ```
 You are an archivist distilling canonical knowledge of Lumia.
 
@@ -292,6 +313,7 @@ If graph details contradict the prose or entity summary, trust the canon sources
 ```
 
 **Usage**:
+
 ```python
 from src.agents.langchain.chains.direct_answer import DirectAnswerChain
 
@@ -309,23 +331,30 @@ answer = result.get("answer")
 ```
 
 **Output Structure**:
+
 ```markdown
 ## Direct Answer
+
 [Core response summary]
 
 ## Canonical Details
+
 [Every supporting fact from context]
 
 ## Key Entities & Roles
+
 [Important entities and their roles]
 
 ## Notable Connections
+
 [Key relationships from graph]
 
 ## Additional Insights
+
 [Related tangential information]
 
 ## Source Blocks
+
 - Block 1: [Preview of first 100 chars...]
 - Block 2: [Preview of first 100 chars...]
 ```
@@ -341,6 +370,7 @@ answer = result.get("answer")
 **Location**: `src/agents/langchain/chains/agent_orchestrator.py`
 
 **Capabilities**:
+
 - Analyze complex requests
 - Create execution plans
 - Execute agents sequentially
@@ -348,6 +378,7 @@ answer = result.get("answer")
 - Assemble combined responses
 
 **Planning Process**:
+
 ```python
 {
     "user_intent": "Create story and quest about Crystal Dwarf",
@@ -385,6 +416,7 @@ answer = result.get("answer")
 ```
 
 **Available Tools**:
+
 - `search_lore`: Search canonical information
 - `develop_story`: Create non-canon stories
 - `plan_quest`: Generate quest structures
@@ -408,6 +440,7 @@ The validation and correction system provides autonomous graph quality assurance
 **Location**: `src/agents/relationship_validator.py`
 
 **Capabilities**:
+
 - **Rule-Based Validation**: 6 validation types with deterministic checks
 - **LLM-Enhanced Analysis**: Semantic appropriateness and GraphRAG optimization
 - **Complete Audit Trail**: All findings stored in PostgreSQL
@@ -454,6 +487,7 @@ The validation and correction system provides autonomous graph quality assurance
 - **MENTIONS Classification**: Should rich MENTIONS semantics be RELATES_TO instead?
 
 **Configuration**:
+
 ```python
 report = await validator.validate(
     entity_limit=1000,              # Max entities to analyze
@@ -467,6 +501,7 @@ report = await validator.validate(
 ```
 
 **Output Schema**:
+
 ```python
 class ValidationReport(BaseModel):
     report_id: str
@@ -477,7 +512,7 @@ class ValidationReport(BaseModel):
     findings: List[ValidationFinding]
     execution_time_seconds: float
     success: bool
-    
+
 class ValidationFinding(BaseModel):
     finding_id: str
     severity: ValidationSeverity  # INFO, WARNING, ERROR, CRITICAL
@@ -498,6 +533,7 @@ class ValidationFinding(BaseModel):
 ```
 
 **Business Rules**:
+
 - **Never validates MENTIONS bidirectionality**: MENTIONS are unidirectional episode→entity links
 - **GraphRAG-aware**: RELATES_TO needs semantics for LLM reasoning, MENTIONS should be simple
 - **Confidence-based**: High confidence (>0.85) suitable for autonomous correction
@@ -511,6 +547,7 @@ class ValidationFinding(BaseModel):
 **Location**: `src/agents/base_validator.py`
 
 **Features**:
+
 - **Standardized Finding Structure**: ValidationFinding and ValidationReport models
 - **Confidence Scoring Guidelines**: 0.9-1.0 (very high) to 0.1-0.2 (very low)
 - **Human Review Tracking**: Reviewer, action, timestamp, notes
@@ -519,6 +556,7 @@ class ValidationFinding(BaseModel):
 - **Priority System**: 1 (highest) to 5 (lowest)
 
 **System Prompt Template**:
+
 ```python
 You are a validation agent for the Luminari Sage knowledge graph system.
 
@@ -541,12 +579,14 @@ CONFIDENCE SCORING GUIDELINES:
 ```
 
 **Severity Levels**:
+
 - **CRITICAL**: Data corruption, major inconsistencies requiring immediate action
 - **ERROR**: Clear logical problems needing fixes
 - **WARNING**: Potential issues worth investigating
 - **INFO**: Suggestions for improvement
 
 **Helper Methods**:
+
 ```python
 def create_finding(...) -> ValidationFinding
 def create_report(...) -> ValidationReport
@@ -563,6 +603,7 @@ def create_report(...) -> ValidationReport
 **Location**: `src/agents/relationship_corrector.py`
 
 **Capabilities**:
+
 - **Deduplication**: Remove duplicate RELATES_TO relationships (confidence: 0.95)
 - **Semantic Standardization**: Normalize to SCREAMING_SNAKE_CASE (confidence: 0.90)
 - **Complete Backup**: Store full relationship data before modification
@@ -587,6 +628,7 @@ def create_report(...) -> ValidationReport
    - Action: UPDATE
 
 **Scoring Algorithm** (for duplicate selection):
+
 ```python
 def score_relationship(rel):
     score = 0
@@ -601,6 +643,7 @@ def score_relationship(rel):
 ```
 
 **Configuration**:
+
 ```python
 corrections = await corrector.apply_corrections(
     relationships=relationships,
@@ -613,6 +656,7 @@ corrections = await corrector.apply_corrections(
 ```
 
 **Safety Mechanisms**:
+
 1. **Dry-run by default**: Must explicitly set `dry_run=False`
 2. **Confidence threshold**: Only high-confidence corrections (≥0.85)
 3. **Max corrections limit**: Prevents runaway corrections
@@ -621,6 +665,7 @@ corrections = await corrector.apply_corrections(
 6. **Batch tracking**: All corrections share correction_batch_id
 
 **Correction Record**:
+
 ```python
 class CorrectionRecord(BaseModel):
     correction_id: str
@@ -644,6 +689,7 @@ class CorrectionRecord(BaseModel):
 **Location**: `src/agents/rollback_manager.py`
 
 **Capabilities**:
+
 - **Single Correction Rollback**: Restore one specific correction
 - **Batch Rollback**: Atomically rollback all corrections in a batch
 - **Rollback Preview**: Preview what would be rolled back
@@ -651,6 +697,7 @@ class CorrectionRecord(BaseModel):
 - **Safety Validation**: Check if correction can be rolled back
 
 **Key Methods**:
+
 ```python
 async def rollback_correction(
     correction_id: str,
@@ -674,6 +721,7 @@ async def get_rollback_statistics(
 ```
 
 **Rollback Process**:
+
 1. **Validate**: Check if correction can be rolled back (not already rolled back)
 2. **Retrieve**: Get complete backup data from PostgreSQL
 3. **Restore**: Apply inverse operation to Neo4j
@@ -693,6 +741,7 @@ async def get_rollback_statistics(
 **Location**: `src/agents/validation_storage.py`
 
 **Key Methods**:
+
 ```python
 async def store_report(report: ValidationReport) -> bool
 async def get_report(report_id: str) -> Optional[ValidationReport]
@@ -712,6 +761,7 @@ async def get_validation_statistics() -> Dict[str, Any]
 ```
 
 **Features**:
+
 - **PostgreSQL Storage**: Durable storage with indexes
 - **Report Versioning**: Track all validation runs
 - **Finding Tracking**: Individual finding records with review status
@@ -720,6 +770,7 @@ async def get_validation_statistics() -> Dict[str, Any]
 - **Query Filters**: By severity, category, agent ID, reviewed status
 
 **Database Schema**:
+
 ```sql
 CREATE TABLE validation_reports (
     report_id UUID PRIMARY KEY,
@@ -762,6 +813,7 @@ CREATE TABLE validation_findings (
 ```
 
 **Review Actions**:
+
 - `fixed`: Issue has been resolved
 - `false_positive`: Agent was wrong, no issue exists
 - `acknowledged`: Valid finding, will fix later
@@ -777,6 +829,7 @@ CREATE TABLE validation_findings (
 **Location**: `src/agents/correction_storage.py`
 
 **Key Methods**:
+
 ```python
 async def store_correction(
     correction_id: str,
@@ -799,6 +852,7 @@ async def list_recent_corrections(limit: int = 100) -> List[Dict[str, Any]]
 ```
 
 **Features**:
+
 - **Complete Backup**: Stores entire relationship including embeddings
 - **Batch Management**: Group related corrections
 - **Rollback Data**: Everything needed to restore exact original state
@@ -807,18 +861,19 @@ async def list_recent_corrections(limit: int = 100) -> List[Dict[str, Any]]
 - **Linked to Validation**: Connects corrections to originating validation reports
 
 **Database Schema**:
+
 ```sql
 CREATE TABLE relationship_corrections (
     correction_id UUID PRIMARY KEY,
     validation_report_id UUID REFERENCES validation_reports(report_id),
     correction_batch_id UUID NOT NULL,
-    
+
     -- Correction details
     correction_type VARCHAR(50) NOT NULL,  -- DEDUPLICATION, SEMANTIC_STANDARDIZATION
     action VARCHAR(20) NOT NULL,           -- DELETE, UPDATE
     confidence_score FLOAT NOT NULL,
     agent_reasoning TEXT NOT NULL,
-    
+
     -- Relationship backup (complete data for rollback)
     relationship_id TEXT NOT NULL,
     relationship_type VARCHAR(50) NOT NULL,
@@ -830,19 +885,19 @@ CREATE TABLE relationship_corrections (
     target_node_labels TEXT[],
     original_properties JSONB NOT NULL,  -- Full backup including embeddings
     new_properties JSONB,                -- For UPDATE actions
-    
+
     -- Type-specific details
     original_semantic_type TEXT,
     new_semantic_type TEXT,
     duplicate_count INTEGER,
-    
+
     -- Rollback tracking
     applied_at TIMESTAMPTZ DEFAULT NOW(),
     rolled_back BOOLEAN DEFAULT FALSE,
     rollback_at TIMESTAMPTZ,
     rollback_by VARCHAR(100),
     rollback_reason TEXT,
-    
+
     -- Additional metadata
     metadata JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -850,6 +905,7 @@ CREATE TABLE relationship_corrections (
 ```
 
 **Correction States**:
+
 - **Applied**: Successfully applied to Neo4j (`rolled_back=false`)
 - **Rolled Back**: Reverted to original state (`rolled_back=true`)
 
@@ -866,6 +922,7 @@ CREATE TABLE relationship_corrections (
 **Location**: `src/agents/langchain/util/classifier.py`
 
 **Routes**:
+
 1. **lore_query**: Factual questions
 2. **quest_planning**: Quest creation
 3. **narrative_generation**: Prose writing
@@ -874,6 +931,7 @@ CREATE TABLE relationship_corrections (
 6. **meta_help**: System capabilities
 
 **Classification Process**:
+
 ```python
 async def llm_classify(message, conversation_history):
     # Considers conversation context
@@ -884,6 +942,7 @@ async def llm_classify(message, conversation_history):
 ### Heuristic Fallback
 
 Pattern-based classification when LLM unavailable:
+
 - Quest patterns: "quest", "adventure", "mission"
 - Story patterns: "create", "develop", "new character"
 - Narrative patterns: "write", "describe", "scene"
@@ -898,6 +957,7 @@ Pattern-based classification when LLM unavailable:
 **Location**: `src/agents/conversation_storage.py`
 
 **Features**:
+
 - PostgreSQL-backed persistence
 - Session management
 - Message threading
@@ -905,6 +965,7 @@ Pattern-based classification when LLM unavailable:
 - Streaming state tracking
 
 **Schema**:
+
 ```sql
 conversations (
     id UUID PRIMARY KEY,
@@ -930,6 +991,7 @@ conversation_messages (
 ### SSE (Server-Sent Events)
 
 **Event Types**:
+
 ```javascript
 // Route selection
 {"type": "route", "route": "lore_query", "confidence": 0.95}
@@ -956,12 +1018,14 @@ conversation_messages (
 ### Stream Session Management
 
 **Session Creation**:
+
 1. User sends message
 2. Create stream session with TTL
 3. Return stream URL
 4. Client connects to SSE endpoint
 
 **Session State**:
+
 - `pending`: Awaiting processing
 - `processing`: Currently generating
 - `completed`: Successfully finished
@@ -974,20 +1038,22 @@ conversation_messages (
 ### Retry Mechanisms
 
 **LLM Failures**:
+
 1. First retry: Provide error feedback
 2. Second retry: Give concrete template
 3. Fallback: Use default response
 
 **Example Retry Logic**:
+
 ```python
 if not valid_response:
     # First retry with feedback
     retry_prompt = "Your JSON was invalid. Expected format: ..."
-    
+
     if still_invalid:
         # Second retry with template
         template_prompt = "Fill in this exact template: ..."
-        
+
         if still_invalid:
             # Use fallback
             return FALLBACK_RESPONSE
@@ -1007,6 +1073,7 @@ if not valid_response:
 ### Creating New Agents
 
 **Base Template**:
+
 ```python
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
@@ -1015,7 +1082,7 @@ from pydantic import BaseModel
 class CustomAgent(Runnable):
     def __init__(self, model="gpt-4o-mini", temperature=0.7):
         self.llm = ChatOpenAI(model=model, temperature=temperature)
-    
+
     def invoke(self, input: Dict[str, Any]) -> Dict[str, Any]:
         # Process input
         # Call LLM
@@ -1035,16 +1102,19 @@ class CustomAgent(Runnable):
 ## Performance Optimization
 
 ### Token Management
+
 - Streaming for long responses
 - Chunked processing for large contexts
 - Token counting with tiktoken
 
 ### Caching Strategy
+
 - Embedding cache (15 minutes)
 - Query result cache
 - Conversation context cache
 
 ### Parallel Processing
+
 - Concurrent tool calls
 - Batch embedding generation
 - Async database queries
@@ -1054,6 +1124,7 @@ class CustomAgent(Runnable):
 ## Testing Agents
 
 ### Unit Testing
+
 ```python
 async def test_story_agent():
     agent = StoryDevelopmentChain()
@@ -1065,6 +1136,7 @@ async def test_story_agent():
 ```
 
 ### Integration Testing
+
 ```python
 async def test_orchestration():
     service = LangChainChatService()
@@ -1076,6 +1148,7 @@ async def test_orchestration():
 ```
 
 ### Load Testing
+
 ```bash
 # Using locust or similar
 locust -f tests/load_test.py --host=http://localhost:8003
@@ -1086,18 +1159,21 @@ locust -f tests/load_test.py --host=http://localhost:8003
 ## Best Practices
 
 ### Prompt Engineering
+
 1. Be explicit about output format
 2. Provide examples when possible
 3. Use temperature appropriate to task
 4. Include validation instructions
 
 ### Context Management
+
 1. Limit context to relevant information
 2. Use semantic chunking
 3. Preserve conversation flow
 4. Clean up old sessions
 
 ### Error Recovery
+
 1. Always have fallbacks
 2. Log failures for debugging
 3. Provide meaningful error messages
@@ -1108,12 +1184,14 @@ locust -f tests/load_test.py --host=http://localhost:8003
 ## Future Enhancements
 
 ### Planned Features
+
 1. **Multi-modal agents**: Image and map understanding
 2. **Collaborative agents**: Multi-agent debate
 3. **Learning agents**: Fine-tuning on feedback
 4. **Specialized agents**: Combat, crafting, trading
 
 ### Research Areas
+
 1. **Chain-of-thought prompting**
 2. **Self-consistency checking**
 3. **Retrieval-augmented generation improvements**
@@ -1122,7 +1200,9 @@ locust -f tests/load_test.py --host=http://localhost:8003
 ## Context Management Strategy
 
 ### Problem Statement
+
 As conversations grow with multi-step tasks (questlines, connected stories), context accumulation becomes critical:
+
 - 4-quest questline can exceed 5000+ tokens
 - Tool results add 1000+ tokens per complex operation
 - Conversation history grows linearly
@@ -1131,6 +1211,7 @@ As conversations grow with multi-step tasks (questlines, connected stories), con
 ### Proposed Solution: Intelligent Context Compression
 
 #### 1. Sliding Window with Task Preservation
+
 ```python
 class ContextWindow:
     full_detail_turns: int = 2      # Last 2 turns keep full detail
@@ -1139,6 +1220,7 @@ class ContextWindow:
 ```
 
 **Implementation**:
+
 - Keep recent messages in full detail
 - Compress older messages to summaries
 - ALWAYS preserve "active task" context (current questline, pending stories)
@@ -1147,6 +1229,7 @@ class ContextWindow:
 #### 2. Semantic Compression Strategies
 
 **Tool Result Compression**:
+
 ```python
 # Original (1000+ tokens):
 {
@@ -1169,23 +1252,25 @@ class ContextWindow:
 ```
 
 **Conversation Compression**:
+
 - Merge adjacent user messages
 - Combine tool calls of same type
 - Extract and preserve key decisions/choices
 - Remove redundant confirmations
 
 #### 3. Task-Aware Context Structure
+
 ```python
 class TaskAwareContext:
     # Always preserved
-    active_questline: Optional[QuestlineState]  
+    active_questline: Optional[QuestlineState]
     pending_stories: List[StoryThread]
     unresolved_threads: List[str]
-    
+
     # Compressed after completion
     completed_quests: List[QuestSummary]  # Just titles and connections
     tool_history: ToolHistorySummary      # Aggregated by type
-    
+
     # Recent context
     recent_messages: List[Message]        # Last 3-5 turns
     current_entities: Set[str]            # Active NPCs/locations
@@ -1193,25 +1278,27 @@ class TaskAwareContext:
 
 #### 4. Progressive Detail Reduction
 
-| Age | Detail Level | Example |
-|-----|-------------|---------|
-| Current turn | Full | Complete tool results, all text |
-| 1 turn ago | Full | Complete tool results, all text |
-| 2-4 turns ago | Moderate | Key results, main points |
-| 5-10 turns ago | Summary | One-line summaries |
-| 10+ turns ago | Minimal | Only if task-relevant |
+| Age            | Detail Level | Example                         |
+| -------------- | ------------ | ------------------------------- |
+| Current turn   | Full         | Complete tool results, all text |
+| 1 turn ago     | Full         | Complete tool results, all text |
+| 2-4 turns ago  | Moderate     | Key results, main points        |
+| 5-10 turns ago | Summary      | One-line summaries              |
+| 10+ turns ago  | Minimal      | Only if task-relevant           |
 
 #### 5. Smart Compression Triggers
 
 **Automatic Compression When**:
+
 - Context exceeds 50% of model limit
 - Major task completes (questline finished)
 - Topic shift detected
 - User explicitly starts new task
 
 **Never Compress**:
+
 - Active multi-step operations
-- Unresolved story threads  
+- Unresolved story threads
 - Recent tool failures needing retry
 - Explicit user references to past content
 
@@ -1222,23 +1309,23 @@ class ContextManager:
     def __init__(self, max_tokens: int = 8000):
         self.max_tokens = max_tokens
         self.compression_threshold = max_tokens * 0.5
-        
+
     async def manage_context(
-        self, 
+        self,
         messages: List[Message],
         active_tasks: List[Task]
     ) -> List[Message]:
         """Intelligently compress context while preserving continuity."""
-        
+
         # Calculate current token usage
         current_tokens = self.count_tokens(messages)
-        
+
         if current_tokens < self.compression_threshold:
             return messages  # No compression needed
-            
+
         # Identify what must be preserved
         preserve_ids = self.identify_critical_messages(messages, active_tasks)
-        
+
         # Apply progressive compression
         compressed = []
         for msg in messages:
@@ -1252,28 +1339,32 @@ class ContextManager:
                 summary = self.semantic_compress(msg)
                 if summary:  # Only include if still relevant
                     compressed.append(summary)
-                    
+
         return compressed
 ```
 
 ### When to Implement
 
 **Phase 1** (Current): Monitor token usage in production
+
 - Log warnings when context > 4000 tokens
 - Track which operations cause most growth
 - Identify compression candidates
 
 **Phase 2** (When needed): Implement basic compression
+
 - Start with tool result compression
 - Add conversation summarization
 - Preserve task continuity
 
 **Phase 3** (Future): Advanced features
+
 - Semantic importance scoring
 - Dynamic compression thresholds
 - User-controllable detail levels
 
 ### Success Metrics
+
 - No loss of task continuity
 - Maintain conversation coherence
 - Support 10+ turn questline generation
@@ -1282,5 +1373,5 @@ class ContextManager:
 
 ---
 
-*For API integration, see the [API Reference](./API_REFERENCE.md).*
-*For development setup, see the [Developer Guide](./DEVELOPER_GUIDE.md).*
+_For API integration, see the [API Reference](./API_REFERENCE.md)._
+_For development setup, see the [Developer Guide](./DEVELOPER_GUIDE.md)._

@@ -1,6 +1,6 @@
 # Luminari Lore MCP Server
 
-**Documentation Type**: MCP Server Setup & Usage Guide  
+**Documentation Type**: MCP Server Setup & Usage Guide
 **Audience**: Claude Desktop Users, MCP Client Integrators
 
 > **Note**: For general project documentation, setup, and API information, see [README.md](./README.md).
@@ -30,7 +30,8 @@ The MCP server runs on port 8004 alongside the FastAPI server (port 8003) using 
 
 Add this to your Claude Desktop MCP settings file:
 
-**Location**: 
+**Location**:
+
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
@@ -78,9 +79,11 @@ If running locally without Docker:
 ## Available Tools
 
 ### query_lore
+
 Query the lore using natural language. Returns semantically relevant text chunks from the knowledge base.
 
 **Parameters**:
+
 - `query` (required): Natural language question about the lore
 - `max_results` (optional): Number of chunks to return (1-20, default 5)
 - `threshold` (optional): Similarity threshold (0.0-1.0, default 0.1)
@@ -88,9 +91,11 @@ Query the lore using natural language. Returns semantically relevant text chunks
 **Example**: "Tell me about the Knights of the Crimson Loom"
 
 ### search_entities
+
 Find entities by name or description with optional type filtering.
 
 **Parameters**:
+
 - `query` (required): Search term (entity name or keyword)
 - `entity_type` (optional): Filter by type (Deity, Organization, Person, Location, etc.)
 - `limit` (optional): Max results (1-50, default 10)
@@ -98,20 +103,25 @@ Find entities by name or description with optional type filtering.
 **Example**: Search for "Paladine" with entity_type "Deity"
 
 ### get_entity_details
+
 Get comprehensive information about a specific entity including properties and metadata.
 
 **Parameters**:
+
 - `entity_id` (required): Unique identifier from search_entities
 
 ### get_entity_relationships
+
 Explore knowledge graph connections for an entity.
 
 **Parameters**:
+
 - `entity_id` (required): Unique identifier from search_entities
 
 **Returns**: Relationships like Commands, ServesUnder, OpposedTo, Influences, etc.
 
 ### get_lore_stats
+
 Get system statistics including document counts, entity counts by type, and relationship counts.
 
 **No parameters required.**
@@ -119,8 +129,9 @@ Get system statistics including document counts, entity counts by type, and rela
 ## Entity Types
 
 The system recognizes 13 entity types:
+
 - **Deity**: Gods and divine beings
-- **Organization**: Orders, guilds, institutions  
+- **Organization**: Orders, guilds, institutions
 - **Person**: Named individuals, NPCs
 - **Location**: Cities, regions, landmarks
 - **Concept**: Abstract ideas, philosophies
@@ -136,6 +147,7 @@ The system recognizes 13 entity types:
 ## Relationship Types
 
 The knowledge graph uses 14 relationship types:
+
 - **Commands**: Leadership relationships
 - **ServesUnder**: Service hierarchies
 - **OpposedTo**: Conflicts and opposition
@@ -154,6 +166,7 @@ The knowledge graph uses 14 relationship types:
 ## Data Coverage
 
 The lore system contains 1000+ episodes covering:
+
 - Complete pantheon with 40+ deities
 - Six sacred knight orders
 - World history across 7 ages
@@ -186,6 +199,7 @@ The lore system contains 1000+ episodes covering:
 ## Development
 
 The MCP server code is in `/src/mcp/server.py` and uses:
+
 - **mcp** package for protocol implementation
 - **aiohttp** for API communication
 - **asyncio** for async operations

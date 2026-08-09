@@ -36,15 +36,10 @@ os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ.setdefault("GRAPHITI_TELEMETRY_ENABLED", "false")
 
-from src.graphiti.policy_graphiti import PolicyGraphiti
-
-# graphiti-core names the episode node type EpisodicNode (older releases used EpisodeNode)
-try:
-    from graphiti_core.nodes import EpisodicNode as EpisodeNode
-except ImportError:  # pragma: no cover - very old graphiti-core
-    from graphiti_core.nodes import EpisodeNode
-
+from graphiti_core.graphiti import AddEpisodeResults
 from neo4j import AsyncGraphDatabase
+
+from src.graphiti.policy_graphiti import PolicyGraphiti
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +61,8 @@ class LuminariGraphiti:
         resolved_neo4j_uri = neo4j_uri or os.getenv("NEO4J_URI", "bolt://localhost:7687")
         resolved_neo4j_user = neo4j_user or os.getenv("NEO4J_USER", "neo4j")
         resolved_neo4j_password = neo4j_password or os.getenv("NEO4J_PASSWORD")
+        if not resolved_neo4j_uri or not resolved_neo4j_user or not resolved_neo4j_password:
+            raise ValueError("Neo4j URI, user, and password are required")
         self.verbose = verbose
 
         # Use provided clients or get from ollama_config
@@ -228,7 +225,7 @@ class LuminariGraphiti:
                     console.print(f"[red]❌ LLM error type:[/red] {type(e).__name__}")
                 raise
 
-        self.graphiti.llm_client.generate_response = logged_generate_response
+        setattr(self.graphiti.llm_client, "generate_response", logged_generate_response)
 
         # Create separate driver for our own operations
         self.driver = AsyncGraphDatabase.driver(
@@ -243,6 +240,7 @@ class LuminariGraphiti:
 
     async def close(self):
         """Close connections."""
+        await self.graphiti.close()
         if hasattr(self, "driver"):
             await self.driver.close()
         llm_client = getattr(getattr(self, "graphiti", None), "llm_client", None)
@@ -265,7 +263,7 @@ class LuminariGraphiti:
         source_file: str,
         timestamp: datetime | None = None,
         metadata: dict | None = None,
-    ) -> EpisodeNode:
+    ) -> AddEpisodeResults:
         """Add an episode with comprehensive fantasy lore relationship types."""
         from graphiti_core.nodes import EpisodeType
 
@@ -681,13 +679,12 @@ class LuminariGraphiti:
                         },
                     )
 
-                    # Extract count based on Neo4j driver version
-                    if hasattr(result, "records") and result.records:
-                        count = result.records[0]["updated_count"]
-                    elif result and len(result) > 0:
-                        count = result[0]["updated_count"]
-                    else:
-                        count = 0
+                    count_value = result.records[0]["updated_count"] if result.records else 0
+                    count = (
+                        count_value
+                        if isinstance(count_value, int) and not isinstance(count_value, bool)
+                        else 0
+                    )
 
                     updated_count += count
                     if count > 0:
@@ -858,8 +855,11 @@ async def initialize_graphiti(
             await session.run(
                 "CREATE CONSTRAINT entity_stable_id_unique IF NOT EXISTS FOR (n:Entity) REQUIRE n.stable_id IS UNIQUE"
             )
-        except Exception:
-            pass  # Constraint might already exist
+        except Exception as constraint_error:
+            logger.warning(
+                "Unable to verify the entity stable-id constraint (%s)",
+                type(constraint_error).__name__,
+            )
 
         # Note: We don't create unique constraint on Episodic.stable_id since multiple episodes
         # might theoretically reference the same PostgreSQL episode in edge cases

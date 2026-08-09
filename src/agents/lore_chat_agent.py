@@ -420,7 +420,7 @@ Remember: You're a lore sage having a conversation, not a document retrieval sys
 
     async def process_message(
         self, conversation_id: str, user_message: str, stream_id: str
-    ) -> AsyncGenerator[StreamEvent, None]:
+    ) -> AsyncGenerator[StreamEvent]:
         """Process a user message and stream the response."""
         try:
             # Get conversation context
@@ -1018,7 +1018,7 @@ Remember: You're a lore sage having a conversation, not a document retrieval sys
             thinking_parts.append(f"and {len(entities)} entities")
 
             # Show interesting entity types
-            entity_types = {}
+            entity_types: dict[str, int] = {}
             for entity in entities[:5]:
                 entity_type = entity.get("type", "Unknown")
                 entity_types[entity_type] = entity_types.get(entity_type, 0) + 1
@@ -1238,7 +1238,7 @@ Remember: You're a lore sage having a conversation, not a document retrieval sys
             return True  # If no topics to compare against, assume relevant
 
         # Convert topics to lowercase for comparison
-        topic_keywords = set()
+        topic_keywords: set[str] = set()
         for topic in recent_topics:
             topic_keywords.update(word.lower() for word in topic.split() if len(word) > 2)
 
@@ -1247,13 +1247,15 @@ Remember: You're a lore sage having a conversation, not a document retrieval sys
             chunk_text = chunk.get("text", "").lower()
 
             # If at least 2 topic keywords appear in the chunk, consider it relevant
-            matching_keywords = sum(1 for keyword in topic_keywords if keyword in chunk_text)
+            matching_keywords = len(
+                [keyword for keyword in topic_keywords if keyword in chunk_text]
+            )
             if matching_keywords >= 2:
                 return True
 
         return False
 
-    async def _stream_response_content(self, content: str) -> AsyncGenerator[StreamEvent, None]:
+    async def _stream_response_content(self, content: str) -> AsyncGenerator[StreamEvent]:
         """Stream response content in chunks."""
         # Split content into sentences for natural streaming
         sentences = content.split(". ")

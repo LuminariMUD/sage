@@ -21,11 +21,13 @@ Copy the contents from the file `.github/workflows/deploy.yml` in this directory
 Add these secrets in your GitHub repository settings (Settings → Secrets and variables → Actions):
 
 ### For Staging Deployment:
+
 - `STAGING_HOST`: Your staging server hostname/IP
 - `STAGING_USER`: SSH username for staging server
 - `STAGING_SSH_KEY`: Private SSH key for staging server
 
 ### For Production Deployment:
+
 - `PROD_HOST`: Your production server hostname/IP
 - `PROD_USER`: SSH username for production server
 - `PROD_SSH_KEY`: Private SSH key for production server
@@ -33,6 +35,7 @@ Add these secrets in your GitHub repository settings (Settings → Secrets and v
 - `STAGING_API_URL`: Staging API URL for smoke tests
 
 ### Optional:
+
 - `SLACK_WEBHOOK`: Slack webhook URL for deployment notifications
 - `GRAFANA_PASSWORD`: Password for Grafana monitoring
 
@@ -42,6 +45,7 @@ Add these secrets in your GitHub repository settings (Settings → Secrets and v
 - **Deployment**: Manual trigger or automatic on push to main branch
 
 The workflows will automatically:
+
 1. Run tests with PostgreSQL and Neo4j services
 2. Build Docker images
 3. Push to GitHub Container Registry

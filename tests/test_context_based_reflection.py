@@ -1,158 +1,108 @@
-"""Test that reflection catches factual errors using context, not hardcoded rules.
+"""Deterministic context-grounding coverage for the reflection chain."""
 
-This test verifies that the system can detect misattributions (like elves speaking Tal)
-by checking against the knowledge base context, without any hardcoded lore facts.
-"""
-
-import asyncio
-import os
-import sys
+import json
+from types import SimpleNamespace
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from src.agents.langchain.chains.reflection import ReflectionChain
-
-pytestmark = [pytest.mark.integration, pytest.mark.slow]
+from src.agents.langchain.chains import reflection as reflection_module
 
 
-async def test_tal_misattribution():
-    """Test that reflection catches Tal language misattribution using context."""
-    print("Testing context-based error detection for Tal language...")
+class ContextFactCheckerDouble:
+    """Return stable evaluations while verifying the authored prompt content."""
 
-    reflection = ReflectionChain()
+    async def ainvoke(self, messages):
+        prompt = "\n".join(str(message.content) for message in messages)
 
-    # Context that clearly states Tal is Crystal Dwarves' language
+        if "The elves speak in Tal" in prompt:
+            result = {
+                "is_grounded": False,
+                "unsupported_claims": ["The elves speak in Tal"],
+                "context_sufficient": True,
+                "missing_aspects": [],
+                "suggested_queries": [],
+                "confidence_score": 0.4,
+                "reasoning": "The context attributes Tal to Crystal Dwarves, not elves.",
+            }
+        elif "The Crystal Dwarves communicate in Tal" in prompt:
+            result = {
+                "is_grounded": True,
+                "unsupported_claims": [],
+                "context_sufficient": True,
+                "missing_aspects": [],
+                "suggested_queries": [],
+                "confidence_score": 0.95,
+                "reasoning": "Every claim is present in the supplied context.",
+            }
+        else:
+            assert "Elves speak an ancient melodic language" in prompt
+            result = {
+                "is_grounded": False,
+                "unsupported_claims": ["Elves speak an ancient melodic language"],
+                "context_sufficient": False,
+                "missing_aspects": ["The language spoken by elves"],
+                "suggested_queries": ["canonical elven language"],
+                "confidence_score": 0.3,
+                "reasoning": "The supplied context contains no language information.",
+            }
+
+        return SimpleNamespace(content=json.dumps(result))
+
+
+@pytest.fixture
+def reflection(monkeypatch):
+    monkeypatch.setattr(
+        reflection_module,
+        "text_profile_is_ready",
+        lambda capability: False,
+    )
+    chain = reflection_module.ReflectionChain()
+    chain.llm = ContextFactCheckerDouble()
+    return chain
+
+
+async def test_tal_misattribution(reflection):
     context_blocks = [
-        "Crystal Dwarves speak in Tal, a language of harmonic resonance that sounds like living music.",
-        "Elves emerged from moonlight and memory, with pointed ears attuned to the Otherworld.",
-        "The Crystal Dwarves of Nagburim communicate through vibrations and musical tones.",
+        "Crystal Dwarves speak in Tal, a language of harmonic resonance.",
+        "Elves emerged from moonlight and memory.",
     ]
 
-    # Answer that incorrectly attributes Tal to elves
-    incorrect_answer = (
-        "The elves speak in Tal, their voices resonating like symphonies through crystalline halls."
-    )
-
     result = await reflection.reflect_on_answer(
-        answer=incorrect_answer,
+        answer="The elves speak in Tal, their voices resonating like symphonies.",
         question="Tell me about elven language",
         context_blocks=context_blocks,
     )
 
-    print("\nResults for incorrect Tal attribution:")
-    print(f"- Is grounded: {result.is_grounded}")
-    print(f"- Unsupported claims: {result.unsupported_claims}")
-    print(f"- Confidence: {result.confidence_score}")
-    print(f"- Reasoning: {result.reasoning}")
-
-    # The system should detect this as unsupported because:
-    # 1. Context says Crystal Dwarves speak Tal
-    # 2. Context doesn't say elves speak Tal
-    # 3. Therefore attributing Tal to elves is unsupported
-
-    assert not result.is_grounded, "Should detect the answer is not grounded"
-    assert result.confidence_score < 0.7, "Should have low confidence"
-    assert any(
-        "tal" in claim.lower() or "elves speak" in claim.lower()
-        for claim in result.unsupported_claims
-    ), "Should identify Tal/elves claim as unsupported"
-
-    print("\n✓ Successfully detected misattribution through context analysis")
+    assert not result.is_grounded
+    assert result.needs_revision
+    assert result.confidence_score < 0.7
+    assert any("elves speak" in claim.lower() for claim in result.unsupported_claims)
 
 
-async def test_correct_attribution():
-    """Test that reflection approves correct attributions."""
-    print("\nTesting correct attribution...")
-
-    reflection = ReflectionChain()
-
+async def test_correct_attribution(reflection):
     context_blocks = [
-        "Crystal Dwarves speak in Tal, a language of harmonic resonance that sounds like living music.",
-        "They communicate through vibrations and musical tones that ring through crystal halls.",
+        "Crystal Dwarves speak in Tal, a language of harmonic resonance.",
+        "They communicate through vibrations and musical tones.",
     ]
 
-    # Correct answer about Crystal Dwarves and Tal
-    correct_answer = "The Crystal Dwarves communicate in Tal, a harmonic language that resonates through their crystalline halls like living music."
-
     result = await reflection.reflect_on_answer(
-        answer=correct_answer,
+        answer="The Crystal Dwarves communicate in Tal through harmonic resonance.",
         question="How do Crystal Dwarves communicate?",
         context_blocks=context_blocks,
     )
 
-    print("\nResults for correct attribution:")
-    print(f"- Is grounded: {result.is_grounded}")
-    print(f"- Unsupported claims: {result.unsupported_claims}")
-    print(f"- Confidence: {result.confidence_score}")
-
-    assert result.is_grounded, "Should recognize correct attribution as grounded"
-    assert result.confidence_score > 0.7, "Should have high confidence"
-
-    print("\n✓ Successfully approved correct attribution")
+    assert result.is_grounded
+    assert not result.needs_revision
+    assert result.confidence_score > 0.7
 
 
-async def test_missing_context():
-    """Test that reflection requests more context when information is missing."""
-    print("\nTesting missing context detection...")
-
-    reflection = ReflectionChain()
-
-    # Limited context - doesn't mention elven language at all
-    context_blocks = [
-        "Elves are an ancient race with pointed ears.",
-        "They emerged from moonlight and memory.",
-    ]
-
-    # Answer makes claims about elven language
-    answer = "Elves speak an ancient melodic language passed down through generations."
-
+async def test_missing_context(reflection):
     result = await reflection.reflect_on_answer(
-        answer=answer, question="What language do elves speak?", context_blocks=context_blocks
+        answer="Elves speak an ancient melodic language passed down through generations.",
+        question="What language do elves speak?",
+        context_blocks=["Elves are an ancient race with pointed ears."],
     )
 
-    print("\nResults for missing context:")
-    print(f"- Context sufficient: {result.context_sufficient}")
-    print(f"- Missing aspects: {result.missing_aspects}")
-    print(f"- Suggested queries: {result.suggested_queries}")
-
-    assert not result.context_sufficient, "Should detect insufficient context"
-    assert result.suggested_queries, "Should suggest queries for more information"
-
-    print("\n✓ Successfully identified need for additional context")
-
-
-async def main():
-    """Run all context-based reflection tests."""
-    print("=" * 60)
-    print("Context-Based Reflection Tests")
-    print("=" * 60)
-
-    if not os.getenv("OPENAI_API_KEY"):
-        print("⚠️  Warning: OPENAI_API_KEY not set. Tests will use fallback behavior.")
-        print("Set the environment variable for full testing.\n")
-
-    try:
-        await test_tal_misattribution()
-        await test_correct_attribution()
-        await test_missing_context()
-
-        print("\n" + "=" * 60)
-        print("✅ All context-based reflection tests passed!")
-        print("The system correctly detects errors using context alone,")
-        print("without any hardcoded lore facts.")
-        print("=" * 60)
-
-    except AssertionError as e:
-        print(f"\n❌ Test failed: {e}")
-        print("The system may need adjustment to better detect")
-        print("misattributions through context analysis.")
-        return 1
-
-    return 0
-
-
-if __name__ == "__main__":
-    exit_code = asyncio.run(main())
-    sys.exit(exit_code)
+    assert not result.context_sufficient
+    assert result.needs_revision
+    assert result.suggested_queries == ["canonical elven language"]

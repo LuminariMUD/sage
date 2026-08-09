@@ -2,16 +2,16 @@
 
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from functools import wraps
-from typing import Any, TypeVar
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
 
-
-def monitor_performance(func: Callable[..., T]) -> Callable[..., T]:
+def monitor_performance[**P, T](
+    func: Callable[P, Awaitable[T]],
+) -> Callable[P, Coroutine[Any, Any, T]]:
     """
     Decorator to monitor LLM request performance.
 
@@ -31,7 +31,7 @@ def monitor_performance(func: Callable[..., T]) -> Callable[..., T]:
     """
 
     @wraps(func)
-    async def wrapper(*args: Any, **kwargs: Any) -> T:
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         start_time = time.time()
         func_name = func.__name__
 
@@ -68,7 +68,7 @@ def monitor_performance(func: Callable[..., T]) -> Callable[..., T]:
     return wrapper
 
 
-def monitor_sync_performance(func: Callable[..., T]) -> Callable[..., T]:
+def monitor_sync_performance[**P, T](func: Callable[P, T]) -> Callable[P, T]:
     """
     Decorator to monitor synchronous function performance.
 
@@ -88,7 +88,7 @@ def monitor_sync_performance(func: Callable[..., T]) -> Callable[..., T]:
     """
 
     @wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> T:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         start_time = time.time()
         func_name = func.__name__
 

@@ -30,9 +30,7 @@ class SemanticChunker:
         embedding_revision: str | None = None,
     ):
         # Load models
-        resolved_revision = embedding_revision or os.getenv(
-            "SAGE_SENTENCE_TRANSFORMERS_REVISION"
-        )
+        resolved_revision = embedding_revision or os.getenv("SAGE_SENTENCE_TRANSFORMERS_REVISION")
         self.sentence_model = SentenceTransformer(
             embedding_model,
             revision=resolved_revision,
@@ -118,7 +116,7 @@ class SemanticChunker:
         if not sentences:
             return []
 
-        overlap_sentences = []
+        overlap_sentences: list[str] = []
         current_tokens = 0
 
         # Work backwards from end of sentences
@@ -219,9 +217,9 @@ class SemanticChunker:
         dynamic_max_tokens = self.calculate_dynamic_max_tokens(sentences)
         target_overlap_tokens = int(dynamic_max_tokens * self.overlap_percentage)
 
-        chunks = []
-        current_sentences = []
-        current_embeddings = []
+        chunks: list[dict] = []
+        current_sentences: list[str] = []
+        current_embeddings: list[np.ndarray] = []
         current_tokens = 0
 
         for i, (sentence, embedding) in enumerate(zip(sentences, embeddings)):
@@ -252,7 +250,8 @@ class SemanticChunker:
                                 "sentence_count": len(current_sentences),
                                 "has_overlap": len(chunks) > 0,  # Has overlap if not first chunk
                                 "complexity_score": sum(
-                                    self.calculate_complexity_score(s) for s in current_sentences
+                                    float(self.calculate_complexity_score(s))
+                                    for s in current_sentences
                                 )
                                 / len(current_sentences),
                                 "dynamic_max_tokens": dynamic_max_tokens,
@@ -301,7 +300,7 @@ class SemanticChunker:
                         "sentence_count": len(current_sentences),
                         "has_overlap": len(chunks) > 0,
                         "complexity_score": sum(
-                            self.calculate_complexity_score(s) for s in current_sentences
+                            float(self.calculate_complexity_score(s)) for s in current_sentences
                         )
                         / len(current_sentences),
                         "dynamic_max_tokens": dynamic_max_tokens,

@@ -1,9 +1,6 @@
 """Integration tests for Luminari Sage API."""
 
 import pytest
-from fastapi.testclient import TestClient
-
-from src.api.main import app
 
 pytestmark = [pytest.mark.integration, pytest.mark.data_dependent]
 
@@ -15,68 +12,63 @@ TEST_RELATIONSHIP_ID = 894  # Known working relationship
 class TestAPIHealthChecks:
     """Test basic API health and connectivity."""
 
-    def test_root_endpoint(self):
+    def test_root_endpoint(self, api_client):
         """Test root endpoint returns service info."""
-        client = TestClient(app)
-        response = client.get("/")
+        response = api_client.get("/")
         assert response.status_code == 200
         data = response.json()
-        assert "service" in data
-        assert data["service"] == "Luminari Sage"
+        assert data["message"] == "Welcome to Luminari Sage API"
+        assert data["version"] == "0.1.0"
 
-    def test_ping_endpoint(self):
+    def test_ping_endpoint(self, api_client):
         """Test ping endpoint for basic connectivity."""
-        client = TestClient(app)
-        response = client.get("/ping")
+        response = api_client.get("/ping")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ok"
 
-    def test_health_endpoint(self):
+    def test_health_endpoint(self, api_client):
         """Test health endpoint shows database connectivity."""
-        client = TestClient(app)
-        response = client.get("/api/v1/health")
+        response = api_client.get("/api/v1/health")
         assert response.status_code == 200
         data = response.json()
-        assert "postgres_connected" in data
-        assert "neo4j_connected" in data
-        # Health check should pass in production
-        assert data["status"] in ["healthy", "unhealthy"]
+        assert data["services"]["postgresql"] == "healthy"
+        assert data["services"]["neo4j"] == "healthy"
+        assert data["status"] in ["healthy", "degraded"]
+        assert "providers" in data
+        assert "embedding_storage" in data
 
 
 class TestEntityEndpoints:
     """Test entity-related API endpoints."""
 
-    def test_entity_search(self):
+    def test_entity_search(self, api_client):
         """Test entity search functionality."""
-        client = TestClient(app)
-        response = client.get("/api/v1/entities/search?query=void&limit=5")
+        response = api_client.get("/api/v1/entities/search?query=void&limit=5")
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
         # Should find entities related to "void"
         if data:  # If entities exist
             entity = data[0]
-            assert "stable_id" in entity
+            assert "uuid" in entity
             assert "name" in entity
             assert "type" in entity
 
-    def test_entity_details(self):
+    def test_entity_details(self, api_client):
         """Test getting specific entity details."""
-        client = TestClient(app)
-        response = client.get(f"/api/v1/entities/{TEST_ENTITY_ID}")
+        response = api_client.get(f"/api/v1/entities/{TEST_ENTITY_ID}")
         assert response.status_code in [200, 404]  # 404 if entity doesn't exist in test env
 
         if response.status_code == 200:
             data = response.json()
-            assert data["stable_id"] == TEST_ENTITY_ID
+            assert data["uuid"] == TEST_ENTITY_ID
             assert "name" in data
             assert "type" in data
 
-    def test_entity_relationships_list(self):
+    def test_entity_relationships_list(self, api_client):
         """Test getting entity relationships (thin list)."""
-        client = TestClient(app)
-        response = client.get(f"/api/v1/entities/{TEST_ENTITY_ID}/relationships")
+        response = api_client.get(f"/api/v1/entities/{TEST_ENTITY_ID}/relationships")
         assert response.status_code in [200, 404]  # 404 if entity doesn't exist
 
         if response.status_code == 200:
@@ -91,10 +83,9 @@ class TestEntityEndpoints:
                 assert "relationship_type" in rel
                 assert "direction" in rel
 
-    def test_relationship_details(self):
+    def test_relationship_details(self, api_client):
         """Test getting specific relationship details."""
-        client = TestClient(app)
-        response = client.get(f"/api/v1/relationships/{TEST_RELATIONSHIP_ID}")
+        response = api_client.get(f"/api/v1/relationships/{TEST_RELATIONSHIP_ID}")
         assert response.status_code in [200, 404]  # 404 if relationship doesn't exist
 
         if response.status_code == 200:
@@ -108,10 +99,9 @@ class TestEntityEndpoints:
 class TestSearchEndpoints:
     """Test search and RAG functionality."""
 
-    def test_lore_search(self):
+    def test_lore_search(self, api_client):
         """Test basic lore document search."""
-        client = TestClient(app)
-        response = client.get("/api/v1/lore/search?query=void&limit=3")
+        response = api_client.get("/api/v1/lore/search?query=void&limit=3")
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
@@ -121,15 +111,13 @@ class TestSearchEndpoints:
             doc = data[0]
             assert "id" in doc
             assert "title" in doc
-            assert "content" in doc
+            assert "source_file" in doc
 
-    def test_rag_query(self):
+    def test_rag_query(self, api_client):
         """Test hybrid RAG query functionality."""
-        client = TestClient(app)
+        query_data = {"query": "What is Void's Wake?", "limit": 3, "threshold": 0.3}
 
-        query_data = {"query": "What is Void's Wake?", "max_results": 3, "threshold": 0.3}
-
-        response = client.post("/api/v1/rag/query", json=query_data)
+        response = api_client.post("/api/v1/rag/query", json=query_data)
         assert response.status_code in [200, 500]  # 500 if embeddings not loaded
 
         if response.status_code == 200:
@@ -138,19 +126,17 @@ class TestSearchEndpoints:
             assert "entities" in data
             assert "total_results" in data
 
-    def test_validation_endpoint(self):
+    def test_validation_endpoint(self, api_client):
         """Test lore validation functionality."""
-        client = TestClient(app)
-
         validation_data = {
             "content": "Paladine is the god of good dragons in Luminari.",
             "strict": False,
         }
 
-        response = client.post("/api/v1/validate", json=validation_data)
+        response = api_client.post("/api/v1/validate", json=validation_data)
         assert response.status_code == 200
         data = response.json()
-        assert "valid" in data
+        assert "is_valid" in data
         assert "issues" in data
         assert isinstance(data["issues"], list)
 
@@ -158,10 +144,9 @@ class TestSearchEndpoints:
 class TestSystemEndpoints:
     """Test system information and statistics."""
 
-    def test_stats_endpoint(self):
+    def test_stats_endpoint(self, api_client):
         """Test system statistics endpoint."""
-        client = TestClient(app)
-        response = client.get("/api/v1/stats")
+        response = api_client.get("/api/v1/stats")
         assert response.status_code == 200
         data = response.json()
 
@@ -179,34 +164,29 @@ class TestSystemEndpoints:
 class TestErrorHandling:
     """Test error handling and edge cases."""
 
-    def test_nonexistent_entity(self):
+    def test_nonexistent_entity(self, api_client):
         """Test handling of non-existent entity requests."""
-        client = TestClient(app)
         fake_id = "00000000-0000-0000-0000-000000000000"
-        response = client.get(f"/api/v1/entities/{fake_id}")
+        response = api_client.get(f"/api/v1/entities/{fake_id}")
         assert response.status_code == 404
         data = response.json()
         assert "detail" in data
 
-    def test_invalid_relationship_id(self):
+    def test_invalid_relationship_id(self, api_client):
         """Test handling of invalid relationship ID."""
-        client = TestClient(app)
-        response = client.get("/api/v1/relationships/99999999")
+        response = api_client.get("/api/v1/relationships/99999999")
         assert response.status_code == 404
 
-    def test_malformed_rag_query(self):
+    def test_malformed_rag_query(self, api_client):
         """Test handling of malformed RAG queries."""
-        client = TestClient(app)
-
         # Missing required field
         bad_query = {"max_results": 5}
-        response = client.post("/api/v1/rag/query", json=bad_query)
+        response = api_client.post("/api/v1/rag/query", json=bad_query)
         assert response.status_code == 422  # Validation error
 
-    def test_empty_search_query(self):
+    def test_empty_search_query(self, api_client):
         """Test handling of empty search queries."""
-        client = TestClient(app)
-        response = client.get("/api/v1/entities/search?query=")
+        response = api_client.get("/api/v1/entities/search?query=")
         assert response.status_code in [200, 422]  # May return empty results or validation error
 
 

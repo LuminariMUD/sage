@@ -1,6 +1,7 @@
 # ReAct Streaming Implementation Plan
 
 ## Overview
+
 Implement streaming of the ReAct agent's thinking process to provide real-time feedback to users, similar to Claude's dimmed thinking text, making the wait feel shorter and providing transparency into the generation process.
 
 ## Architecture Design
@@ -8,6 +9,7 @@ Implement streaming of the ReAct agent's thinking process to provide real-time f
 ### 1. Backend Changes - Streaming from ReAct Agent
 
 **Modify `SimpleQuestlineReActAgent` to yield streaming events:**
+
 - Create a `stream_questline_generation` async generator method
 - Yield events for each step: Thought, Action, Observation
 - Event types:
@@ -18,11 +20,13 @@ Implement streaming of the ReAct agent's thinking process to provide real-time f
   - `questline_complete`: Final result
 
 **Update `generate_questline` tool in `modern_service.py`:**
+
 - Check if client supports streaming
 - If yes, use streaming version and yield events
 - Pass events through the existing SSE streaming infrastructure
 
 ### 2. Event Structure
+
 ```python
 {
     "type": "react_thought",
@@ -31,7 +35,7 @@ Implement streaming of the ReAct agent's thinking process to provide real-time f
     "quest_number": null
 }
 {
-    "type": "react_action", 
+    "type": "react_action",
     "content": "search_lore",
     "args": {"query": "Mark of the Luminari", "limit": 10},
     "step": 2
@@ -46,6 +50,7 @@ Implement streaming of the ReAct agent's thinking process to provide real-time f
 ### 3. Frontend UI Changes
 
 **Add new UI components in `chat-ui.html`:**
+
 - Create a collapsible "thinking" section with dimmed text
 - Style it with:
   - Semi-transparent background
@@ -55,30 +60,32 @@ Implement streaming of the ReAct agent's thinking process to provide real-time f
   - Auto-collapse when generation completes
 
 **CSS additions:**
+
 ```css
 .react-thinking {
-    background: rgba(0, 0, 0, 0.05);
-    border-left: 3px solid rgba(74, 144, 226, 0.3);
-    padding: 10px;
-    margin: 10px 0;
-    font-size: 0.9em;
-    font-style: italic;
-    color: rgba(44, 62, 80, 0.7);
+  background: rgba(0, 0, 0, 0.05);
+  border-left: 3px solid rgba(74, 144, 226, 0.3);
+  padding: 10px;
+  margin: 10px 0;
+  font-size: 0.9em;
+  font-style: italic;
+  color: rgba(44, 62, 80, 0.7);
 }
 
 .react-thinking.collapsed {
-    max-height: 40px;
-    overflow: hidden;
+  max-height: 40px;
+  overflow: hidden;
 }
 
 .react-thinking-toggle {
-    cursor: pointer;
-    color: var(--primary-color);
-    font-size: 0.8em;
+  cursor: pointer;
+  color: var(--primary-color);
+  font-size: 0.8em;
 }
 ```
 
 **JavaScript event handlers:**
+
 - Listen for `react_*` events in the SSE stream
 - Append thinking text to a dedicated container
 - Update in real-time as events arrive
@@ -107,6 +114,7 @@ Implement streaming of the ReAct agent's thinking process to provide real-time f
    - Smooth animations for expand/collapse
 
 ## Benefits
+
 - **Transparency**: Users see the reasoning process
 - **Engagement**: Makes wait time feel shorter
 - **Debugging**: Easier to see where issues occur
@@ -114,30 +122,32 @@ Implement streaming of the ReAct agent's thinking process to provide real-time f
 - **UX**: Collapsible design keeps interface clean
 
 ## Example User Experience
+
 1. User requests: "Create a questline about the Mark of the Luminari"
 2. Thinking section appears with dimmed text:
-   - *"Thinking: I need to search for lore about the Mark..."*
-   - *"Searching: Mark of the Luminari, Luminari heroes..."*
-   - *"Found: 15 relevant entries including..."*
-   - *"Thinking: For quest 1, I'll introduce the concept..."*
-   - *"Generating: Quest 1 - The First Signs..."*
+   - _"Thinking: I need to search for lore about the Mark..."_
+   - _"Searching: Mark of the Luminari, Luminari heroes..."_
+   - _"Found: 15 relevant entries including..."_
+   - _"Thinking: For quest 1, I'll introduce the concept..."_
+   - _"Generating: Quest 1 - The First Signs..."_
 3. As each quest completes, it appears in the main chat
 4. When done, thinking section auto-collapses with option to review
 
 ## Code Examples
 
 ### Backend Streaming Generator
+
 ```python
 async def stream_questline_generation(self, premise: str, num_quests: int):
     """Stream ReAct thinking process."""
-    
+
     # Yield thinking
     yield {
         "type": "react_thought",
         "content": f"I need to search for lore about {premise}",
         "step": 1
     }
-    
+
     # Yield action
     yield {
         "type": "react_action",
@@ -145,7 +155,7 @@ async def stream_questline_generation(self, premise: str, num_quests: int):
         "args": {"query": premise},
         "step": 2
     }
-    
+
     # Execute and yield observation
     results = await search_lore(premise)
     yield {
@@ -153,33 +163,35 @@ async def stream_questline_generation(self, premise: str, num_quests: int):
         "content": f"Found {len(results)} relevant entries",
         "step": 3
     }
-    
+
     # Continue for each quest...
 ```
 
 ### Frontend Handler
+
 ```javascript
 function handleReActEvent(event) {
-    const thinkingContainer = document.getElementById('react-thinking');
-    
-    switch(event.type) {
-        case 'react_thought':
-            appendThought(event.content);
-            break;
-        case 'react_action':
-            appendAction(event.content, event.args);
-            break;
-        case 'react_observation':
-            appendObservation(event.content);
-            break;
-        case 'questline_complete':
-            collapseThinking();
-            break;
-    }
+  const thinkingContainer = document.getElementById("react-thinking");
+
+  switch (event.type) {
+    case "react_thought":
+      appendThought(event.content);
+      break;
+    case "react_action":
+      appendAction(event.content, event.args);
+      break;
+    case "react_observation":
+      appendObservation(event.content);
+      break;
+    case "questline_complete":
+      collapseThinking();
+      break;
+  }
 }
 ```
 
 ## Future Enhancements
+
 - Add settings for verbosity level
 - Allow filtering of certain event types
 - Export thinking trace for debugging
@@ -187,6 +199,7 @@ function handleReActEvent(event) {
 - Support for nested thinking (sub-thoughts)
 
 ## Implementation Priority
+
 1. Backend streaming infrastructure (High)
 2. Basic UI display of thoughts (High)
 3. Collapsible UI with styling (Medium)

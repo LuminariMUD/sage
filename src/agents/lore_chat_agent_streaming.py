@@ -327,7 +327,7 @@ class StreamingLoreChatAgent:
         self, response_text: str, deps: AgentDependencies
     ) -> dict[str, Any]:
         """Analyze how the response was constructed from search results."""
-        analysis = {
+        analysis: dict[str, Any] = {
             "search_strategy": deps.search_strategy or "No search performed",
             "primary_sources": [],
             "graph_enhancement": {
@@ -368,7 +368,7 @@ class StreamingLoreChatAgent:
         # Analyze entity usage
         if deps.used_entities:
             # Extract unique entity names that were actually mentioned
-            entity_mentions = []
+            entity_mentions: list[str] = []
             for entity in deps.used_entities:
                 if entity["name"].lower() in response_text.lower():
                     entity_mentions.append(f"{entity['name']} ({entity['type']})")
@@ -381,7 +381,7 @@ class StreamingLoreChatAgent:
         # Analyze relationship usage
         if deps.used_relationships:
             # Track which relationships were leveraged
-            rel_mentions = []
+            rel_mentions: list[str] = []
             for rel in deps.used_relationships[:10]:  # Top 10 relationships
                 rel_str = f"{rel['source']} --[{rel['type']}]--> {rel['target']}"
                 rel_mentions.append(rel_str)
@@ -393,13 +393,13 @@ class StreamingLoreChatAgent:
 
         # Analyze subgraph contributions
         if hasattr(deps, "used_subgraphs") and deps.used_subgraphs:
-            subgraph_info = []
+            subgraph_info: list[dict[str, Any]] = []
             for idx, subgraph_data in enumerate(deps.used_subgraphs[:3], 1):  # Top 3 subgraphs
                 subgraph = subgraph_data.get("subgraph", {})
                 scores = subgraph_data.get("scores", {})
 
                 # Extract key entities in this subgraph
-                key_entities = []
+                key_entities: list[str] = []
                 for node in subgraph.get("nodes", [])[:5]:  # Top 5 nodes
                     key_entities.append(node.get("name", "Unknown"))
 
@@ -461,7 +461,7 @@ class StreamingLoreChatAgent:
 
         # Add final summary
         if has_graph_data or has_subgraph_data:
-            contrib_parts = []
+            contrib_parts: list[str] = []
             if analysis["graph_enhancement"]["text_contribution_percent"] > 0:
                 contrib_parts.append(
                     f"{analysis['graph_enhancement']['text_contribution_percent']}% text"
@@ -515,7 +515,49 @@ RESPONSE FORMAT after searching:
 
 If the search finds information, provide comprehensive details. If the search finds nothing, say so explicitly and suggest related topics that might have information."""
 
-    async def stream_chat(self, message: str) -> AsyncGenerator[dict[str, Any], None]:
+    def _generate_follow_ups(self) -> list[str]:
+        """Generate contextual follow-up questions from the latest search payload."""
+        follow_ups: list[str] = []
+        search_data = self.deps.search_data
+        if search_data and search_data.chunks:
+            chunk_text = " ".join(chunk.get("text", "") for chunk in search_data.chunks[:3]).lower()
+
+            if "age" in chunk_text and ("vigil" in chunk_text or "marking" in chunk_text):
+                follow_ups.append("Tell me more about the Age of Vigil and Age of Marking")
+            if "prisoner" in chunk_text:
+                follow_ups.append("What is the Prisoner and why is it important?")
+            if "luminari" in chunk_text and ("mark" in chunk_text or "heroes" in chunk_text):
+                follow_ups.append("Who are the Luminari and what is their mark?")
+            if "arcanite" in chunk_text:
+                follow_ups.append("What is Arcanite and how is it used?")
+
+            entity_names = [
+                name
+                for entity in search_data.entities[:3]
+                if isinstance((name := entity.get("name")), str) and name
+            ]
+            if len(entity_names) == 1:
+                follow_ups.append(f"Tell me more about {entity_names[0]}")
+            elif len(entity_names) >= 2:
+                follow_ups.append(f"How are {entity_names[0]} and {entity_names[1]} connected?")
+
+            if any(
+                isinstance((metadata := relationship.get("metadata")), dict)
+                and metadata.get("fact")
+                for relationship in search_data.relationships[:5]
+            ):
+                follow_ups.append("What do the relationship facts tell us about this topic?")
+
+            if self.deps.used_subgraphs:
+                follow_ups.append("Explain the connections in the knowledge graph")
+
+        return follow_ups or [
+            "Search for more specific topics",
+            "Try a different search term",
+            "What other lore topics are available?",
+        ]
+
+    async def stream_chat(self, message: str) -> AsyncGenerator[dict[str, Any]]:
         """
         Stream chat response using pydantic-ai's streaming capabilities.
 
@@ -534,20 +576,6 @@ If the search finds information, provide comprehensive details. If the search fi
             self.deps.search_data = None
             self.deps.search_queries = []
             self.deps.tools_called = []
-
-            # Event handler to capture intermediate events
-            async def event_handler(event_type: str, event_data: Any):
-                """Handle intermediate events during streaming."""
-                if event_type == "tool_call":
-                    yield {
-                        "type": "tool_use",
-                        "content": f"🔍 Searching: {event_data.get('query', 'lore database')}",
-                        "data": event_data,
-                        "timestamp": datetime.now().isoformat(),
-                    }
-                elif event_type == "model_response":
-                    # This would be partial model responses
-                    pass
 
             # Use run_stream for real-time streaming
             previous_text = ""
@@ -646,68 +674,7 @@ If the search finds information, provide comprehensive details. If the search fi
                     "timestamp": datetime.now().isoformat(),
                 }
 
-            # Generate dynamic follow-up questions based on search results
-            follow_ups = []
-
-            if self.deps.search_data and self.deps.search_data.chunks:
-                # Extract key topics from the chunks for contextual questions
-                chunk_text = " ".join(
-                    [chunk.get("text", "") for chunk in self.deps.search_data.chunks[:3]]
-                )
-
-                # Look for specific entities or topics mentioned
-                if "age" in chunk_text.lower() and (
-                    "vigil" in chunk_text.lower() or "marking" in chunk_text.lower()
-                ):
-                    follow_ups.append("Tell me more about the Age of Vigil and Age of Marking")
-                if "prisoner" in chunk_text.lower():
-                    follow_ups.append("What is the Prisoner and why is it important?")
-                if "luminari" in chunk_text.lower() and (
-                    "mark" in chunk_text.lower() or "heroes" in chunk_text.lower()
-                ):
-                    follow_ups.append("Who are the Luminari and what is their mark?")
-                if "arcanite" in chunk_text.lower():
-                    follow_ups.append("What is Arcanite and how is it used?")
-                # Add entity-specific follow-ups based on what was found
-                if len(self.deps.search_data.entities) > 0:
-                    # Pick the most interesting entities for follow-up
-                    entity_names = [
-                        e.name for e in self.deps.search_data.entities[:3] if hasattr(e, "name")
-                    ]
-                    if entity_names:
-                        if len(entity_names) == 1:
-                            follow_ups.append(f"Tell me more about {entity_names[0]}")
-                        elif len(entity_names) >= 2:
-                            follow_ups.append(
-                                f"How are {entity_names[0]} and {entity_names[1]} connected?"
-                            )
-
-                # Add relationship-specific follow-ups if we have facts
-                if len(self.deps.search_data.relationships) > 0:
-                    # Look for relationships with facts
-                    facts_found = False
-                    for rel in self.deps.search_data.relationships[:5]:
-                        if hasattr(rel, "metadata") and rel.metadata and "fact" in rel.metadata:
-                            facts_found = True
-                            break
-
-                    if facts_found:
-                        follow_ups.append(
-                            "What do the relationship facts tell us about this topic?"
-                        )
-
-                # Add subgraph-specific follow-ups
-                if hasattr(self.deps.search_data, "subgraphs") and self.deps.search_data.subgraphs:
-                    if len(self.deps.search_data.subgraphs) > 0:
-                        follow_ups.append("Explain the connections in the knowledge graph")
-
-            # Fallback questions if no specific content found
-            if not follow_ups:
-                follow_ups = [
-                    "Search for more specific topics",
-                    "Try a different search term",
-                    "What other lore topics are available?",
-                ]
+            follow_ups = self._generate_follow_ups()
 
             yield {
                 "type": "follow_up_questions",

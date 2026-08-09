@@ -18,6 +18,31 @@ INITIALIZE_EMPTY_CONFIRMATION = "INITIALIZE_EMPTY_EMBEDDING_SPACE"
 _SQL_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _VECTOR_TYPE = re.compile(r"^vector\((?P<dimensions>[1-9][0-9]*)\)$")
 
+EMBEDDING_PROFILE_COLUMNS = (
+    "fingerprint",
+    "provider",
+    "endpoint_class",
+    "implementation",
+    "model",
+    "model_revision",
+    "dimensions",
+    "output_encoding",
+    "storage_type",
+    "normalize",
+    "distance_metric",
+    "input_type",
+)
+
+EMBEDDING_PROFILE_INSERT_QUERY = """
+    INSERT INTO embedding_profiles (
+        fingerprint, provider, endpoint_class, implementation,
+        model, model_revision, dimensions, output_encoding,
+        storage_type, normalize, distance_metric, input_type
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ON CONFLICT (fingerprint) DO NOTHING
+"""
+
 
 class EmbeddingSpaceError(RuntimeError):
     """Raised when a vector operation cannot safely use its configured space."""
@@ -91,6 +116,7 @@ EMBEDDING_SPACE_SPECS = MappingProxyType(
 def episode_embedding_space(profile: EmbeddingProfile) -> EmbeddingSpaceSpec:
     """Return the episode-space contract at the configured profile width."""
     return replace(EPISODE_EMBEDDING_SPACE, dimensions=profile.dimensions)
+
 
 _METADATA_TABLE_QUERY = """
     SELECT
@@ -197,6 +223,24 @@ def _safe_identifier(value: str) -> str:
     if not parts or any(not _SQL_IDENTIFIER.fullmatch(part) for part in parts):
         raise ValueError("Embedding-space SQL identifier is invalid")
     return ".".join(parts)
+
+
+def _coverage_count_query(table_name: str, column_name: str) -> str:
+    """Build the only dynamic coverage query after strict identifier validation."""
+    template = "SELECT count(*) AS total_rows, " "count({column}) AS embedded_rows FROM {table}"
+    return template.format(  # nosec B608
+        table=_safe_identifier(table_name),
+        column=_safe_identifier(column_name),
+    )
+
+
+def _nonnull_count_query(table_name: str, column_name: str) -> str:
+    """Build a validated identifier-only non-null count query."""
+    template = "SELECT count({column}) FROM {table}"
+    return template.format(  # nosec B608
+        table=_safe_identifier(table_name),
+        column=_safe_identifier(column_name),
+    )
 
 
 def _row_dict(row: Any | None) -> dict[str, Any] | None:
@@ -341,11 +385,9 @@ async def preflight_embedding_space(
                         "The physical vector dimension does not match the checked-in contract",
                     )
 
-            count_row = _row_dict(await postgres.fetchrow(f"""
-                    SELECT count(*) AS total_rows,
-                           count({column_name}) AS embedded_rows
-                    FROM {table_name}
-                    """))
+            count_row = _row_dict(
+                await postgres.fetchrow(_coverage_count_query(table_name, column_name))
+            )
             if count_row is not None:
                 total_rows = int(count_row["total_rows"])
                 embedded_rows = int(count_row["embedded_rows"])
@@ -413,6 +455,8 @@ async def preflight_embedding_space(
         }
 
     if configured_profile is not None:
+        if configured_record is None:
+            raise EmbeddingSpaceError("Configured embedding profile metadata is missing")
         if configured_profile.dimensions != spec.dimensions:
             _add_finding(
                 findings,
@@ -575,10 +619,7 @@ async def activate_embedding_space(
         raise EmbeddingSpaceError("Embedding profile activation confirmation is invalid")
 
     record = embedding_profile_record(profile)
-    columns = tuple(record)
-    values = tuple(record[column] for column in columns)
-    placeholders = ", ".join(f"${index}" for index in range(1, len(values) + 1))
-    insert_columns = ", ".join(columns)
+    values = tuple(record[column] for column in EMBEDDING_PROFILE_COLUMNS)
 
     async with postgres.acquire() as connection:
         async with connection.transaction():
@@ -628,14 +669,7 @@ async def activate_embedding_space(
             if state["state"] == "active" and state["profile_fingerprint"] != profile.fingerprint:
                 raise EmbeddingSpaceError("A different embedding profile is already active")
 
-            await connection.execute(
-                f"""
-                INSERT INTO embedding_profiles ({insert_columns})
-                VALUES ({placeholders})
-                ON CONFLICT (fingerprint) DO NOTHING
-                """,
-                *values,
-            )
+            await connection.execute(EMBEDDING_PROFILE_INSERT_QUERY, *values)
             stored = await connection.fetchrow(
                 """
                 SELECT fingerprint, provider, endpoint_class, implementation,
@@ -646,7 +680,9 @@ async def activate_embedding_space(
                 """,
                 profile.fingerprint,
             )
-            if stored is None or any(stored[column] != record[column] for column in columns):
+            if stored is None or any(
+                stored[column] != record[column] for column in EMBEDDING_PROFILE_COLUMNS
+            ):
                 raise EmbeddingSpaceError("Stored embedding profile identity is inconsistent")
 
             await connection.execute(
@@ -721,11 +757,11 @@ async def initialize_empty_embedding_space(
                 if state["profile_fingerprint"] != profile.fingerprint:
                     raise EmbeddingSpaceError("A different embedding profile is already active")
             elif state["state"] != "unverified" or state["profile_fingerprint"] is not None:
-                raise EmbeddingSpaceError("Only an unverified profile-free space can be initialized")
+                raise EmbeddingSpaceError(
+                    "Only an unverified profile-free space can be initialized"
+                )
 
-            embedded_rows = await connection.fetchval(
-                f"SELECT count({column_name}) FROM {table_name}"
-            )
+            embedded_rows = await connection.fetchval(_nonnull_count_query(table_name, column_name))
             if int(embedded_rows or 0) != 0:
                 raise EmbeddingSpaceError("Stored embeddings cannot be retargeted in place")
 
@@ -744,22 +780,20 @@ async def initialize_empty_embedding_space(
 
             if physical_dimensions != target_spec.dimensions:
                 await connection.execute(f"DROP INDEX IF EXISTS {index_name}")
-                await connection.execute(
-                    f"""
+                await connection.execute(f"""
                     ALTER TABLE {table_name}
                     ALTER COLUMN {column_name} TYPE vector({target_spec.dimensions})
                     USING {column_name}::vector({target_spec.dimensions})
-                    """
+                    """)
+                options = ", ".join(
+                    option.replace("=", " = ", 1) for option in target_spec.index_options
                 )
-                options = ", ".join(option.replace("=", " = ", 1) for option in target_spec.index_options)
-                await connection.execute(
-                    f"""
+                await connection.execute(f"""
                     CREATE INDEX {index_name}
                     ON {table_name}
                     USING {index_method} ({column_name} {operator_class})
                     WITH ({options})
-                    """
-                )
+                    """)
 
             await connection.execute(
                 """

@@ -167,7 +167,7 @@ class OpenRouterProvider(BaseLLMProvider):
         model: str | None = None,
         temperature: float = 0.7,
         **kwargs: Any,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str]:
         """Stream content and surface OpenRouter in-band SSE errors."""
         self.last_response_metadata = {}
         self.last_transport_attempts = 0

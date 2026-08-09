@@ -22,6 +22,7 @@ from src.llm.embeddings.validation import validate_embedding_batch
 from src.llm.provider_config import (
     TEXT_TASKS,
     EmbeddingProfile,
+    ProviderConnection,
     ProviderSettings,
     TextModelCandidate,
     TextTask,
@@ -45,7 +46,7 @@ EmbedderFactory = Callable[[EmbeddingProfile], BaseEmbedder]
 def configuration_report(settings: ProviderSettings) -> dict[str, object]:
     """Build a secret-free report for the complete selected profile."""
     report = settings.sanitized_summary()
-    connections = []
+    connections: list[ProviderConnection] = []
     for route in (*settings.text_routes.values(), settings.graphiti_text_route):
         connections.extend(candidate.connection for candidate in route.candidates)
     connections.extend(
@@ -195,9 +196,11 @@ def _human_report(report: Mapping[str, object]) -> str:
         return "\n".join(lines)
     if operation == "configuration_check":
         profile = report["profile"]
-        assert isinstance(profile, Mapping)
+        if not isinstance(profile, Mapping):
+            raise ValueError("Provider profile report is invalid")
         credentials = report["credential_status"]
-        assert isinstance(credentials, Mapping)
+        if not isinstance(credentials, Mapping):
+            raise ValueError("Provider credential report is invalid")
         return "\n".join(
             (
                 "Provider configuration: VALID",

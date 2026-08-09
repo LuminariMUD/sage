@@ -428,7 +428,7 @@ class Realm(BaseModel):
 
 
 # Complete entity type mapping for import
-ENTITY_TYPES = {
+ENTITY_TYPES: dict[str, type[BaseModel]] = {
     "Deity": Deity,
     "Organization": Organization,
     "Person": Person,

@@ -39,7 +39,7 @@ from src.security import (
 load_dotenv()
 
 # Configure logging with fallback for file handler
-handlers = [logging.StreamHandler(sys.stdout)]
+handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
 
 # Try to add file handler, but don't fail startup if we can't
 log_file = os.getenv("LOG_FILE", "/app/logs/startup.log")
@@ -863,6 +863,7 @@ async def get_relationship_details(relationship_id: int):
                 else:
                     safe_properties[k] = str(v)
             except Exception:
+                logger.debug("Skipped an unserializable relationship property")
                 continue  # Skip problematic properties
 
     return {
@@ -883,32 +884,18 @@ async def search_lore(
     """Search canon lore documents by title or content."""
     postgres_db = await get_postgres_db()
 
-    # Build SQL query
-    conditions = [
-        "search_vector @@ plainto_tsquery('english', $1)",
-        "canonical IS TRUE",
-        "source_file LIKE 'canon/%'",
-    ]
-    params = [query]
-    param_count = 1
-
-    if document_type:
-        param_count += 1
-        conditions.append(f"document_type = ${param_count}")
-        params.append(document_type)
-
-    where_clause = " AND ".join(conditions)
-
-    sql = f"""
+    sql = """
         SELECT id, title, document_type, source_file, summary, canonical, metadata
         FROM lore_documents
-        WHERE {where_clause}
+        WHERE search_vector @@ plainto_tsquery('english', $1)
+          AND canonical IS TRUE
+          AND source_file LIKE 'canon/%'
+          AND ($2::document_type IS NULL OR document_type = $2::document_type)
         ORDER BY ts_rank(search_vector, plainto_tsquery('english', $1)) DESC
-        LIMIT ${param_count + 1}
+        LIMIT $3
     """
-    params.append(limit)
 
-    results = await postgres_db.fetch(sql, *params)
+    results = await postgres_db.fetch(sql, query, document_type, limit)
 
     documents = []
     for row in results:
@@ -1011,8 +998,8 @@ async def rag_query(request: RAGQueryRequest):
     )
 
     # Combine results using Reciprocal Rank Fusion (RRF)
-    episode_results = []
-    rrf_scores = {}
+    episode_results: list[dict[str, Any]] = []
+    rrf_scores: dict[Any, float] = {}
     k = 60  # RRF constant
 
     # Add vector results with RRF scoring
@@ -1146,8 +1133,8 @@ async def rag_query(request: RAGQueryRequest):
             )
 
     # Step 2: Get Neo4j Episodic node UUIDs and use Graphiti focused search
-    graphiti_entities = []
-    graphiti_relationships = []
+    graphiti_entities: list[dict[str, Any]] = []
+    graphiti_relationships: list[dict[str, Any]] = []
 
     # Map PostgreSQL episode UUIDs to Neo4j Episodic node UUIDs
     neo4j_episode_map = {}
@@ -1290,8 +1277,8 @@ async def rag_query(request: RAGQueryRequest):
     # Connection pooling is handled by asyncpg
 
     # Process Graphiti results - this is our primary source for graph data
-    all_entities = []
-    all_relationships = []
+    all_entities: list[EntityResponse] = []
+    all_relationships: list[dict[str, Any]] = []
 
     # Process Graphiti entities
     for graphiti_entity in graphiti_entities:
@@ -1367,9 +1354,14 @@ async def rag_query(request: RAGQueryRequest):
             target_type = "unknown"
 
             # Try to find target entity name from the properties
-            if graphiti_rel.get("properties"):
-                target_name = graphiti_rel["properties"].get("name", target_name)
-                target_type = graphiti_rel["properties"].get("type", target_type)
+            relationship_properties = graphiti_rel.get("properties")
+            if isinstance(relationship_properties, dict):
+                property_name = relationship_properties.get("name")
+                property_type = relationship_properties.get("type")
+                if isinstance(property_name, str):
+                    target_name = property_name
+                if isinstance(property_type, str):
+                    target_type = property_type
 
             # Include ALL Graphiti properties in the relationship
             enhanced_rel = {
@@ -1389,7 +1381,7 @@ async def rag_query(request: RAGQueryRequest):
             all_relationships.append(enhanced_rel)
 
     # Convert relationships to the proper format
-    relationship_info = []
+    relationship_info: list[RelationshipInfo] = []
     logger.info(f"Processing {len(all_relationships)} relationships from Graphiti")
     for rel in all_relationships:
         # Standard RelationshipInfo fields
@@ -1403,7 +1395,7 @@ async def rag_query(request: RAGQueryRequest):
         )
 
         # Include fact, episodes, and Graphiti properties as metadata
-        metadata_dict = {}
+        metadata_dict: dict[str, Any] = {}
 
         # Add the fact if it exists - this is the most important piece
         if rel.get("fact"):
@@ -1527,6 +1519,11 @@ async def rag_query(request: RAGQueryRequest):
         max_graph_chunks = 5
         chunks.extend(graph_chunks[:max_graph_chunks])
 
+    # ``limit`` is the response contract, not only the number of seed episodes.
+    # Neighboring episodes and graph insights may supplement sparse search results,
+    # but must not expand the returned chunk list beyond the caller's requested size.
+    chunks = chunks[: request.limit]
+
     response_metadata: dict[str, Any] = {}
     if graph_entity_payload:
         response_metadata["graph_entities"] = graph_entity_payload
@@ -1612,6 +1609,7 @@ async def validate_lore(request: ValidationRequest):
 
     # Generate embedding for the content
     content_embedding = await embedder.embed_text(request.content)
+    content_embedding_str = "[" + ",".join(map(str, content_embedding)) + "]"
 
     # The application embedder belongs to the active 768-dimensional episode
     # space. The legacy 384-dimensional chunk index is intentionally retired.
@@ -1632,7 +1630,7 @@ async def validate_lore(request: ValidationRequest):
         ORDER BY e.embedding <=> $1::vector
         LIMIT 10
     """,
-        content_embedding,
+        content_embedding_str,
     )
 
     # Extract mentioned entities from content (simple pattern matching for demo)
@@ -2401,7 +2399,7 @@ async def chat_stream(
                         yield f"data: {json.dumps({'type': 'trace', 'error': public_error_message('Retrieval preview')})}\n\n"
 
                 # Format conversation history for the service
-                conversation_history = []
+                conversation_history: list[dict[str, str]] = []
                 for msg in messages:
                     # Include all messages before the current user message
                     if msg.id == user_message.id:
@@ -2409,13 +2407,10 @@ async def chat_stream(
                     # Skip empty placeholder messages
                     if msg.message_type == "assistant" and not msg.content:
                         continue
-                    history_entry = {
+                    history_entry: dict[str, str] = {
                         "role": "assistant" if msg.message_type == "assistant" else "user",
                         "content": msg.content,
                     }
-                    # Include tool context for assistant messages
-                    if msg.message_type == "assistant" and msg.tools_used:
-                        history_entry["tools_used"] = msg.tools_used
                     conversation_history.append(history_entry)
 
                 buffer = ""
@@ -2487,8 +2482,11 @@ async def chat_stream(
             # Update stream status to error
             try:
                 await storage_service.update_stream_status(stream_id, "error")
-            except Exception:
-                pass
+            except Exception as status_error:
+                logger.warning(
+                    "Unable to mark failed chat stream (%s)",
+                    type(status_error).__name__,
+                )
 
     return StreamingResponse(
         event_stream(),

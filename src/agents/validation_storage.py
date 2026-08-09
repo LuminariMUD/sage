@@ -55,6 +55,8 @@ class ValidationStorageService:
             report.error_message,
             report.to_markdown(),
         )
+        if report_row is None:
+            raise RuntimeError("Validation report insert returned no row")
 
         db_report_id = report_row["id"]
 
@@ -170,43 +172,19 @@ class ValidationStorageService:
         """
         postgres_db = await get_postgres_db()
 
-        # Build query with optional filters
-        where_clauses = []
-        params = []
-        param_count = 0
-
-        if agent_id:
-            param_count += 1
-            where_clauses.append(f"agent_id = ${param_count}")
-            params.append(agent_id)
-
-        if validation_type:
-            param_count += 1
-            where_clauses.append(f"validation_type = ${param_count}")
-            params.append(validation_type)
-
-        where_clause = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
-
-        param_count += 1
-        limit_clause = f"LIMIT ${param_count}"
-        params.append(limit)
-
-        param_count += 1
-        offset_clause = f"OFFSET ${param_count}"
-        params.append(offset)
-
-        query = f"""
+        query = """
             SELECT
                 report_id, agent_id, created_at, validation_type, scope_description,
                 total_items_checked, findings_count, severity_counts, category_counts,
                 execution_time_seconds, success, error_message
             FROM validation_reports
-            {where_clause}
+            WHERE ($1::varchar IS NULL OR agent_id = $1::varchar)
+              AND ($2::varchar IS NULL OR validation_type = $2::varchar)
             ORDER BY created_at DESC
-            {limit_clause} {offset_clause}
+            LIMIT $3 OFFSET $4
         """
 
-        rows = await postgres_db.fetch(query, *params)
+        rows = await postgres_db.fetch(query, agent_id, validation_type, limit, offset)
 
         results = []
         for row in rows:
@@ -270,42 +248,19 @@ class ValidationStorageService:
         """
         postgres_db = await get_postgres_db()
 
-        # Build query with optional filters
-        where_clauses = ["reviewed = FALSE"]
-        params = []
-        param_count = 0
-
-        if severity:
-            param_count += 1
-            where_clauses.append(f"severity = ${param_count}")
-            params.append(severity)
-
-        if category:
-            param_count += 1
-            where_clauses.append(f"category = ${param_count}")
-            params.append(category)
-
-        if agent_id:
-            param_count += 1
-            where_clauses.append(f"agent_id = ${param_count}")
-            params.append(agent_id)
-
-        where_clause = "WHERE " + " AND ".join(where_clauses)
-
-        param_count += 1
-        limit_clause = f"LIMIT ${param_count}"
-        params.append(limit)
-
-        query = f"""
+        query = """
             SELECT f.*, r.validation_type, r.scope_description
             FROM validation_findings f
             JOIN validation_reports r ON f.report_id = r.id
-            {where_clause}
+            WHERE f.reviewed = FALSE
+              AND ($1::varchar IS NULL OR f.severity = $1::varchar)
+              AND ($2::varchar IS NULL OR f.category = $2::varchar)
+              AND ($3::varchar IS NULL OR f.agent_id = $3::varchar)
             ORDER BY f.priority ASC, f.created_at DESC
-            {limit_clause}
+            LIMIT $4
         """
 
-        rows = await postgres_db.fetch(query, *params)
+        rows = await postgres_db.fetch(query, severity, category, agent_id, limit)
 
         results = []
         for row in rows:
@@ -367,6 +322,9 @@ class ValidationStorageService:
         """
 
         category_stats = await postgres_db.fetch(category_stats_query)
+
+        if report_stats is None or finding_stats is None:
+            raise RuntimeError("Validation statistics query returned no aggregate row")
 
         return {
             "reports": dict(report_stats),

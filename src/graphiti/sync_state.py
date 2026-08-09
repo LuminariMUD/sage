@@ -100,6 +100,8 @@ class GraphSyncRepository:
             """,
             fingerprint,
         )
+        if row is None:
+            raise RuntimeError("Graph sync queue summary returned no row")
         return {key: int(row[key]) for key in row.keys()}
 
     async def start_or_join_run(
@@ -1881,6 +1883,8 @@ class GraphSyncRepository:
                 (SELECT count(*) FROM graph_sync_provider_calls)
                     AS completed_provider_calls
             """)
+        if totals is None or attempt_totals is None:
+            raise RuntimeError("Graph sync status aggregates returned no row")
         visible_run = dict(active_run) if active_run is not None else None
         if visible_run is not None and visible_run["last_failure_summary"] is not None:
             visible_run["last_failure_summary"] = sanitize_summary(

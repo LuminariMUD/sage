@@ -16,7 +16,7 @@ Thank you for your interest in contributing to Luminari Sage! This document prov
 
 ### Prerequisites
 
-- **Python 3.11+** - Core language (containers and CI run 3.13)
+- **Python 3.13** - Core language version used by containers and CI
 - **Docker & Docker Compose** - Container orchestration
 - **Git** - Version control
 - **Pre-commit** - Git hooks (installed automatically)
@@ -169,7 +169,8 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 
 - **Formatting**: Use `black` (enforced by pre-commit)
 - **Import sorting**: Use `isort` with black profile (enforced by pre-commit)
-- **Linting**: Follow `flake8` rules (max line length: 100)
+- **Linting**: Use Ruff with the rules in `pyproject.toml` (max line length: 100)
+- **Type checking**: Run mypy against `src/`; configured and untyped function bodies are checked
 - **Type hints**: Required for all function signatures
   ```python
   def search_lore(query: str, limit: int = 10) -> List[Dict[str, Any]]:
@@ -245,13 +246,14 @@ await db.fetch(f"SELECT * FROM table WHERE id = {user_id}")
 2. **Run full test suite**:
 
    ```bash
-   pytest
+   make test-all
    ```
 
 3. **Run security checks**:
 
    ```bash
    pre-commit run --all-files
+   docker compose exec -T api python -m mypy src/
    pip-audit -r requirements.txt
    bandit -r src/
    ```
@@ -264,7 +266,7 @@ await db.fetch(f"SELECT * FROM table WHERE id = {user_id}")
 - [ ] **All tests pass** (`pytest`)
 - [ ] **Pre-commit hooks pass** (Gitleaks, formatters, linters)
 - [ ] **No security vulnerabilities** (pip-audit, Bandit clean)
-- [ ] **Code follows style guide** (Black, isort, flake8)
+- [ ] **Code follows style guide** (Black, isort, Ruff, mypy)
 - [ ] **Type hints added** for new functions
 - [ ] **Docstrings added** for public APIs
 - [ ] **Tests added** for new features

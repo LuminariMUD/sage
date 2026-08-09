@@ -9,7 +9,7 @@ and hierarchy rule enforcement.
 
 import time
 import uuid
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -360,7 +360,7 @@ class RelationshipValidator(BaseValidator):
 
         # Collect RELATES_TO relationships for semantic analysis
         relates_to_relationships = []
-        relationship_pairs = {}
+        relationship_pairs: dict[tuple[Any, Any], list[dict]] = {}
 
         for rel in relationships:
             source_id = rel["source_id"]
@@ -451,7 +451,7 @@ class RelationshipValidator(BaseValidator):
         findings = []
 
         # Group relationships by entity pairs
-        entity_relationships = {}
+        entity_relationships: dict[tuple[Any, Any], list[dict]] = {}
 
         for rel in relationships:
             source_id = rel["source_id"]
@@ -523,7 +523,7 @@ class RelationshipValidator(BaseValidator):
         findings = []
 
         # Group relationships by semantic type
-        semantic_relationships = {}
+        semantic_relationships: dict[str, list[dict]] = {}
 
         for rel in relationships:
             rel_props = rel.get("props", {})
@@ -827,7 +827,7 @@ Provide your analysis for each relationship."""
         self, semantic_findings: list[ValidationFinding], relationships: list[dict]
     ) -> list[ValidationFinding]:
         """Use LLM to enhance semantic consistency findings with detailed analysis."""
-        enhanced_findings = []
+        enhanced_findings: list[ValidationFinding] = []
 
         try:
             # Group findings by type for batch processing
@@ -882,7 +882,7 @@ Provide your analysis for each relationship."""
         self, findings: list[ValidationFinding], relationships: list[dict]
     ) -> list[ValidationFinding]:
         """Use LLM to analyze RELATES_TO relationships missing semantic types."""
-        enhanced_findings = []
+        enhanced_findings: list[ValidationFinding] = []
 
         # Prepare relationship data for LLM analysis
         analysis_data = []
@@ -939,7 +939,7 @@ Provide your analysis for each relationship."""
         self, findings: list[ValidationFinding], relationships: list[dict]
     ) -> list[ValidationFinding]:
         """Use LLM to analyze MENTIONS relationships with complex semantics."""
-        enhanced_findings = []
+        enhanced_findings: list[ValidationFinding] = []
 
         # Prepare data for LLM analysis
         analysis_data = []
@@ -1070,24 +1070,15 @@ Format your response as JSON:
     ]
 }}"""
 
-    def _parse_llm_relates_to_analysis(
-        self, llm_response: str, analysis_data: list[dict]
+    def _process_llm_relates_to_analysis(
+        self, llm_response: RelatesAnalysisResponse, analysis_data: list[dict]
     ) -> list[ValidationFinding]:
-        """Parse LLM analysis of RELATES_TO relationships."""
+        """Convert structured RELATES_TO analysis into validation findings."""
         findings = []
 
         try:
-            import json
-
-            # Strip markdown code blocks if present
-            clean_response = llm_response.strip()
-            clean_response = clean_response.removeprefix("```json")  # Remove ```json
-            clean_response = clean_response.removesuffix("```")  # Remove ```
-            clean_response = clean_response.strip()
-
-            response_data = json.loads(clean_response)
-
-            for analysis in response_data.get("analyses", []):
+            for analysis_model in llm_response.analyses:
+                analysis = analysis_model.model_dump()
                 rel_id = analysis["relationship_id"]
                 # Map semantic clarity to severity for GraphRAG optimization
                 clarity_map = {
@@ -1152,24 +1143,15 @@ Format your response as JSON:
 
         return findings
 
-    def _parse_llm_mentions_analysis(
-        self, llm_response: str, analysis_data: list[dict]
+    def _process_llm_mentions_analysis(
+        self, llm_response: MentionsAnalysisResponse, analysis_data: list[dict]
     ) -> list[ValidationFinding]:
-        """Parse LLM analysis of MENTIONS relationships."""
+        """Convert structured MENTIONS analysis into validation findings."""
         findings = []
 
         try:
-            import json
-
-            # Strip markdown code blocks if present
-            clean_response = llm_response.strip()
-            clean_response = clean_response.removeprefix("```json")  # Remove ```json
-            clean_response = clean_response.removesuffix("```")  # Remove ```
-            clean_response = clean_response.strip()
-
-            response_data = json.loads(clean_response)
-
-            for analysis in response_data.get("analyses", []):
+            for analysis_model in llm_response.analyses:
+                analysis = analysis_model.model_dump()
                 rel_id = analysis["relationship_id"]
                 # Map GraphRAG benefit to severity
                 benefit_map = {
@@ -1287,7 +1269,7 @@ Format your response as JSON:
         findings = []
 
         # Group relationships by source, target, and semantic type
-        relationship_groups = {}
+        relationship_groups: dict[tuple[Any, Any, str], list[dict]] = {}
 
         for rel in relationships:
             source_id = rel["source_id"]

@@ -4,6 +4,7 @@ import pytest
 
 from src.agents.langchain.quest_workflow import QuestWorkflow
 from src.agents.langchain.service import LangChainChatService
+from src.agents.langchain.story_workflow import StoryWorkflow
 
 
 @pytest.mark.e2e
@@ -79,7 +80,7 @@ async def test_quest_generation():
 @pytest.mark.asyncio
 async def test_story_development():
     """Test complete story development workflow."""
-    service = LangChainChatService()
+    workflow = StoryWorkflow()
 
     story_request = """
     I want to develop a story about a young Crystal Dwarf apprentice who discovers
@@ -90,60 +91,12 @@ async def test_story_development():
     print("\n\n📖 Testing Story Development Workflow...")
     print(f"Request: {story_request.strip()}")
 
-    # Generate the story
-    response = await service.chat(story_request, conversation_history=[])
+    story = await workflow.build_story(story_request, story_length="short")
 
-    # Verify response structure
-    assert response is not None, "Response should be generated"
-    assert isinstance(response, dict), "Response should be a dictionary"
-
-    print(f"\n📊 Route: {response.get('route', 'unknown')}")
-    print(f"🎯 Confidence: {response.get('confidence', 0):.2f}")
-
-    # Should route to story_development
-    route = response.get("route", "")
-    # Accept story_development, narrative_generation, or creative routes
-    assert route in [
-        "story_development",
-        "narrative_generation",
-        "creative",
-        "direct_answer",
-    ], f"Should route to creative workflow, got: {route}"
-
-    # Check for story content
-    has_content = False
-
-    if "story_development" in response:
-        dev = response["story_development"]
-        print("\n📚 Story Development Response:")
-
-        if "story_content" in dev:
-            content = dev["story_content"]
-            print(f"   Content length: {len(content)} chars")
-            assert len(content) > 100, "Story content should be substantial"
-            has_content = True
-
-        if "new_elements" in dev:
-            elements = dev["new_elements"]
-            print(f"   New elements: {len(elements)}")
-
-        if "canon_foundation" in dev:
-            foundation = dev["canon_foundation"]
-            print(f"   Canon foundation: {len(foundation)} items")
-
-    elif "content" in response:
-        content = response["content"]
-        print(f"\n📝 Content length: {len(content)} chars")
-        assert len(content) > 100, "Story content should be substantial"
-        has_content = True
-
-    elif "answer" in response:
-        answer = response["answer"]
-        print(f"\n📝 Answer length: {len(answer)} chars")
-        assert len(answer) > 100, "Story answer should be substantial"
-        has_content = True
-
-    assert has_content, "Response should contain story content"
+    assert story["title"]
+    assert len(story["sections"]) >= 3
+    assert len(story["full_story"]) > 100, "Story content should be substantial"
+    assert all(section.get("text") for section in story["sections"])
 
     print("\n✅ Story development workflow completed successfully!")
 

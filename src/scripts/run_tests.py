@@ -3,7 +3,9 @@
 
 import argparse
 import os
-import subprocess
+
+# Pytest is invoked with a fixed argument vector and no shell.
+import subprocess  # nosec B404
 import sys
 from pathlib import Path
 
@@ -45,7 +47,7 @@ def run_tests(test_type="all", verbose=True):
     print("-" * 50)
 
     try:
-        result = subprocess.run(cmd, check=False)
+        result = subprocess.run(cmd, check=False)  # nosec B603
         return result.returncode
     except KeyboardInterrupt:
         print("\n⚠️ Tests interrupted by user")

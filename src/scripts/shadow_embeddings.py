@@ -74,9 +74,11 @@ def _emit(report: Mapping[str, object], *, as_json: bool, error: bool = False) -
                         f"{str(latest_run['status']).upper()}{request_summary}",
                         file=destination,
                     )
-        for finding in report.get("findings", []):
-            if isinstance(finding, Mapping):
-                print(f"- {finding['code']}", file=destination)
+        findings = report.get("findings")
+        if isinstance(findings, list):
+            for finding in findings:
+                if isinstance(finding, Mapping):
+                    print(f"- {finding['code']}", file=destination)
         if report.get("message"):
             print(str(report["message"]), file=destination)
         if report.get("error_type"):

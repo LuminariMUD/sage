@@ -17,7 +17,7 @@
 
 If not using Docker:
 
-- Python 3.11+ (containers run 3.13)
+- Python 3.13 (matches containers and CI)
 - PostgreSQL 15+ with pgvector extension
 - Neo4j 5.x Community Edition
 - Make (optional but recommended)

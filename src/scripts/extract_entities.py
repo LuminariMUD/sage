@@ -41,6 +41,12 @@ class GraphitiEntityProcessor:
         self.graphiti = await initialize_graphiti(verbose=self.verbose)
         console.print("[green]✓ Graphiti initialized[/green]")
 
+    def _require_graphiti(self) -> LuminariGraphiti:
+        """Return the initialized client or fail with a clear lifecycle error."""
+        if self.graphiti is None:
+            raise RuntimeError("Graphiti processor is not initialized")
+        return self.graphiti
+
     async def update_document_status(self, doc_id: str, status: str, episodes_count: int = 0):
         """Update document processing status in PostgreSQL."""
         from src.db import get_postgres_db
@@ -139,7 +145,7 @@ class GraphitiEntityProcessor:
                     chunk_tokens = len(self.encoder.encode(chunk))
 
                     await asyncio.wait_for(
-                        self.graphiti.add_episode_with_lore_relationships(
+                        self._require_graphiti().add_episode_with_lore_relationships(
                             content=chunk,
                             source_file=f"{source_file}_chunk_{i + 1}",
                             metadata={
@@ -196,7 +202,7 @@ class GraphitiEntityProcessor:
                 import asyncio
 
                 await asyncio.wait_for(
-                    self.graphiti.add_episode_with_lore_relationships(
+                    self._require_graphiti().add_episode_with_lore_relationships(
                         content=content,
                         source_file=source_file,
                         metadata={
@@ -340,7 +346,7 @@ class GraphitiEntityProcessor:
             # Process temporal episode without splitting - use base Graphiti add_episode
             from graphiti_core.nodes import EpisodeType
 
-            await self.graphiti.graphiti.add_episode(
+            await self._require_graphiti().graphiti.add_episode(
                 name=f"episode_{episode_id}",
                 episode_body=episode_text,
                 source_description=f"temporal_metadata_{episode_id}",
@@ -349,7 +355,7 @@ class GraphitiEntityProcessor:
             )
         else:
             # Regular episode processing with relationship extraction
-            await self.graphiti.add_episode_with_lore_relationships(
+            await self._require_graphiti().add_episode_with_lore_relationships(
                 content=episode_text,
                 source_file=f"episode_{episode_id}",  # Unique identifier
                 timestamp=datetime.now(UTC),
@@ -480,7 +486,7 @@ class GraphitiEntityProcessor:
 
         for knight_order, deity, rel_type in knight_deity_mappings:
             try:
-                await self.graphiti.add_relationship(
+                await self._require_graphiti().add_relationship(
                     source_name=knight_order,
                     target_name=deity,
                     relationship_type=rel_type,

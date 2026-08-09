@@ -111,7 +111,7 @@ async def clear_neo4j_all_data():
         # Close connection
         if hasattr(neo4j_db, "close"):
             await neo4j_db.close()
-        elif hasattr(neo4j_db, "driver") and hasattr(neo4j_db.driver, "close"):
+        elif neo4j_db.driver is not None:
             await neo4j_db.driver.close()
 
         return True
@@ -173,7 +173,7 @@ async def verify_clearing():
         # Close connection
         if hasattr(neo4j_db, "close"):
             await neo4j_db.close()
-        elif hasattr(neo4j_db, "driver") and hasattr(neo4j_db.driver, "close"):
+        elif neo4j_db.driver is not None:
             await neo4j_db.driver.close()
 
         if success:

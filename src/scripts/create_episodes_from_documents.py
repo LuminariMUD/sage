@@ -286,8 +286,11 @@ async def create_episodes_from_documents(
                             """,
                                 doc["id"],
                             )
-                        except Exception:
-                            pass  # Don't fail on failed status update
+                        except Exception as status_error:
+                            console.print(
+                                "[yellow]Unable to persist the failed processing status "
+                                f"({type(status_error).__name__})[/yellow]"
+                            )
 
                         # Update progress to show failed
                         progress.update(
@@ -376,6 +379,10 @@ async def check_episode_status():
             """)
 
             await postgres.disconnect()
+
+        if stats is None or episode_stats is None:
+            console.print("[red]Could not read episode status from PostgreSQL[/red]")
+            return False
 
         # Create beautiful status tables
         doc_table = Table(title="📄 Document Processing Status", border_style="blue")

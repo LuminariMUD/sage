@@ -1,6 +1,6 @@
 LangChain Chat Agent TODO (Week Sprint)
 
-Legend: [ ] pending  [~] in progress  [x] done
+Legend: [ ] pending [~] in progress [x] done
 
 Phase 1 – Foundations
 [ ] Add dependencies: langchain-core, langchain-openai, langchain-community, langchain-text-splitters (defer until code integration)
@@ -38,5 +38,6 @@ Stretch (If Time)
 [ ] Reusable prompt templates externalized
 
 Notes:
+
 - Keep legacy untouched.
 - Avoid deep dependency lock conflicts—pin minimal versions.

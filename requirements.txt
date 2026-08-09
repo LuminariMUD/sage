@@ -1,5 +1,5 @@
 # Luminari Sage Python Requirements
-# Python 3.11+ required (CI/containers run 3.13)
+# Python 3.13 required (matches CI and containers)
 
 # ===========================================
 # Core Framework

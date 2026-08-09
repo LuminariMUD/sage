@@ -290,7 +290,7 @@ Remember: Users want DEPTH and DETAIL, not summaries. Give them the rich lore th
             if self.deps.sources_used:
                 response += "\n---\n\n### 📚 **Sources**\n\n"
                 # Group by document
-                docs = {}
+                docs: dict[str, list[dict[str, Any]]] = {}
                 for source in self.deps.sources_used:
                     doc_id = source.get("document_id", "Unknown")
                     if doc_id not in docs:
@@ -349,7 +349,7 @@ Remember: Users want DEPTH and DETAIL, not summaries. Give them the rich lore th
             logger.error("Chat error (%s)", type(e).__name__)
             return public_error_message("Chat")
 
-    async def stream_chat(self, message: str) -> AsyncGenerator[dict[str, Any], None]:
+    async def stream_chat(self, message: str) -> AsyncGenerator[dict[str, Any]]:
         """
         Stream chat response line-by-line for better UX.
         """
@@ -394,10 +394,11 @@ Remember: Users want DEPTH and DETAIL, not summaries. Give them the rich lore th
 
             # Split by lines first to stream more granularly
             lines = response.split("\n")
-            current_paragraph = []
+            current_paragraph: list[str] = []
 
             for line in lines:
                 if line.strip():
+                    current_paragraph.append(line)
                     # Send each line immediately
                     yield {
                         "type": "content",
