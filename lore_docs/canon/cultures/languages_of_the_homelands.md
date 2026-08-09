@@ -398,8 +398,8 @@ These named registers add flavor but do not require separate proficiencies:
   `lore_docs/canon/locations/the_five_nations.md`,
   `lore_docs/canon/cultures/races_of_lumia.md`, and the Lumia timeline.
 - The Three Tongue model, Old Anterean, Verdanian, Sanctus Silent, and Shallow
-  Sea language ideas were promoted and substantially reconciled from
-  `lore_docs/drafts/cultures/CULTURES_OF_LUMIA.md`.
+  Sea language ideas were promoted and substantially reconciled from the
+  retired `lore_docs/drafts/cultures/CULTURES_OF_LUMIA.md`.
 - All other named languages and writing systems are newly established here to
   make the approved Homeland registry complete.
 - The current source fallback at
