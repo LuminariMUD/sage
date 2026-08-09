@@ -17,7 +17,7 @@ The truth, as much as truth exists in Lumia, is this: When the Infinite Eternal 
 
 **Origin**: When the Last War erupted, a dwarven clan delved deep into caverns of luminous crystal—raw Arcanite, humming with hidden power. They sealed their gates against the surface world, believing it lost to ruin. In isolation, the Arcanite's slow pulse reshaped them over centuries: skin hardened and turned translucent, their need for food and drink fell away, and their thoughts harmonized into crystalline clarity. What emerged were no longer dwarves as the world knew them, but beings of flesh transmuted into living crystal—the first Crystal Dwarves.
 
-**Physical Form**: Bodies of translucent crystal that range from diamond-clear nobility to clouded quartz commoners. At each one's core burns an Arcanite heart—a lattice of crystalline energy that sustains their being, glowing faintly through their transparent flesh. This heart ties them to Lumina itself; beyond the world's Arcanite field, they slowly fade to lifeless crystal. Their forms require no food or drink, yet they cannot survive without the world's crystalline pulse.
+**Physical Form**: Bodies of translucent crystal that range from diamond-clear nobility to clouded quartz commoners. At each one's core burns an Arcanite heart—a lattice of crystalline energy that sustains their being, glowing faintly through their transparent flesh. This heart ties them to Lumia itself; beyond the world's Arcanite field, they slowly fade to lifeless crystal. Their forms require no food or drink, yet they cannot survive without the world's crystalline pulse.
 
 **Culture**: A rigid caste system based on crystal purity. The nobles are nearly transparent, while lower castes bear veins of darker minerals, mottled stone, or cloudy imperfections. Among the lower castes arose the practice of gilding—tracing their fractures and flaws with molten gold, silver, or copper. Part adornment, part concealment, gilding is at once an act of shame and aspiration—a ritual of transcendence or a mask hiding imperfections beneath beauty's illusion. They speak in Tal, a language of harmonic resonance that sounds like living music, their words ringing like symphonies through crystal halls.
 
@@ -79,7 +79,7 @@ The truth, as much as truth exists in Lumia, is this: When the Infinite Eternal 
 
 ### Half-Orcs (Grohl'mar - "The Battlefield's Children")
 
-**Origin**: During the First Darkling War, when the Prisoner's corruption threatened to overwhelm all resistance, the war god Cassis and the goddess of endurance Keridur performed a desperate ritual. They took human prisoners and orc berserkers and fused them in forges of divine rage, creating a race born for war that could resist the Darkling Touch.
+**Origin**: During the First Darkling War, when the Prisoner's corruption threatened to overwhelm all resistance, Chulani sorcerers serving the Anterian Alliance joined human and orcish lineages to create soldiers capable of resisting the Darkling Touch. Half-orc oral tradition gives the deeper act to **Cassis** and **Keridur**, figures of Rage and Endurance who may be lost divine names, saints, or the moral faces later generations placed upon Chulan's forges. The historical and sacred accounts need not describe the same kind of cause.
 
 **Physical Form**: Muscles dense enough to turn blades, hearts that beat twice (one for rage, one for reason), and blood that literally boils when angered. Their tusks aren't vestigial—they're essence anchors that prevent their dual nature from tearing them apart.
 
@@ -157,7 +157,7 @@ The truth, as much as truth exists in Lumia, is this: When the Infinite Eternal 
 
 ### Changelings (Mut'ani - "The Possibility Drunk")
 
-**Origin**: When the Shadowmoon passes too close, sometimes pregnant mothers of any race give birth to changelings—children composed of pure potential who never quite finish becoming anything.
+**Origin**: During close-seeming Shadowmoon manifestations, some pregnant mothers of any race give birth to changelings—children composed of pure potential who never quite finish becoming anything. Whether proximity is spatial, metaphysical, or merely how witnesses describe the event remains unresolved.
 
 **Physical Form**: Default to a generic, forgettable appearance but can shift to match any humanoid they've studied. They don't shapeshift—they literally become what they mimic, down to the cellular level, though they retain their changeling consciousness.
 

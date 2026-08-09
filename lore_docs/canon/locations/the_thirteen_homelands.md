@@ -1003,15 +1003,16 @@ Homeland record it reuses for city lore.
 - `/home/aiwithapex/projects/Luminari-Source/src/transport.c:98-232`
 - `/home/aiwithapex/projects/Luminari-Source/src/race.c:6267-6426`
 
-### Draft evidence adjudicated
+### Retired draft evidence adjudicated
 
 - `lore_docs/drafts/locations/LEGENDARY_LOCATIONS.md`
 - `lore_docs/drafts/locations/Hir_Pesh Region Main Quest (Darkling).md`
 - `lore_docs/drafts/locations/Ashenport Region Main Quest.md`
 - `lore_docs/drafts/cultures/CULTURES_OF_LUMIA.md`
 
-Draft material was treated as testimony, not authority. Its useful particulars
-were promoted only where this document resolves their contradictions.
+These historical sources no longer remain in the draft tree. Their material was
+treated as testimony, not authority, and useful particulars were promoted only
+where this document resolves their contradictions.
 
 ---
 

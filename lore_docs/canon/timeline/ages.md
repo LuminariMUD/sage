@@ -259,8 +259,10 @@ Each Age represents a different "weaving pattern" in the Loom of Aether:
 - **Revelation**: Pattern fraying, new design emerging
 
 ### The Shadowmoon's Influence
-- Appears every 3,000-5,000 years
-- Each appearance coincides with Age transitions
+- Older chronologies estimate recurrences separated by 3,000-5,000 years, but
+  the Shadowmoon's physical motion and any conventional orbit remain unresolved
+- Retrospective accounts associate its appearances with Age transitions; they
+  do not prove that the Shadowmoon causes every transition
 - Weakens barriers between planes
 - Makes the Loom "loose" and changeable
 
@@ -281,7 +283,7 @@ Each Age represents a different "weaving pattern" in the Loom of Aether:
 - Minor ages or sub-periods
 
 ### [PROPOSED]
-- The Shadowmoon as age-marker
+- The Shadowmoon as a reliable age-marker rather than a recurrent manifestation
 - Different species experiencing time differently
 - Temporal anomalies from prison degradation
 - Age-specific magical phenomena
