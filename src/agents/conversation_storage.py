@@ -8,6 +8,7 @@ using PostgreSQL for persistence and context management.
 import json
 import logging
 import uuid
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -124,6 +125,8 @@ class ConversationStorageService:
 
         try:
             row = await postgres_db.fetchrow(query, *values)
+            if row is None:
+                raise RuntimeError("Conversation insert returned no row")
             return self._row_to_conversation(row)
         except Exception as e:
             self.logger.error("Failed to create conversation (%s)", type(e).__name__)
@@ -152,39 +155,16 @@ class ConversationStorageService:
         """List conversations with pagination."""
         postgres_db = await get_postgres_db()
 
-        conditions = []
-        params = []
-        param_count = 0
-
-        if user_id:
-            param_count += 1
-            conditions.append(f"user_id = ${param_count}")
-            params.append(user_id)
-
-        if active_only:
-            param_count += 1
-            conditions.append(f"is_active = ${param_count}")
-            params.append(True)
-
-        where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
-
-        param_count += 1
-        limit_param = f"${param_count}"
-        params.append(limit)
-
-        param_count += 1
-        offset_param = f"${param_count}"
-        params.append(offset)
-
-        query = f"""
+        query = """
         SELECT * FROM conversations
-        {where_clause}
+        WHERE ($1::varchar IS NULL OR user_id = $1::varchar)
+          AND (NOT $2::boolean OR is_active = TRUE)
         ORDER BY updated_at DESC
-        LIMIT {limit_param} OFFSET {offset_param}
+        LIMIT $3 OFFSET $4
         """
 
         try:
-            rows = await postgres_db.fetch(query, *params)
+            rows = await postgres_db.fetch(query, user_id, active_only, limit, offset)
             return [self._row_to_conversation(row) for row in rows]
         except Exception as e:
             self.logger.error("Failed to list conversations (%s)", type(e).__name__)
@@ -226,6 +206,8 @@ class ConversationStorageService:
 
         try:
             row = await postgres_db.fetchrow(query, *values)
+            if row is None:
+                raise RuntimeError("Message insert returned no row")
             return self._row_to_message(row)
         except Exception as e:
             self.logger.error("Failed to add message to conversation (%s)", type(e).__name__)
@@ -246,36 +228,28 @@ class ConversationStorageService:
         """
         postgres_db = await get_postgres_db()
 
-        # Build dynamic update set
-        sets = []
-        values: list[Any] = []
-        idx = 1
-        if content is not None:
-            sets.append(f"content = ${idx}")
-            values.append(content)
-            idx += 1
-        if tools_used is not None:
-            sets.append(f"tools_used = ${idx}")
-            values.append(json.dumps(tools_used))
-            idx += 1
-        if sources is not None:
-            sets.append(f"sources = ${idx}")
-            values.append(json.dumps(sources))
-            idx += 1
-        if entities_discovered is not None:
-            sets.append(f"entities_discovered = ${idx}")
-            values.append(json.dumps(entities_discovered))
-            idx += 1
-        if metadata is not None:
-            sets.append(f"metadata = ${idx}")
-            values.append(json.dumps(metadata))
-            idx += 1
-
-        if not sets:
+        if all(
+            value is None for value in (content, tools_used, sources, entities_discovered, metadata)
+        ):
             return False
 
-        values.append(message_id)
-        query = f"UPDATE conversation_messages SET {', '.join(sets)} WHERE id = ${idx}"
+        query = """
+            UPDATE conversation_messages
+            SET content = COALESCE($1, content),
+                tools_used = COALESCE($2, tools_used),
+                sources = COALESCE($3, sources),
+                entities_discovered = COALESCE($4, entities_discovered),
+                metadata = COALESCE($5, metadata)
+            WHERE id = $6
+        """
+        values = (
+            content,
+            json.dumps(tools_used) if tools_used is not None else None,
+            json.dumps(sources) if sources is not None else None,
+            json.dumps(entities_discovered) if entities_discovered is not None else None,
+            json.dumps(metadata) if metadata is not None else None,
+            message_id,
+        )
         try:
             result = await postgres_db.execute(query, *values)
             # result format: 'UPDATE <n>'
@@ -360,6 +334,8 @@ class ConversationStorageService:
             result = await postgres_db.fetchrow(
                 query, str(uuid.uuid4()), conversation_id, stream_id, current_message_id, expires_at
             )
+            if result is None:
+                raise RuntimeError("Stream-session insert returned no row")
             return result["stream_id"]
         except Exception as e:
             self.logger.error("Failed to create stream session (%s)", type(e).__name__)
@@ -434,11 +410,8 @@ class ConversationStorageService:
             self.logger.error("Failed to delete conversation (%s)", type(e).__name__)
             raise
 
-    def _row_to_conversation(self, row) -> Conversation:
+    def _row_to_conversation(self, row: Mapping[str, Any]) -> Conversation:
         """Convert database row to Conversation object."""
-        if not row:
-            return None
-
         return Conversation(
             id=row["id"],
             user_id=row["user_id"],
@@ -450,19 +423,16 @@ class ConversationStorageService:
             is_active=row["is_active"],
         )
 
-    def _row_to_message(self, row) -> ConversationMessage:
+    def _row_to_message(self, row: Mapping[str, Any]) -> ConversationMessage:
         """Convert database row to ConversationMessage object."""
-        if not row:
-            return None
-
         # asyncpg Record may not support .get reliably in all contexts; guard access
         seq = None
         try:
             if "sequence_number" in row.keys():  # type: ignore[attr-defined]
                 seq = row["sequence_number"]
-        except Exception:
-            # Fallback silent; sequence number optional
-            pass
+        except (AttributeError, KeyError, TypeError):
+            # Some Mapping implementations do not expose asyncpg's Record helpers.
+            seq = None
         return ConversationMessage(
             id=row["id"],
             conversation_id=row["conversation_id"],

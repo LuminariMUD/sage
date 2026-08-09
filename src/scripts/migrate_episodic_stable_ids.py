@@ -223,11 +223,8 @@ async def analyze_episodic_nodes(dry_run: bool = True):
                 f"\n[bold green]🎉 Migration completed: {updated_count}/{len(nodes_to_update)} nodes updated[/bold green]"
             )
 
-        # Close connection
-        if hasattr(neo4j_db, "close"):
-            await neo4j_db.close()
-        elif hasattr(neo4j_db, "driver") and hasattr(neo4j_db.driver, "close"):
-            await neo4j_db.driver.close()
+        # Close the connection through the database manager.
+        await neo4j_db.disconnect()
 
         return len(nodes_to_update), len(nodes_unparseable)
 
@@ -279,7 +276,7 @@ async def verify_migration():
         # Close connection
         if hasattr(neo4j_db, "close"):
             await neo4j_db.close()
-        elif hasattr(neo4j_db, "driver") and hasattr(neo4j_db.driver, "close"):
+        elif neo4j_db.driver is not None:
             await neo4j_db.driver.close()
 
         return with_stable_id == total

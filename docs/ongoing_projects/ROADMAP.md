@@ -1,13 +1,15 @@
 # Luminari Sage - TODO List
 
 ## Project Status
-**Current Phase**: Production & Enhancement (Phase 4+)  
-**Completion**: ~75% of MVP (Production deployed, ongoing enhancements)  
+
+**Current Phase**: Production & Enhancement (Phase 4+)
+**Completion**: ~75% of MVP (Production deployed, ongoing enhancements)
 **Last Updated**: 2025-11-12
 
 ## ✅ Completed Tasks
 
 ### Infrastructure & Setup
+
 - [x] Project structure created
 - [x] Docker configuration (docker-compose.yml)
 - [x] Database schemas (PostgreSQL + Neo4j)
@@ -16,6 +18,7 @@
 - [x] GitHub Actions workflow templates
 
 ### Core Implementation
+
 - [x] FastAPI application foundation
 - [x] Database connection modules (PostgreSQL + Neo4j)
 - [x] API endpoints:
@@ -36,6 +39,7 @@
 - [x] Hybrid RAG implementation (vector + full-text + graph)
 
 ### Scripts & Data Pipeline
+
 - [x] load_documents.py - Load markdown into PostgreSQL
 - [x] create_episodes_from_documents.py - Semantic chunking
 - [x] generate_embeddings.py - Vector embeddings
@@ -46,6 +50,7 @@
 ## 🚧 In Progress Tasks
 
 ### Current Sprint (Week of Nov 12)
+
 - [x] Test complete data pipeline end-to-end
 - [x] Deploy to production environment (luminarimud.com:8003)
 - [x] Load initial lore documents (1000+ episodes)
@@ -57,6 +62,7 @@
 ## 📋 Upcoming Tasks
 
 ### Phase 2: Core Development (Completed ✅)
+
 - [x] **Agent System**
   - [x] PydanticAI streaming chat agent
   - [x] LangChain ReAct agent with LangGraph
@@ -84,6 +90,7 @@
   - [ ] Add cache invalidation logic
 
 ### Phase 3: Testing & Validation (Partial ✅)
+
 - [x] **Unit Tests**
   - [x] Basic test structure with pytest
   - [x] Test markers (unit, integration, data_dependent)
@@ -106,6 +113,7 @@
   - [x] Search relevance tested with Postman collections
 
 ### Phase 4: Production Deployment (Completed ✅)
+
 - [x] **Deployment Preparation**
   - [x] Set up production server (luminarimud.com:8003)
   - [x] Docker Compose orchestration
@@ -122,6 +130,7 @@
   - [ ] Set up MUD interface (planned)
 
 ### Phase 5: Enhancements
+
 - [ ] **Discord Bot**
   - [ ] Implement Discord commands
   - [ ] Add role-based permissions
@@ -173,6 +182,7 @@
 ## 📊 Progress Metrics
 
 ### MVP Completion
+
 - Database Setup: 100% ✅
 - API Development: 95% ✅
 - Entity Extraction: 90% ✅
@@ -185,6 +195,7 @@
 - Deployment: 90% ✅
 
 ### Lines of Code
+
 - Python: ~2,500 lines
 - SQL: ~400 lines
 - Configuration: ~800 lines
@@ -229,5 +240,5 @@
 
 ---
 
-*Use `make help` to see available commands*  
-*Check IMPLEMENTATION_PLAN.md for detailed phase descriptions*
+_Use `make help` to see available commands_
+_Check IMPLEMENTATION_PLAN.md for detailed phase descriptions_

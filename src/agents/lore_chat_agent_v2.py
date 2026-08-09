@@ -238,7 +238,7 @@ Remember: You're not just a search engine - you're a sage who understands the de
             logger.error("Chat failed (%s)", type(e).__name__)
             return public_error_message("Chat")
 
-    async def stream_chat(self, message: str) -> AsyncGenerator[StreamEvent, None]:
+    async def stream_chat(self, message: str) -> AsyncGenerator[StreamEvent]:
         """
         Stream a chat response with transparency.
 

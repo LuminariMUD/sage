@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
@@ -34,7 +35,7 @@ def _package_version(distribution: str) -> str:
         return "not-installed"
 
 
-def _type_contract(type_map: dict[str, type]) -> dict[str, Any]:
+def _type_contract(type_map: Mapping[str, type]) -> dict[str, Any]:
     contract: dict[str, Any] = {}
     for name, model in sorted(type_map.items()):
         schema_factory = getattr(model, "model_json_schema", None)

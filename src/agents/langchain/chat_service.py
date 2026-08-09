@@ -10,7 +10,7 @@ import json
 import logging
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 
 from src.llm.langchain_helpers import get_chat_model
@@ -173,7 +173,7 @@ Be creative, be helpful, and bring the world of Luminari to life!"""
             Event dictionaries compatible with the API
         """
         # Build conversation messages
-        messages = [SystemMessage(content=self.system_prompt)]
+        messages: list[BaseMessage] = [SystemMessage(content=self.system_prompt)]
 
         if conversation_history:
             for msg in conversation_history:
@@ -268,8 +268,6 @@ Be creative, be helpful, and bring the world of Luminari to life!"""
                                     result = await tool_func.func(**tool_args)
 
                                 # Add tool result as message
-                                from langchain_core.messages import ToolMessage
-
                                 tool_message = ToolMessage(
                                     content=(
                                         json.dumps(result)
@@ -283,8 +281,6 @@ Be creative, be helpful, and bring the world of Luminari to life!"""
                                 logger.info(f"Tool {tool_name} completed successfully")
                             else:
                                 # Tool not found
-                                from langchain_core.messages import ToolMessage
-
                                 error_message = ToolMessage(
                                     content=f"Tool {tool_name} not found", tool_call_id=tool_id
                                 )
@@ -293,8 +289,6 @@ Be creative, be helpful, and bring the world of Luminari to life!"""
 
                         except Exception as e:
                             logger.error("Tool execution failed (%s)", type(e).__name__)
-                            from langchain_core.messages import ToolMessage
-
                             error_message = ToolMessage(
                                 content=public_error_message("Tool execution"),
                                 tool_call_id=tool_id,

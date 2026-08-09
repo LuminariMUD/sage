@@ -23,25 +23,25 @@ def extract_connected_components(
     Returns list of subgraphs, each containing connected entities and their relationships.
     """
     # Build entity map - use stable_id as primary key
-    entity_map = {}
-    entity_id_to_name = {}  # For debugging and display
+    entity_map: dict[str, dict[str, Any]] = {}
+    entity_id_to_name: dict[str, Any] = {}  # For debugging and display
 
     for e in entities:
         entity_id = e.get("stable_id") or e.get("name")
-        if entity_id:
+        if isinstance(entity_id, str) and entity_id:
             entity_map[entity_id] = e
             entity_id_to_name[entity_id] = e.get("name", entity_id)
 
     logger.debug(f"Built entity_map with {len(entity_map)} entities")
 
     # Build adjacency list and relationship map
-    adjacency = defaultdict(set)
-    relationship_map = defaultdict(list)
+    adjacency: defaultdict[str, set[str]] = defaultdict(set)
+    relationship_map: defaultdict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
 
     for rel in relationships:
         source = rel.get("source")
         target = rel.get("target")
-        if source and target:
+        if isinstance(source, str) and isinstance(target, str) and source and target:
             # Ensure both endpoints exist in entity_map
             if source in entity_map and target in entity_map:
                 adjacency[source].add(target)
@@ -56,16 +56,16 @@ def extract_connected_components(
     logger.debug(f"Built adjacency list with {len(adjacency)} connected nodes")
 
     # Find connected components using BFS
-    visited = set()
-    components = []
+    visited: set[str] = set()
+    components: list[dict[str, Any]] = []
 
     # Process all entities, including isolated ones
     for entity_id in entity_map:
         if entity_id not in visited:
             # BFS to find all connected nodes
-            component_nodes = set()
-            component_edges = []
-            queue = deque([entity_id])
+            component_nodes: set[str] = set()
+            component_edges: list[dict[str, Any]] = []
+            queue: deque[str] = deque([entity_id])
 
             while queue:
                 current = queue.popleft()

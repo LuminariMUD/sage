@@ -580,6 +580,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 **Automated Scanning**:
 
 - Pre-commit hooks with Gitleaks (blocks commits with secrets)
+- GitHub Actions quality workflow (Black, isort, Ruff, mypy, deterministic tests)
 - GitHub Actions security workflow (secrets, dependencies, Docker)
 - pip-audit for Python dependency vulnerabilities
 - Bandit for Python security linting

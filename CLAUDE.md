@@ -6,11 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Luminari Sage is a graph-based lore management system for LuminariMUD. It combines Neo4j (knowledge graph), PostgreSQL with pgvector (documents + embeddings), and AI agents to enable intelligent search, validation, and creative writing assistance for game lore.
 
-**Stack**: Python 3.11+, FastAPI, Neo4j, PostgreSQL/pgvector, Graphiti, PydanticAI, LangChain
+**Stack**: Python 3.13, FastAPI, Neo4j, PostgreSQL/pgvector, Graphiti, PydanticAI, LangChain
 
 ## Development Commands
 
 ### Docker Operations
+
 ```bash
 # Start all services (PostgreSQL, Neo4j, API)
 docker compose up -d
@@ -26,6 +27,7 @@ docker compose restart
 ```
 
 ### Data Pipeline (Makefile)
+
 The data pipeline processes markdown lore documents into a queryable knowledge graph:
 
 ```bash
@@ -54,6 +56,7 @@ deployment. Graph sync requires the exact confirmation shown above because it ca
 call the configured provider and mutate durable Neo4j state.
 
 ### Testing
+
 ```bash
 # Run all tests
 pytest
@@ -71,6 +74,7 @@ pytest tests/test_api_integration.py -v
 ```
 
 ### API Operations
+
 ```bash
 # API runs on port 8003 inside container
 curl http://localhost:8003/ping
@@ -90,6 +94,7 @@ curl -X POST http://localhost:8003/api/v1/rag/query \
 ## Architecture
 
 ### High-Level Data Flow
+
 ```
 Markdown Lore Files
     ↓
@@ -107,6 +112,7 @@ FastAPI serves hybrid RAG: PostgreSQL vectors + Neo4j graph
 ### Key Architectural Concepts
 
 **1. Hybrid RAG (Retrieval-Augmented Generation)**
+
 - **Vector Search**: PostgreSQL pgvector finds semantically similar episode chunks
 - **Full-Text Search**: PostgreSQL FTS for keyword matching
 - **Reciprocal Rank Fusion**: Combines both result sets with RRF scoring
@@ -114,6 +120,7 @@ FastAPI serves hybrid RAG: PostgreSQL vectors + Neo4j graph
 - **Implementation**: `src/api/main.py::rag_query()` endpoint
 
 **2. Semantic Chunking Pipeline**
+
 - Documents split into "episodes" (semantic chunks) of 200-500 tokens
 - Overlap strategy: 25% with complete sentences only
 - Uses tiktoken for consistent token counting
@@ -121,6 +128,7 @@ FastAPI serves hybrid RAG: PostgreSQL vectors + Neo4j graph
 - Episodes stored with stable_id for Neo4j cross-referencing
 
 **3. Graphiti Knowledge Graph**
+
 - Graphiti automatically extracts entities and relationships from episodes
 - Creates Neo4j nodes: Entity types (Character, Location, Faction, etc.)
 - Creates Neo4j edges: Relationship types with semantic properties
@@ -138,6 +146,7 @@ The codebase has TWO chat agent implementations:
   - Unified creative chain with ReAct loop
 
 **5. Database Connection Pattern**
+
 ```python
 # IMPORTANT: Use singleton pattern for database connections
 from src.db import get_postgres_db, get_neo4j_db
@@ -187,6 +196,7 @@ lore_docs/          # Markdown lore documents (mounted read-only)
 ## Common Development Patterns
 
 ### Adding a New API Endpoint
+
 1. Define Pydantic request/response models in `src/api/main.py`
 2. Add endpoint function with FastAPI decorators
 3. Use `await get_postgres_db()` / `await get_neo4j_db()` for connections
@@ -194,6 +204,7 @@ lore_docs/          # Markdown lore documents (mounted read-only)
 5. Return Pydantic model instances for automatic validation
 
 ### Working with the Knowledge Graph
+
 ```python
 # Query Neo4j for entities
 neo4j_db = await get_neo4j_db()
@@ -214,12 +225,14 @@ results = await postgres_db.fetch("""
 ```
 
 ### Extending Entity Types
+
 1. Add Pydantic model to `src/graphiti/entity_types.py`
 2. Register in `ENTITY_TYPES` dict
 3. Graphiti will automatically extract entities of this type
 4. Update Neo4j schema if needed (`schemas/neo4j_schema.cypher`)
 
 ### Adding a New LangChain Tool
+
 1. Create tool in `src/agents/langchain/tools/`
 2. Inherit from `BaseTool` or use `@tool` decorator
 3. Register in focused_tools.py or chain configuration
@@ -228,6 +241,7 @@ results = await postgres_db.fetch("""
 ## Code Standards
 
 ### Python Style
+
 - **Formatting**: Use `black` for code formatting, `isort` for import sorting
 - **Type Checking**: Use `mypy` for static type analysis - type hints required for all functions
 - **Imports**: Order: Standard library → Third party → Local (alphabetical within groups)
@@ -235,6 +249,7 @@ results = await postgres_db.fetch("""
 - **Docstrings**: Google style with Args, Returns, Raises sections
 
 ### FastAPI Patterns
+
 - All endpoints must use `async`/`await`
 - Use dependency injection with `Depends()` for database connections and auth
 - Pydantic models for request/response validation
@@ -242,6 +257,7 @@ results = await postgres_db.fetch("""
 - Never manually manage database connections in endpoints
 
 ### Database Queries
+
 - **Always use parameterized queries** - never string concatenation
 - Neo4j: Use `src/db/neo4j_db.py` wrapper with transaction support
 - PostgreSQL: Use asyncpg connection pool via `src/db/postgres.py`
@@ -255,18 +271,21 @@ results = await postgres_db.fetch("""
   ```
 
 ### PydanticAI Agent Development
+
 - Follow `src/agents/lore_chat_agent.py` template structure
 - Tools use `@agent.tool` decorator with `RunContext` parameter
 - System prompts should be detailed and lore-specific
 - Output types: Use `StructuredResponse` or `StreamingResponse`
 
 ### Error Handling & Logging
+
 - Use Python `logging` module with structured output
 - Custom exceptions defined in `src/auth/exceptions.py` and `src/agents/`
 - Graceful degradation: Provide fallbacks when optional services fail
 - Always validate inputs with Pydantic before processing
 
 ### Git Workflow
+
 - Branch naming: `feat/feature-name` or `fix/bug-description`
 - Commit messages: Use conventional commits format
   - `feat: add semantic chunking pipeline`
@@ -277,13 +296,16 @@ results = await postgres_db.fetch("""
 ## Important Notes
 
 ### Data Pipeline Execution
+
 - **Run inside container**: All pipeline scripts use `docker exec luminari-api python src/scripts/...`
 - **Order matters**: load → episodes → embeddings → sync (use Makefile targets)
 - **Idempotent**: Scripts track processing status in PostgreSQL flags
 - **Resume capability**: `make resume` continues interrupted pipeline
 
 ### Environment Variables
+
 Key environment variables (see `.env` or `docker-compose.yml`):
+
 - `POSTGRES_*`: PostgreSQL connection settings
 - `NEO4J_*`: Neo4j connection and credentials
 - `OPENAI_API_KEY`: Required for embeddings and LLM operations
@@ -291,19 +313,23 @@ Key environment variables (see `.env` or `docker-compose.yml`):
 - `API_PORT`: API server port (8003)
 
 ### Embedding Model
+
 - Default: `sentence-transformers/all-MiniLM-L6-v2` (384 dimensions)
 - OpenAI alternative: Set `USE_OPENAI_EMBEDDINGS=true` (1536 dimensions)
 - Model loads on first use for faster startup
 - Dimension must match pgvector schema
 
 ### Testing Best Practices
+
 - Mark integration tests with `@pytest.mark.integration`
 - Mark data-dependent tests with `@pytest.mark.data_dependent`
 - Use `--asyncio-mode=auto` for async tests (configured in pytest.ini)
 - Mock external services (OpenAI, Neo4j) in unit tests
 
 ### LangChain Agent Routes
+
 The modern agent system (`src/agents/langchain/legacy_service.py`) routes queries:
+
 - **Direct Answer**: Factual lore questions → Retrieval + answer
 - **Quest Workflow**: Quest planning requests → Multi-step quest generation
 - **Story Workflow**: Story/creative requests → Narrative development with reasoning
@@ -311,6 +337,7 @@ The modern agent system (`src/agents/langchain/legacy_service.py`) routes querie
 Each route uses the same underlying hybrid RAG but applies different generation strategies.
 
 ### Authentication
+
 - Middleware in `src/auth/` validates API keys
 - Multiple key types: BACKEND_API, MCP_OPERATIONS, MCP_BACKEND_ACCESS
 - Certain paths excluded from auth (e.g., `/ping`, `/docs`)

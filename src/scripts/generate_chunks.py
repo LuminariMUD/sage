@@ -84,7 +84,7 @@ class ChunkGenerator:
     def split_by_headers(self, content: str) -> list[tuple[str, str]]:
         """Split content by markdown headers, preserving hierarchy."""
         sections = []
-        current_section = []
+        current_section: list[str] = []
         current_header = ""
 
         lines = content.split("\n")

@@ -235,7 +235,7 @@ class TestPerformanceBenchmarks:
         start = time.time()
         individual_embeddings = []
         for text in texts:
-            emb = await embedder.embed(text)
+            emb = await embedder.embed_text(text)
             individual_embeddings.append(emb)
         individual_time = time.time() - start
 

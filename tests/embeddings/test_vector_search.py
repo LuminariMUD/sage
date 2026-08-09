@@ -1,9 +1,23 @@
 """Test vector search with Ollama embeddings."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 import pytest
 
-from src.db import get_postgres_db
+from src.db.postgres import PostgresDB
 from src.llm.embeddings.factory import get_embedder
+
+
+@asynccontextmanager
+async def _connected_postgres() -> AsyncIterator[PostgresDB]:
+    """Give each async test a pool owned by that test's event loop."""
+    database = PostgresDB()
+    await database.connect()
+    try:
+        yield database
+    finally:
+        await database.disconnect()
 
 
 @pytest.mark.integration
@@ -11,26 +25,26 @@ from src.llm.embeddings.factory import get_embedder
 async def test_vector_search_quality():
     """Test vector search returns relevant results."""
     embedder = get_embedder()
-    db = await get_postgres_db()
 
     # Test query
     query = "crystal dwarves mining"
     query_embedding = await embedder.embed_text(query)
 
     # Search for similar episodes
-    results = await db.fetch(
-        """
-        SELECT
-            id,
-            text,
-            1 - (embedding <=> $1::vector) as similarity
-        FROM episodes
-        WHERE embedding IS NOT NULL
-        ORDER BY embedding <=> $1::vector
-        LIMIT 5
-    """,
-        "[" + ",".join(map(str, query_embedding)) + "]",
-    )
+    async with _connected_postgres() as db:
+        results = await db.fetch(
+            """
+            SELECT
+                id,
+                text,
+                1 - (embedding <=> $1::vector) as similarity
+            FROM episodes
+            WHERE embedding IS NOT NULL
+            ORDER BY embedding <=> $1::vector
+            LIMIT 5
+        """,
+            "[" + ",".join(map(str, query_embedding)) + "]",
+        )
 
     print(f"\nQuery: {query}")
     print(f"Found {len(results)} results\n")
@@ -50,15 +64,15 @@ async def test_vector_search_quality():
 @pytest.mark.asyncio
 async def test_embedding_dimension_consistency():
     """Test all embeddings have correct dimension."""
-    db = await get_postgres_db()
     embedder = get_embedder()
 
-    results = await db.fetch("""
-        SELECT array_length(embedding::float[], 1) as dim, COUNT(*) as count
-        FROM episodes
-        WHERE embedding IS NOT NULL
-        GROUP BY dim
-    """)
+    async with _connected_postgres() as db:
+        results = await db.fetch("""
+            SELECT vector_dims(embedding) as dim, COUNT(*) as count
+            FROM episodes
+            WHERE embedding IS NOT NULL
+            GROUP BY dim
+        """)
 
     print("\nEmbedding dimensions in database:")
     for row in results:

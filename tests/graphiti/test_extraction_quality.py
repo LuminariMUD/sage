@@ -1,32 +1,17 @@
 """Validate entity extraction quality with Graphiti."""
 
-import os
+from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
-from graphiti_core import Graphiti
-
-from src.graphiti.ollama_config import (
-    get_graphiti_embedding_client,
-    get_graphiti_llm_client,
-)
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_entity_extraction_accuracy():
+async def test_entity_extraction_accuracy(graphiti_client):
     """Test entity extraction produces expected results with acceptable accuracy."""
-    # Get configured clients
-    llm_client = get_graphiti_llm_client()
-    embedding_client = get_graphiti_embedding_client()
-
-    # Initialize Graphiti
-    graphiti = Graphiti(
-        uri=os.getenv("NEO4J_URI", "bolt://neo4j:7687"),
-        user=os.getenv("NEO4J_USER", "neo4j"),
-        password=os.getenv("NEO4J_PASSWORD"),
-        llm_client=llm_client,
-        embedder=embedding_client,
-    )
+    graphiti = graphiti_client
+    group_id = f"sage-test-entity-{uuid4()}"
 
     # Known test case with clear entities
     episode_text = """
@@ -52,17 +37,22 @@ async def test_entity_extraction_accuracy():
         name="test_silverport_accuracy",
         episode_body=episode_text,
         source_description="Quality test episode",
+        reference_time=datetime.now(UTC),
+        group_id=group_id,
     )
 
     print("✅ Episode added successfully!")
 
     # Query results
-    async with graphiti.graph_driver.execute_query() as query_fn:
-        results = await query_fn("""
+    results = await graphiti.driver.execute_query(
+        """
             MATCH (e:Entity)
-            WHERE e.name =~ '(?i).*(silver|elena|aldric|bazaar|merchant|guild).*'
+            WHERE e.group_id = $group_id
+              AND e.name =~ '(?i).*(silver|elena|aldric|bazaar|merchant|guild).*'
             RETURN e.name as name, e.entity_type as type
-            """)
+        """,
+        params={"group_id": group_id},
+    )
 
     extracted_entities = {}
     for record in results.records:
@@ -105,20 +95,10 @@ async def test_entity_extraction_accuracy():
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_relationship_extraction():
+async def test_relationship_extraction(graphiti_client):
     """Test that relationships are extracted along with entities."""
-    # Get configured clients
-    llm_client = get_graphiti_llm_client()
-    embedding_client = get_graphiti_embedding_client()
-
-    # Initialize Graphiti
-    graphiti = Graphiti(
-        uri=os.getenv("NEO4J_URI", "bolt://neo4j:7687"),
-        user=os.getenv("NEO4J_USER", "neo4j"),
-        password=os.getenv("NEO4J_PASSWORD"),
-        llm_client=llm_client,
-        embedder=embedding_client,
-    )
+    graphiti = graphiti_client
+    group_id = f"sage-test-relationships-{uuid4()}"
 
     # Test episode with clear relationships
     episode_text = """
@@ -133,19 +113,24 @@ async def test_relationship_extraction():
         name="test_relationships",
         episode_body=episode_text,
         source_description="Relationship extraction test",
+        reference_time=datetime.now(UTC),
+        group_id=group_id,
     )
 
     print("✅ Episode added successfully!")
 
     # Query for relationships
-    async with graphiti.graph_driver.execute_query() as query_fn:
-        results = await query_fn("""
+    results = await graphiti.driver.execute_query(
+        """
             MATCH (e1:Entity)-[r]->(e2:Entity)
-            WHERE e1.name =~ '(?i).*(merlin|arthur|excalibur).*'
-               OR e2.name =~ '(?i).*(merlin|arthur|excalibur).*'
+            WHERE e1.group_id = $group_id
+              AND (e1.name =~ '(?i).*(merlin|arthur|excalibur).*'
+                   OR e2.name =~ '(?i).*(merlin|arthur|excalibur).*')
             RETURN e1.name as source, type(r) as relationship, e2.name as target
             LIMIT 20
-            """)
+        """,
+        params={"group_id": group_id},
+    )
 
     relationships = []
     for record in results.records:
@@ -165,20 +150,10 @@ async def test_relationship_extraction():
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_extraction_consistency():
+async def test_extraction_consistency(graphiti_client):
     """Test that extraction produces consistent results across runs."""
-    # Get configured clients
-    llm_client = get_graphiti_llm_client()
-    embedding_client = get_graphiti_embedding_client()
-
-    # Initialize Graphiti
-    graphiti = Graphiti(
-        uri=os.getenv("NEO4J_URI", "bolt://neo4j:7687"),
-        user=os.getenv("NEO4J_USER", "neo4j"),
-        password=os.getenv("NEO4J_PASSWORD"),
-        llm_client=llm_client,
-        embedder=embedding_client,
-    )
+    graphiti = graphiti_client
+    group_id = f"sage-test-consistency-{uuid4()}"
 
     episode_text = """
     The Dragon of Mount Doom terrorizes the nearby villages.
@@ -192,21 +167,28 @@ async def test_extraction_consistency():
         name="test_consistency_1",
         episode_body=episode_text,
         source_description="Consistency test run 1",
+        reference_time=datetime.now(UTC),
+        group_id=group_id,
     )
 
     await graphiti.add_episode(
         name="test_consistency_2",
         episode_body=episode_text,
         source_description="Consistency test run 2",
+        reference_time=datetime.now(UTC),
+        group_id=group_id,
     )
 
     # Query entities from both episodes
-    async with graphiti.graph_driver.execute_query() as query_fn:
-        results = await query_fn("""
+    results = await graphiti.driver.execute_query(
+        """
             MATCH (e:Entity)
-            WHERE e.name =~ '(?i).*(dragon|galahad|mount).*'
+            WHERE e.group_id = $group_id
+              AND e.name =~ '(?i).*(dragon|galahad|mount).*'
             RETURN DISTINCT e.name as name
-            """)
+        """,
+        params={"group_id": group_id},
+    )
 
     entities = [record["name"].lower() for record in results.records]
     print(f"\n📊 Unique entities extracted: {len(entities)}")

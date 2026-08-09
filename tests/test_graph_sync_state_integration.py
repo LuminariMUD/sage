@@ -47,7 +47,7 @@ class SchemaPostgres:
         self.pool = pool
 
     @asynccontextmanager
-    async def acquire(self) -> AsyncGenerator[asyncpg.Connection, None]:
+    async def acquire(self) -> AsyncGenerator[asyncpg.Connection]:
         async with self.pool.acquire() as connection:
             yield connection
 
@@ -69,9 +69,7 @@ class SchemaPostgres:
 
 
 @pytest.fixture
-async def state_store() -> (
-    AsyncGenerator[tuple[SchemaPostgres, GraphSyncRepository, list[UUID]], None]
-):
+async def state_store() -> AsyncGenerator[tuple[SchemaPostgres, GraphSyncRepository, list[UUID]]]:
     connect_args = {
         "host": os.getenv("POSTGRES_HOST", "postgres"),
         "port": int(os.getenv("POSTGRES_PORT", "5432")),

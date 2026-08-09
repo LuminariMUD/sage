@@ -12,7 +12,7 @@ This guide covers development environment setup, coding patterns, testing, and d
 
 ### Prerequisites
 
-- Python 3.11+ (containers run 3.13)
+- Python 3.13 (matches containers and CI)
 - Node.js 18+ (for frontend development)
 - Docker & Docker Compose
 - Git

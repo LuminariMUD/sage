@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import inspect
 import json
+import logging
 import re
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
@@ -14,11 +15,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
+from graphiti_core.graphiti_types import GraphitiClients
 from graphiti_core.nodes import EpisodeType, EpisodicNode
 from graphiti_core.utils.maintenance.edge_operations import extract_edges
 from graphiti_core.utils.maintenance.node_operations import extract_nodes
+from pydantic import BaseModel
 
 from src.graphiti.edge_types import EDGE_TYPES
 from src.graphiti.entity_types import ENTITY_TYPES
@@ -37,6 +40,7 @@ _CASE_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 _SAFE_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._:/+@()-]{0,254}$")
 _MAX_CORPUS_BYTES = 1_048_576
 BENCHMARK_EXTRACTION_VERSION = "staged-relationship-policy:v1"
+logger = logging.getLogger(__name__)
 
 
 class BenchmarkConfigurationError(ValueError):
@@ -273,19 +277,21 @@ def score_benchmark_case(
 ) -> dict[str, int | float]:
     """Score only counts and recall; never return extracted names or facts."""
     matched_node_ids: dict[str, set[str]] = {}
-    for expected in case.expected_entities:
-        matched_node_ids[expected.id] = {
+    for entity_expectation in case.expected_entities:
+        matched_node_ids[entity_expectation.id] = {
             str(getattr(node, "uuid", ""))
             for node in nodes
-            if _name_matches(getattr(node, "name", ""), expected.aliases)
+            if _name_matches(getattr(node, "name", ""), entity_expectation.aliases)
         }
     matched_entities = sum(bool(matches) for matches in matched_node_ids.values())
     matched_relationships = 0
-    for expected in case.expected_relationships:
-        allowed_types = {_normalize(value) for value in expected.types}
+    for relationship_expectation in case.expected_relationships:
+        allowed_types = {_normalize(value) for value in relationship_expectation.types}
         if any(
-            str(getattr(edge, "source_node_uuid", "")) in matched_node_ids[expected.source]
-            and str(getattr(edge, "target_node_uuid", "")) in matched_node_ids[expected.target]
+            str(getattr(edge, "source_node_uuid", ""))
+            in matched_node_ids[relationship_expectation.source]
+            and str(getattr(edge, "target_node_uuid", ""))
+            in matched_node_ids[relationship_expectation.target]
             and _normalize(getattr(edge, "name", "")) in allowed_types
             for edge in edges
         ):
@@ -339,7 +345,12 @@ class BenchmarkProviderCallBudget:
         self.verify_ready()
         if self._installed:
             raise BenchmarkConfigurationError("Benchmark call accounting is already installed")
-        resource = self.llm_client.client.chat.completions
+        transport = getattr(self.llm_client, "client", None)
+        resource = getattr(getattr(transport, "chat", None), "completions", None)
+        if resource is None:
+            raise BenchmarkConfigurationError(
+                "Benchmark client has no chat-completions request boundary"
+            )
         marker = object()
         prior_instance_value = vars(resource).get("create", marker)
         original_create = resource.create
@@ -425,14 +436,15 @@ async def extract_staged_policy_graph(
     episode: EpisodicNode,
     previous_episodes: list[EpisodicNode],
     *,
-    entity_types: dict[str, type],
-    edge_types: dict[str, type],
+    entity_types: dict[str, type[BaseModel]],
+    edge_types: dict[str, type[BaseModel]],
     edge_type_map: dict[tuple[str, str], list[str]],
     custom_extraction_instructions: str,
 ) -> BenchmarkExtractionResult:
     """Run the production staged extraction boundary without graph maintenance."""
+    typed_clients = cast(GraphitiClients, clients)
     nodes, node_episode_index_map = await extract_nodes(
-        clients,
+        typed_clients,
         episode,
         previous_episodes,
         entity_types,
@@ -443,8 +455,9 @@ async def extract_staged_policy_graph(
     if llm_client is None:
         raise BenchmarkConfigurationError("Benchmark extraction client is unavailable")
     proxy = RelationshipPolicyLLMProxy(llm_client, nodes)
+    edge_clients = cast(GraphitiClients, SimpleNamespace(llm_client=proxy))
     edges = await extract_edges(
-        SimpleNamespace(llm_client=proxy),
+        edge_clients,
         episode,
         nodes,
         previous_episodes,
@@ -479,6 +492,13 @@ def _structured_result_for_failure(
 
 def _rate(numerator: int, denominator: int) -> float | None:
     return numerator / denominator if denominator else None
+
+
+def _result_count(result: Mapping[str, object], name: str) -> int:
+    value = result.get(name)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise BenchmarkConfigurationError(f"Benchmark result count {name} is invalid")
+    return value
 
 
 def _aggregate_relationship_quality(
@@ -660,14 +680,21 @@ async def benchmark_candidate(
                 if llm_client is not None:
                     try:
                         await _close_llm_client(llm_client)
-                    except Exception:
-                        pass
+                    except Exception as close_error:
+                        logger.warning(
+                            "Unable to close benchmark LLM client (%s)",
+                            type(close_error).__name__,
+                        )
 
     case_results = list(await asyncio.gather(*(run_case(case) for case in corpus.cases)))
-    expected_entities = sum(int(result["expected_entities"]) for result in case_results)
-    matched_entities = sum(int(result["matched_entities"]) for result in case_results)
-    expected_relationships = sum(int(result["expected_relationships"]) for result in case_results)
-    matched_relationships = sum(int(result["matched_relationships"]) for result in case_results)
+    expected_entities = sum(_result_count(result, "expected_entities") for result in case_results)
+    matched_entities = sum(_result_count(result, "matched_entities") for result in case_results)
+    expected_relationships = sum(
+        _result_count(result, "expected_relationships") for result in case_results
+    )
+    matched_relationships = sum(
+        _result_count(result, "matched_relationships") for result in case_results
+    )
     entity_recall = matched_entities / expected_entities
     relationship_recall = matched_relationships / expected_relationships
     failed_cases = sum(result["status"] != "completed" for result in case_results)
@@ -707,8 +734,13 @@ async def benchmark_candidate(
     )
     usage: dict[str, int] = {}
     for result in case_results:
-        for name, count in dict(result["usage"]).items():
-            usage[name] = usage.get(name, 0) + int(count)
+        result_usage = result.get("usage")
+        if not isinstance(result_usage, Mapping):
+            raise BenchmarkConfigurationError("Benchmark usage result is invalid")
+        for name, count in result_usage.items():
+            if not isinstance(name, str) or isinstance(count, bool) or not isinstance(count, int):
+                raise BenchmarkConfigurationError("Benchmark usage result is invalid")
+            usage[name] = usage.get(name, 0) + count
     return {
         "status": "passed" if passed else "failed",
         "provider": candidate.connection.provider,
@@ -730,7 +762,7 @@ async def benchmark_candidate(
         "relationship_recall": relationship_recall,
         "relationship_recall_threshold": corpus.relationship_recall_threshold,
         "relationship_quality": relationship_quality,
-        "provider_calls": sum(int(result["provider_calls"]) for result in case_results),
+        "provider_calls": sum(_result_count(result, "provider_calls") for result in case_results),
         "maximum_provider_calls_per_case": maximum_provider_calls,
         "usage": dict(sorted(usage.items())),
     }

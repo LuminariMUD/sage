@@ -1,17 +1,27 @@
 """Pytest configuration and fixtures for Luminari Sage tests."""
 
-import asyncio
-from collections.abc import Generator
+import os
+from collections.abc import Iterator
 
 import pytest
 
+# Keep API integration tests hermetic when CI does not provide deployment
+# credentials. Authentication-specific tests construct their own apps and keys.
+os.environ.setdefault("SAGE_API_KEY", "test-only-sage-api-key")
+
 
 @pytest.fixture(scope="session")
-def event_loop() -> Generator:
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+def api_client() -> Iterator:
+    """Serve the real API app with a valid test-only backend credential."""
+    from fastapi.testclient import TestClient
+
+    from src.api.main import app
+
+    with TestClient(
+        app,
+        headers={"X-API-Key": os.environ["SAGE_API_KEY"]},
+    ) as client:
+        yield client
 
 
 @pytest.fixture(scope="session")

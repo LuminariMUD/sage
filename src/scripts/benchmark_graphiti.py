@@ -20,7 +20,11 @@ from src.graphiti.benchmark import (
     load_benchmark_corpus,
 )
 from src.graphiti.sync_profile import GraphSyncExecutionProfile
-from src.llm.provider_config import ProviderSettings, resolve_provider_settings
+from src.llm.provider_config import (
+    ProviderSettings,
+    TextModelCandidate,
+    resolve_provider_settings,
+)
 
 BENCHMARK_CONFIRMATION = "RUN_GRAPHITI_BENCHMARK"
 DEFAULT_CORPUS = Path("/app/benchmarks/graphiti_extraction_v2.json")
@@ -44,11 +48,14 @@ def _emit(report: Mapping[str, object], *, as_json: bool, error: bool = False) -
     print(f"Extraction boundary: {report['benchmark_extraction_version']}", file=destination)
     print(f"Sync profile: {report['sync_profile_fingerprint']}", file=destination)
     results = report["candidates"]
-    assert isinstance(results, list)
+    if not isinstance(results, list):
+        raise ValueError("Benchmark report candidates are invalid")
     for result in results:
-        assert isinstance(result, Mapping)
+        if not isinstance(result, Mapping):
+            raise ValueError("Benchmark candidate result is invalid")
         relationship_quality = result["relationship_quality"]
-        assert isinstance(relationship_quality, Mapping)
+        if not isinstance(relationship_quality, Mapping):
+            raise ValueError("Benchmark relationship-quality result is invalid")
         accepted_rate = relationship_quality["accepted_of_proposed"]
         accepted_rate_text = (
             "unavailable" if accepted_rate is None else f"{float(accepted_rate):.3f}"
@@ -109,6 +116,7 @@ async def run(
         settings = settings_resolver()
         profile = profile_resolver()
         route = settings.graphiti_text_route
+        candidates: tuple[TextModelCandidate, ...]
         if args.candidate == "primary":
             candidates = (route.primary,)
         elif args.candidate == "fallback":

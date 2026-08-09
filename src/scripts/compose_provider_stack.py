@@ -6,7 +6,9 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
+
+# All subprocess invocations use argument vectors without a shell.
+import subprocess  # nosec B404
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -44,7 +46,8 @@ def _run_captured(
     environment: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(
+        # Callers supply fixed internal argument vectors.
+        return subprocess.run(  # nosec B603
             list(command),
             cwd=PROJECT_ROOT,
             env=dict(environment) if environment is not None else None,
@@ -177,7 +180,8 @@ def main(arguments: Sequence[str] | None = None) -> int:
             print(render_plan(selection))
             return 0
         command = build_compose_command(selection, args)
-        result = subprocess.run(command, cwd=PROJECT_ROOT, check=False)
+        # User arguments are forwarded as separate argv entries; shell parsing is never enabled.
+        result = subprocess.run(command, cwd=PROJECT_ROOT, check=False)  # nosec B603
         return result.returncode
     except ComposeProviderStackError as error:
         print(f"compose-provider-stack: {error}", file=sys.stderr)

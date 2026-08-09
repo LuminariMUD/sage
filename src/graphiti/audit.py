@@ -59,8 +59,8 @@ def build_graph_audit(
             stable_id for stable_id, episode in episodes.items() if episode["graphiti_synced"]
         }
     else:
-        for job in job_rows:
-            state = str(job.get("state") or "")
+        for job_row in job_rows:
+            state = str(job_row.get("state") or "")
             if state in lifecycle_counts:
                 lifecycle_counts[state] += 1
         state_source = "graph_sync_jobs"
@@ -73,15 +73,15 @@ def build_graph_audit(
     populated_nodes: list[dict[str, Any]] = []
     null_stable_id_nodes: list[dict[str, Any]] = []
     for row in neo4j_rows:
-        stable_id = _string(row.get("stable_id"))
+        node_stable_id = _string(row.get("stable_id"))
         node = {
-            "stable_id": stable_id,
+            "stable_id": node_stable_id,
             "source_description": _string(row.get("source_description")),
             "source_fingerprint": _string(row.get("source_fingerprint")),
             "sync_profile_fingerprint": _string(row.get("sync_profile_fingerprint")),
             "embedding_profile_fingerprint": _string(row.get("embedding_profile_fingerprint")),
         }
-        if stable_id is None or not stable_id.strip():
+        if node_stable_id is None or not node_stable_id.strip():
             null_stable_id_nodes.append(node)
         else:
             populated_nodes.append(node)
@@ -108,15 +108,15 @@ def build_graph_audit(
     embedding_profiled_nodes = 0
 
     for node in populated_nodes:
-        stable_id = node["stable_id"]
-        if stable_id not in episode_ids:
+        node_stable_id = node["stable_id"]
+        if not isinstance(node_stable_id, str) or node_stable_id not in episode_ids:
             continue
 
-        expected_description = f"episode_{stable_id}"
+        expected_description = f"episode_{node_stable_id}"
         if node["source_description"] != expected_description:
             source_description_mismatches.append(
                 {
-                    "stable_id": stable_id,
+                    "stable_id": node_stable_id,
                     "expected": expected_description,
                     "actual": node["source_description"],
                 }
@@ -125,11 +125,11 @@ def build_graph_audit(
         node_source_fingerprint = node["source_fingerprint"]
         if node_source_fingerprint is not None:
             fingerprinted_nodes += 1
-            expected_fingerprint = episodes[stable_id]["source_fingerprint"]
+            expected_fingerprint = episodes[node_stable_id]["source_fingerprint"]
             if node_source_fingerprint != expected_fingerprint:
                 source_fingerprint_mismatches.append(
                     {
-                        "stable_id": stable_id,
+                        "stable_id": node_stable_id,
                         "expected": expected_fingerprint,
                         "actual": node_source_fingerprint,
                     }
@@ -141,7 +141,7 @@ def build_graph_audit(
             if expected_sync_profile and node_sync_profile != expected_sync_profile:
                 sync_profile_mismatches.append(
                     {
-                        "stable_id": stable_id,
+                        "stable_id": node_stable_id,
                         "expected": expected_sync_profile,
                         "actual": node_sync_profile,
                     }
@@ -153,7 +153,7 @@ def build_graph_audit(
             if expected_embedding_profile and node_embedding_profile != expected_embedding_profile:
                 embedding_profile_mismatches.append(
                     {
-                        "stable_id": stable_id,
+                        "stable_id": node_stable_id,
                         "expected": expected_embedding_profile,
                         "actual": node_embedding_profile,
                     }
@@ -174,20 +174,20 @@ def build_graph_audit(
             )
 
         for stable_id, episode in episodes.items():
-            job = jobs.get(stable_id)
-            if job is None:
+            episode_job = jobs.get(stable_id)
+            if episode_job is None:
                 incorrectly_synchronized_jobs.append(
                     {"stable_id": stable_id, "reason": "missing_job"}
                 )
                 continue
 
-            state = str(job.get("state") or "")
+            state = str(episode_job.get("state") or "")
             legacy_synced = episode["graphiti_synced"]
-            desired_fingerprint = _string(job.get("desired_source_fingerprint"))
-            verified_source_fingerprint = _string(job.get("verified_source_fingerprint"))
-            sync_profile_fingerprint = _string(job.get("sync_profile_fingerprint"))
+            desired_fingerprint = _string(episode_job.get("desired_source_fingerprint"))
+            verified_source_fingerprint = _string(episode_job.get("verified_source_fingerprint"))
+            sync_profile_fingerprint = _string(episode_job.get("sync_profile_fingerprint"))
             verified_sync_profile_fingerprint = _string(
-                job.get("verified_sync_profile_fingerprint")
+                episode_job.get("verified_sync_profile_fingerprint")
             )
             job_source_fingerprints += int(desired_fingerprint is not None)
             job_verified_source_fingerprints += int(verified_source_fingerprint is not None)
@@ -206,7 +206,7 @@ def build_graph_audit(
                     {"stable_id": stable_id, "reason": "non_synced_job_legacy_flag_true"}
                 )
 
-            if state == "synced" and job.get("verified_at") is None:
+            if state == "synced" and episode_job.get("verified_at") is None:
                 incorrectly_synchronized_jobs.append(
                     {"stable_id": stable_id, "reason": "synced_job_missing_verified_at"}
                 )
@@ -247,7 +247,7 @@ def build_graph_audit(
                     }
                 )
 
-    drift = {
+    drift: dict[str, Any] = {
         "missing_neo4j_ids": missing_neo4j_ids,
         "unexpected_neo4j_ids": unexpected_neo4j_ids,
         "duplicate_stable_ids": duplicate_stable_ids,

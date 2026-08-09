@@ -9,11 +9,8 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import TypeVar
 
 from src.llm.provider_config import FailureClassName, TransportRetryPolicy
-
-T = TypeVar("T")
 
 
 class MalformedModelOutputError(ValueError):
@@ -143,7 +140,7 @@ def retry_delay_seconds(
     return min(exponential, policy.maximum_delay_seconds)
 
 
-async def execute_with_transport_retry(
+async def execute_with_transport_retry[T](
     operation: Callable[[], Awaitable[T]],
     policy: TransportRetryPolicy,
     *,

@@ -13,6 +13,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 _SQL_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_VECTOR_SEARCH_QUERY = """
+    SELECT *, 1 - ({embedding_column} <=> $1::vector) as similarity
+    FROM {table}
+    WHERE 1 - ({embedding_column} <=> $1::vector) > $2
+    ORDER BY {embedding_column} <=> $1::vector
+    LIMIT $3
+"""
 
 
 class PostgresDB:
@@ -77,12 +84,16 @@ class PostgresDB:
             self.pool = None
 
     @asynccontextmanager
-    async def acquire(self) -> AsyncGenerator[Connection, None]:
+    async def acquire(self) -> AsyncGenerator[Connection]:
         """Acquire a connection from the pool."""
-        if not self.pool:
+        pool = self.pool
+        if pool is None:
             await self.connect()
+            pool = self.pool
+        if pool is None:  # Defensive: ``connect`` either sets the pool or raises.
+            raise RuntimeError("PostgreSQL pool initialization failed")
 
-        async with self.pool.acquire() as conn:
+        async with pool.acquire() as conn:
             yield conn
 
     async def execute(self, query: str, *args) -> str:
@@ -146,13 +157,10 @@ class PostgresDB:
         safe_table = self._validate_identifier(table, "table name")
         safe_embedding_column = self._validate_identifier(embedding_column, "embedding column name")
         # Only identifiers accepted by _validate_identifier are interpolated.
-        query = f"""
-            SELECT *, 1 - ({safe_embedding_column} <=> $1::vector) as similarity
-            FROM {safe_table}
-            WHERE 1 - ({safe_embedding_column} <=> $1::vector) > $2
-            ORDER BY {safe_embedding_column} <=> $1::vector
-            LIMIT $3
-        """
+        query = _VECTOR_SEARCH_QUERY.format(  # nosec B608
+            table=safe_table,
+            embedding_column=safe_embedding_column,
+        )
         return await self.fetch(query, query_embedding, threshold, limit)
 
 

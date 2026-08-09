@@ -485,6 +485,24 @@ def score_retrieval_case(
     return result
 
 
+def _numeric_metric(result: Mapping[str, object], key: str) -> float:
+    value = result.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise RetrievalBenchmarkError(f"Retrieval metric {key} is not numeric")
+    return float(value)
+
+
+def _optional_similarity(value: object) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise RetrievalBenchmarkError("Retrieved similarity is not numeric")
+    similarity = float(value)
+    if not math.isfinite(similarity):
+        raise RetrievalBenchmarkError("Retrieved similarity is not finite")
+    return similarity
+
+
 def score_retrieval_corpus(
     corpus: RetrievalCorpus,
     rankings: Mapping[str, Sequence[RankedEpisode]],
@@ -500,16 +518,22 @@ def score_retrieval_corpus(
     case_count = len(case_results)
     maximum_cutoff = max(corpus.cutoffs)
     metrics = {
-        f"recall_at_{cutoff}": sum(float(result[f"recall_at_{cutoff}"]) for result in case_results)
+        f"recall_at_{cutoff}": math.fsum(
+            _numeric_metric(result, f"recall_at_{cutoff}") for result in case_results
+        )
         / case_count
         for cutoff in corpus.cutoffs
     }
     metrics[f"mrr_at_{maximum_cutoff}"] = (
-        sum(float(result[f"reciprocal_rank_at_{maximum_cutoff}"]) for result in case_results)
+        math.fsum(
+            _numeric_metric(result, f"reciprocal_rank_at_{maximum_cutoff}")
+            for result in case_results
+        )
         / case_count
     )
     metrics[f"ndcg_at_{maximum_cutoff}"] = (
-        sum(float(result[f"ndcg_at_{maximum_cutoff}"]) for result in case_results) / case_count
+        math.fsum(_numeric_metric(result, f"ndcg_at_{maximum_cutoff}") for result in case_results)
+        / case_count
     )
     return {
         "schema_version": 1,
@@ -609,11 +633,7 @@ async def benchmark_episode_space(
                     minimum=0,
                     maximum=1_000_000,
                 ),
-                similarity=(
-                    float(_row_value(row, "similarity"))
-                    if _row_value(row, "similarity") is not None
-                    else None
-                ),
+                similarity=_optional_similarity(_row_value(row, "similarity")),
             )
             for row in rows
         ]

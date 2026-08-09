@@ -11,7 +11,7 @@ Pre-commit hooks are **automated checks** that run before each git commit to:
 - ✅ **Block commits containing secrets** (API keys, passwords, tokens)
 - ✅ **Format code automatically** (Black, isort for Python)
 - ✅ **Catch common errors** (trailing whitespace, large files, private keys)
-- ✅ **Enforce code quality** (flake8 linting)
+- ✅ **Enforce code quality** (Ruff linting)
 - ✅ **Validate configurations** (YAML syntax, merge conflicts)
 
 **Critical for security**: Prevents accidental credential commits that would require emergency rotation.
@@ -118,7 +118,7 @@ git commit -m "feat: add new feature"
 # - Gitleaks scans for secrets ✅
 # - Black formats Python code ✅
 # - isort sorts imports ✅
-# - flake8 lints code ✅
+# - Ruff lints code ✅
 # - YAML validation ✅
 # - ... (other hooks) ✅
 
@@ -199,7 +199,7 @@ git commit -m "feat: add feature"
 9. **mixed-line-ending** - Detects mixed endings
 10. **black** - Python code formatter
 11. **isort** - Python import sorter
-12. **flake8** - Python linter
+12. **Ruff** - Python linter
 13. **prettier** - Markdown/YAML formatter
 
 ### `.gitleaks.toml`

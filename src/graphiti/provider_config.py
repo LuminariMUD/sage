@@ -54,7 +54,7 @@ class SingleAttemptOpenAIGenericClient(OpenAIGenericClient):
             self._transport_response.set(response)
             return response
 
-        resource.create = capture_response
+        setattr(resource, "create", capture_response)
 
     def take_transport_response(self) -> Any | None:
         """Consume the task-local raw response after parsing and validation."""
@@ -341,7 +341,7 @@ def _graphiti_transport(candidate: TextModelCandidate) -> AsyncOpenAI:
             kwargs["extra_body"] = _merge_openrouter_body(candidate, kwargs.get("extra_body"))
             return await create(*args, **kwargs)
 
-        transport.chat.completions.create = create_with_routing
+        setattr(transport.chat.completions, "create", create_with_routing)
     return transport
 
 

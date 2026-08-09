@@ -480,7 +480,7 @@ class ConnectsTo(BaseModel):
 
 
 # Complete edge type mapping for import
-EDGE_TYPES = {
+EDGE_TYPES: dict[str, type[BaseModel]] = {
     "OpposedTo": OpposedTo,
     "Influences": Influences,
     "Protects": Protects,

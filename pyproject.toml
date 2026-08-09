@@ -1,11 +1,12 @@
 # Tool configuration for Luminari Sage.
 # Formatting/lint settings live here so results do not depend on tool defaults,
-# which shift between releases. Line length is 100 to match the flake8 hook in
-# .pre-commit-config.yaml.
+# which shift between releases. Line length is 100 across Black, Ruff, and
+# isort.
 
 [tool.black]
 line-length = 100
-target-version = ["py311"]
+target-version = ["py313"]
+extend-exclude = "^/lore_docs/"
 
 [tool.isort]
 profile = "black"
@@ -13,7 +14,7 @@ line_length = 100
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 extend-exclude = ["docs", "logs", "lore_docs", ".venv", "venv"]
 
 [tool.ruff.lint]
@@ -53,6 +54,8 @@ known-first-party = ["src"]
 "src/graphiti/__init__.py" = ["E402"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.13"
+explicit_package_bases = true
+check_untyped_defs = true
 warn_unused_configs = true
 ignore_missing_imports = true

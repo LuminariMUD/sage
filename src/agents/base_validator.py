@@ -65,10 +65,10 @@ class ValidationFinding(BaseModel):
 
     # Human review tracking
     reviewed: bool = Field(default=False)
-    reviewer: str | None = Field(None, description="Who reviewed this finding")
-    review_timestamp: datetime | None = Field(None)
-    review_action: str | None = Field(None, description="Action taken by reviewer")
-    review_notes: str | None = Field(None)
+    reviewer: str | None = Field(default=None, description="Who reviewed this finding")
+    review_timestamp: datetime | None = None
+    review_action: str | None = Field(default=None, description="Action taken by reviewer")
+    review_notes: str | None = None
 
     # Additional metadata
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional context data")
@@ -200,12 +200,17 @@ class ValidationReport(BaseModel):
 
                 # Review status
                 if finding.reviewed:
+                    review_timestamp = (
+                        finding.review_timestamp.isoformat()
+                        if finding.review_timestamp is not None
+                        else "not recorded"
+                    )
                     lines.extend(
                         [
                             "",
                             "**✅ REVIEWED**",
                             f"- **Reviewer:** {finding.reviewer}",
-                            f"- **Review Date:** {finding.review_timestamp.isoformat()}",
+                            f"- **Review Date:** {review_timestamp}",
                             f"- **Action Taken:** {finding.review_action}",
                         ]
                     )
@@ -313,8 +318,8 @@ Focus on actionable findings that improve data quality and consistency."""
         """Create a validation report with summary statistics."""
 
         # Calculate summary statistics
-        severity_counts = {}
-        category_counts = {}
+        severity_counts: dict[str, int] = {}
+        category_counts: dict[str, int] = {}
 
         for finding in findings:
             # Count by severity

@@ -12,7 +12,11 @@ from time import perf_counter
 from typing import Any
 from uuid import UUID
 
-from src.db.embedding_profiles import embedding_profile_record
+from src.db.embedding_profiles import (
+    EMBEDDING_PROFILE_COLUMNS,
+    EMBEDDING_PROFILE_INSERT_QUERY,
+    embedding_profile_record,
+)
 from src.llm.embeddings.validation import validate_embedding_batch
 from src.llm.provider_config import EmbeddingProfile
 from src.retrieval.benchmark import SourceSnapshot, summarize_source_snapshot
@@ -27,6 +31,27 @@ _INDEX_NAME = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 _FAILURE_TYPE = re.compile(r"^[A-Za-z][A-Za-z0-9_.]{0,127}$")
 _SOURCE_FINGERPRINT = re.compile(r"^sha256:v1:[0-9a-f]{64}$")
 _SHADOW_LOCK_ID = 731047850174
+
+_SHADOW_SEARCH_QUERY_TEMPLATE = """
+    SELECT
+        document.stable_id AS document_stable_id,
+        episode.episode_index,
+        1 - (shadow.embedding::vector({dimensions}) <=> $1::vector({dimensions}))
+            AS similarity
+    FROM episode_embedding_shadows AS shadow
+    JOIN episodes AS episode
+      ON episode.id = shadow.episode_id
+    JOIN lore_documents AS document
+      ON document.id = episode.document_id
+    JOIN graph_sync_jobs AS job
+      ON job.episode_id = episode.id
+     AND job.desired_source_fingerprint = shadow.source_fingerprint
+    WHERE shadow.profile_fingerprint = {fingerprint}
+    ORDER BY shadow.embedding::vector({dimensions}) <=> $1::vector({dimensions}),
+             document.stable_id,
+             episode.episode_index
+    LIMIT $2
+"""
 
 SHADOW_TABLES_QUERY = """
     SELECT
@@ -222,26 +247,10 @@ def shadow_search_query(profile: EmbeddingProfile) -> str:
     """Return a fixed-profile query eligible for the profile-specific HNSW index."""
     dimensions = _dimensions(profile.dimensions)
     fingerprint = _profile_literal(profile.fingerprint)
-    return f"""
-        SELECT
-            document.stable_id AS document_stable_id,
-            episode.episode_index,
-            1 - (shadow.embedding::vector({dimensions}) <=> $1::vector({dimensions}))
-                AS similarity
-        FROM episode_embedding_shadows AS shadow
-        JOIN episodes AS episode
-          ON episode.id = shadow.episode_id
-        JOIN lore_documents AS document
-          ON document.id = episode.document_id
-        JOIN graph_sync_jobs AS job
-          ON job.episode_id = episode.id
-         AND job.desired_source_fingerprint = shadow.source_fingerprint
-        WHERE shadow.profile_fingerprint = {fingerprint}
-        ORDER BY shadow.embedding::vector({dimensions}) <=> $1::vector({dimensions}),
-                 document.stable_id,
-                 episode.episode_index
-        LIMIT $2
-    """
+    return _SHADOW_SEARCH_QUERY_TEMPLATE.format(  # nosec B608
+        dimensions=dimensions,
+        fingerprint=fingerprint,
+    )
 
 
 def _index_matches(
@@ -255,7 +264,10 @@ def _index_matches(
     fingerprint = _profile_fingerprint(profile_fingerprint)
     definition = str(row.get("definition") or "")
     predicate = str(row.get("predicate") or "")
-    options = set(row.get("options") or [])
+    raw_options = row.get("options")
+    options = (
+        {str(option) for option in raw_options} if isinstance(raw_options, (list, tuple)) else set()
+    )
     expected_predicate = f"(profile_fingerprint = '{fingerprint}'::text)"
     return bool(
         row.get("method") == "hnsw"
@@ -333,6 +345,17 @@ def _usage_metadata(embedder: Any, profile: EmbeddingProfile) -> dict[str, objec
     )
 
 
+def _optional_cost(value: object) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+        raise ShadowEmbeddingError("Stored estimated cost is invalid")
+    cost = float(value)
+    if not math.isfinite(cost) or cost < 0:
+        raise ShadowEmbeddingError("Stored estimated cost is invalid")
+    return cost
+
+
 def _public_run(row: Mapping[str, object]) -> dict[str, object]:
     return {
         "run_id": row["id"],
@@ -350,9 +373,7 @@ def _public_run(row: Mapping[str, object]) -> dict[str, object]:
             "input_tokens": row["input_tokens"],
             "total_tokens": row["total_tokens"],
         },
-        "estimated_cost_usd": (
-            float(row["estimated_cost_usd"]) if row["estimated_cost_usd"] is not None else None
-        ),
+        "estimated_cost_usd": _optional_cost(row["estimated_cost_usd"]),
         "failure_type": row["failure_type"],
         "failure_code": row["failure_code"],
     }
@@ -524,20 +545,37 @@ class ShadowEmbeddingRepository:
 
     async def require_registered(self, profile: EmbeddingProfile) -> dict[str, object]:
         report = await self.inventory(profile)
-        if report["findings"] or len(report["spaces"]) != 1:
+        findings = report.get("findings")
+        spaces = report.get("spaces")
+        if not isinstance(findings, list) or not isinstance(spaces, list):
+            raise ShadowEmbeddingError("Shadow embedding inventory is malformed")
+        if findings or len(spaces) != 1:
             raise ShadowEmbeddingError("Shadow embedding profile is not registered")
-        space = report["spaces"][0]
+        space = spaces[0]
+        if not isinstance(space, dict):
+            raise ShadowEmbeddingError("Shadow embedding inventory is malformed")
+        space_findings = space.get("findings")
+        if not isinstance(space_findings, list):
+            raise ShadowEmbeddingError("Shadow embedding inventory is malformed")
         if any(
-            finding["code"] in {"shadow_profile_mismatch", "shadow_space_retired"}
-            for finding in space["findings"]
+            isinstance(finding, Mapping)
+            and finding.get("code") in {"shadow_profile_mismatch", "shadow_space_retired"}
+            for finding in space_findings
         ):
             raise ShadowEmbeddingError("Shadow embedding profile is unavailable")
         return space
 
     async def require_ready(self, profile: EmbeddingProfile) -> dict[str, object]:
         space = await self.require_registered(profile)
-        if not space["ready"]:
-            codes = ",".join(finding["code"] for finding in space["findings"])
+        if space.get("ready") is not True:
+            raw_findings = space.get("findings")
+            if not isinstance(raw_findings, list):
+                raise ShadowEmbeddingError("Shadow embedding inventory is malformed")
+            codes = ",".join(
+                str(finding["code"])
+                for finding in raw_findings
+                if isinstance(finding, Mapping) and "code" in finding
+            )
             raise ShadowEmbeddingError(
                 f"Shadow embedding space is not ready ({codes or 'not_ready'})"
             )
@@ -546,9 +584,7 @@ class ShadowEmbeddingRepository:
     async def register(self, profile: EmbeddingProfile) -> dict[str, object]:
         """Register immutable profile metadata without creating vectors or an index."""
         record = embedding_profile_record(profile)
-        columns = tuple(record)
-        values = tuple(record[column] for column in columns)
-        placeholders = ", ".join(f"${position}" for position in range(1, len(values) + 1))
+        values = tuple(record[column] for column in EMBEDDING_PROFILE_COLUMNS)
         index_name = _shadow_index_name(profile)
         async with self.postgres.acquire() as connection:
             async with connection.transaction():
@@ -556,14 +592,7 @@ class ShadowEmbeddingRepository:
                 tables = _row_dict(await connection.fetchrow(SHADOW_TABLES_QUERY)) or {}
                 if not all(tables.values()):
                     raise ShadowEmbeddingError("Embedding shadow migration has not been applied")
-                await connection.execute(
-                    f"""
-                    INSERT INTO embedding_profiles ({', '.join(columns)})
-                    VALUES ({placeholders})
-                    ON CONFLICT (fingerprint) DO NOTHING
-                    """,
-                    *values,
-                )
+                await connection.execute(EMBEDDING_PROFILE_INSERT_QUERY, *values)
                 stored = _row_dict(
                     await connection.fetchrow(
                         """

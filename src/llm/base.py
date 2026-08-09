@@ -33,9 +33,9 @@ class BaseLLMProvider(ABC):
         """
 
     @abstractmethod
-    async def stream(
+    def stream(
         self, prompt: str, model: str | None = None, temperature: float = 0.7, **kwargs
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str]:
         """
         Stream completion tokens as they're generated.
 
@@ -48,6 +48,7 @@ class BaseLLMProvider(ABC):
         Yields:
             Text tokens as they're generated
         """
+        raise NotImplementedError
 
     async def embed(self, text: str | list[str], **kwargs) -> list[float] | list[list[float]]:
         """Deprecated compatibility shim delegated to the embedding factory."""

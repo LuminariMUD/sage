@@ -163,7 +163,7 @@ class RollbackManager:
             }
 
         # Group corrections by batch and rollback each batch
-        batches = {}
+        batches: dict[str, list[dict[str, Any]]] = {}
         for correction in corrections:
             batch_id = correction["correction_batch_id"]
             if batch_id not in batches:
@@ -258,7 +258,7 @@ class RollbackManager:
                 "correction_batch_id": correction_batch_id,
             }
 
-        preview = {
+        preview: dict[str, Any] = {
             "success": True,
             "correction_batch_id": correction_batch_id,
             "total_corrections": len(corrections),

@@ -173,8 +173,10 @@ class StructuredLoreChatAgent:
                             if data.get("chunks"):
                                 summary_parts.append("RELEVANT TEXT EXCERPTS:")
                                 for chunk in data["chunks"][:5]:
-                                    source = chunk.get("metadata", {}).get("source_file", "Unknown")
-                                    content = chunk.get("content", "")
+                                    source = chunk.get("source_file") or chunk.get(
+                                        "document_id", "Unknown"
+                                    )
+                                    content = chunk.get("text", "")
                                     summary_parts.append(f"\nFrom {source}:\n{content}\n")
 
                             # Add entities with descriptions
@@ -292,7 +294,7 @@ Remember: The search tool provides rich data. Use ALL of it to create comprehens
         if self.deps.search_data and self.deps.search_data.chunks:
             sources = set()
             for chunk in self.deps.search_data.chunks:
-                if source := chunk.get("metadata", {}).get("source_file"):
+                if source := chunk.get("source_file") or chunk.get("document_id"):
                     sources.add(source)
             result.output.sources_referenced = list(sources)
 
@@ -347,7 +349,7 @@ Remember: The search tool provides rich data. Use ALL of it to create comprehens
 
         return "\n".join(parts)
 
-    async def stream_chat(self, message: str) -> AsyncGenerator[dict[str, Any], None]:
+    async def stream_chat(self, message: str) -> AsyncGenerator[dict[str, Any]]:
         """
         Stream chat response using pydantic-ai's run_stream() for real-time updates.
 
@@ -368,7 +370,7 @@ Remember: The search tool provides rich data. Use ALL of it to create comprehens
             # Use run_stream for real-time streaming
             async with self.agent.run_stream(message, deps=self.deps) as stream:
                 # Stream partial structured outputs as they become available
-                async for partial_response in stream:
+                async for partial_response in stream.stream_output():
                     # Check if this is a partial StructuredResponse
                     if hasattr(partial_response, "sections"):
                         # Stream sections as they're being built
@@ -391,7 +393,7 @@ Remember: The search tool provides rich data. Use ALL of it to create comprehens
                         }
 
                 # Get the final complete response
-                response = await stream.get_final_response()
+                response = await stream.get_output()
 
             # Show tool usage if searches were performed
             for query in self.deps.search_queries:

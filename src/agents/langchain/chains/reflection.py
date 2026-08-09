@@ -13,7 +13,7 @@ import logging
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import Runnable
+from langchain_core.runnables import Runnable, RunnableConfig
 from pydantic import BaseModel, Field
 
 from src.llm.config import text_profile_is_ready
@@ -250,10 +250,18 @@ class ReflectionChain(Runnable):
             logger.error("Plan reflection failed (%s)", type(e).__name__)
             return PlanReflectionResult()
 
-    def invoke(self, input: dict[str, Any], config: dict | None = None) -> dict[str, Any]:
+    def invoke(
+        self,
+        input: Any,
+        config: RunnableConfig | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
         """Synchronous invoke for compatibility."""
         import asyncio
 
+        del config, kwargs
+        if not isinstance(input, dict):
+            raise TypeError("Reflection input must be a dictionary")
         reflection_type = input.get("type", "answer")
 
         if reflection_type == "answer":
@@ -264,10 +272,10 @@ class ReflectionChain(Runnable):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                result = loop.run_until_complete(
+                answer_result = loop.run_until_complete(
                     self.reflect_on_answer(answer, question, context_blocks)
                 )
-                return result.dict()
+                return answer_result.model_dump()
             finally:
                 loop.close()
 
@@ -278,8 +286,8 @@ class ReflectionChain(Runnable):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                result = loop.run_until_complete(self.reflect_on_plan(plan, request))
-                return result.dict()
+                plan_result = loop.run_until_complete(self.reflect_on_plan(plan, request))
+                return plan_result.model_dump()
             finally:
                 loop.close()
 

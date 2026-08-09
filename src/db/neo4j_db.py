@@ -21,10 +21,10 @@ class Neo4jDB:
         self.uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 
         # Validate required credentials - no defaults for security
-        self.user = os.getenv("NEO4J_USER")
+        user = os.getenv("NEO4J_USER")
         password = os.getenv("NEO4J_PASSWORD")
 
-        if not self.user:
+        if not user:
             raise ValueError(
                 "NEO4J_USER environment variable is required. "
                 "Set it in your .env file or environment."
@@ -34,6 +34,7 @@ class Neo4jDB:
                 "NEO4J_PASSWORD environment variable is required. "
                 "Set it in your .env file or environment."
             )
+        self.user = user
 
     @staticmethod
     def _validate_identifier(value: str, kind: str) -> str:
@@ -68,11 +69,17 @@ class Neo4jDB:
         self, query: str, parameters: dict[str, Any] | None = None
     ) -> list[dict[str, Any]]:
         """Execute a Cypher query and return results."""
-        if not self.driver:
+        driver = self.driver
+        if driver is None:
             await self.connect()
+            driver = self.driver
+        if driver is None:  # Defensive: ``connect`` either sets the driver or raises.
+            raise RuntimeError("Neo4j driver initialization failed")
 
-        session_options = {"default_access_mode": READ_ACCESS} if self.read_only else {}
-        async with self.driver.session(**session_options) as session:
+        session = (
+            driver.session(default_access_mode=READ_ACCESS) if self.read_only else driver.session()
+        )
+        async with session:
             result = await session.run(query, parameters or {})
             records = await result.data()
             return records

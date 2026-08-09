@@ -703,58 +703,23 @@ async def test_validation_workflow():
 
 ### GitHub Actions Workflow
 
-```yaml
-name: Tests
+The repository's `Code Quality` workflow runs on pushes and pull requests to
+`main` using Python 3.13. It enforces Black and isort formatting, Ruff linting,
+mypy checking (including untyped function bodies), bytecode compilation, and the
+deterministic test suite. JUnit and coverage XML reports are retained as workflow
+artifacts.
 
-on: [push, pull_request]
+Run the same deterministic test selection locally in the development container:
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_PASSWORD: test-only-postgres-password
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      neo4j:
-        image: neo4j:5.15
-        env:
-          NEO4J_AUTH: neo4j/password
-        options: >-
-          --health-cmd "cypher-shell 'RETURN 1'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-asyncio
-
-      - name: Run unit tests
-        run: pytest -m unit --cov=src
-
-      - name: Run integration tests
-        run: pytest -m integration
-        env:
-          POSTGRES_HOST: localhost
-          NEO4J_URI: bolt://localhost:7687
+```bash
+make test
 ```
+
+Live integration, data-dependent, model-quality, performance, and stress tests
+remain part of `make test-all`; they require the corresponding local services,
+data, and selected model provider. The separate `Security Scan` workflow gates
+secrets, dependency vulnerabilities, Bandit findings, and container-image
+vulnerabilities.
 
 ### Pre-commit Hooks
 
@@ -769,19 +734,9 @@ pre-commit install
 pre-commit run --all-files
 ```
 
-Example `.pre-commit-config.yaml`:
-
-```yaml
-repos:
-  - repo: local
-    hooks:
-      - id: pytest-unit
-        name: pytest unit tests
-        entry: pytest -m unit
-        language: system
-        pass_filenames: false
-        always_run: true
-```
+The checked-in configuration runs Gitleaks, repository hygiene checks, Black,
+isort, Ruff, and Prettier. The deterministic test suite and mypy remain CI and
+explicit local checks because they need the project's runtime dependencies.
 
 ---
 

@@ -17,7 +17,7 @@ Server runs on port 8004 with HTTP transport alongside FastAPI on port 8003.
 
 import logging
 import os
-from typing import Any
+from typing import Any, TypeVar, cast
 
 import aiohttp
 import uvicorn
@@ -44,6 +44,7 @@ for handler in logging.getLogger().handlers:
     )
 install_sensitive_logging()
 logger = logging.getLogger(__name__)
+ResponseT = TypeVar("ResponseT", dict[str, Any], list[dict[str, Any]])
 
 # Configuration
 API_BASE_URL = "http://localhost:8003"
@@ -149,9 +150,10 @@ class LuminariLoreClient:
         self,
         method: str,
         endpoint: str,
+        response_type: type[ResponseT],
         params: dict | None = None,
         json_data: dict | None = None,
-    ) -> dict[str, Any]:
+    ) -> ResponseT:
         """Make HTTP request to the API."""
         url = f"{self.base_url}{endpoint}"
 
@@ -166,13 +168,16 @@ class LuminariLoreClient:
                 if method.upper() == "GET":
                     async with session.get(url, params=params) as response:
                         response.raise_for_status()
-                        return await response.json()
+                        payload = await response.json()
                 elif method.upper() == "POST":
                     async with session.post(url, json=json_data) as response:
                         response.raise_for_status()
-                        return await response.json()
+                        payload = await response.json()
                 else:
                     raise ValueError(f"Unsupported HTTP method: {method}")
+                if not isinstance(payload, response_type):
+                    raise RuntimeError("Upstream API returned an unexpected response shape")
+                return cast(ResponseT, payload)
             except aiohttp.ClientResponseError as e:
                 logger.error("API request failed with status %s", e.status)
                 raise RuntimeError(public_error_message("Upstream API request")) from e
@@ -190,9 +195,10 @@ class LuminariLoreClient:
         return await self._make_request(
             "POST",
             "/api/v1/rag/query",
+            dict,
             json_data={
                 "query": query,
-                "max_results": max_results,
+                "limit": max_results,
                 "threshold": threshold,
                 "include_entities": True,
             },
@@ -205,23 +211,23 @@ class LuminariLoreClient:
         params = {"query": query, "limit": limit}
         if entity_type:
             params["entity_type"] = entity_type
-        return await self._make_request("GET", "/api/v1/entities/search", params=params)
+        return await self._make_request("GET", "/api/v1/entities/search", list, params=params)
 
     async def get_entity_details(self, entity_id: str) -> dict[str, Any]:
         """Get detailed information about a specific entity."""
-        return await self._make_request("GET", f"/api/v1/entities/{entity_id}")
+        return await self._make_request("GET", f"/api/v1/entities/{entity_id}", dict)
 
     async def get_entity_relationships(self, entity_id: str) -> dict[str, Any]:
         """Get lightweight list of relationships for a specific entity."""
-        return await self._make_request("GET", f"/api/v1/entities/{entity_id}/relationships")
+        return await self._make_request("GET", f"/api/v1/entities/{entity_id}/relationships", dict)
 
     async def get_relationship_details(self, relationship_id: int) -> dict[str, Any]:
         """Get detailed information about a specific relationship."""
-        return await self._make_request("GET", f"/api/v1/relationships/{relationship_id}")
+        return await self._make_request("GET", f"/api/v1/relationships/{relationship_id}", dict)
 
     async def get_lore_stats(self) -> dict[str, Any]:
         """Get system statistics."""
-        return await self._make_request("GET", "/api/v1/stats")
+        return await self._make_request("GET", "/api/v1/stats", dict)
 
 
 # Initialize the client

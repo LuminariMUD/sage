@@ -43,7 +43,7 @@ We are committed to providing a welcoming and inspiring community for all. Pleas
 
 Before contributing, ensure you have:
 
-- Python 3.11+ installed (containers and CI run 3.13)
+- Python 3.13 installed (matches containers and CI)
 - Docker and Docker Compose
 - Git configured with your name and email
 - A GitHub account
@@ -393,8 +393,9 @@ Use pytest markers to categorize tests:
    # Sort imports
    isort src/ tests/
 
-   # Lint with flake8
-   flake8 src/ tests/
+   # Lint and type-check
+   ruff check .
+   mypy src/
    ```
 
 3. **Update documentation**

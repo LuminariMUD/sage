@@ -73,7 +73,7 @@ class OllamaProvider(BaseLLMProvider):
 
     async def stream(
         self, prompt: str, model: str | None = None, temperature: float = 0.7, **kwargs
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str]:
         """Stream completion tokens using Ollama."""
         model = model or self.default_model
 

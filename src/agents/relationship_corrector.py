@@ -8,8 +8,9 @@ while never modifying MENTIONS relationships (critical for GraphRAG).
 
 import re
 import uuid
+from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..db import get_neo4j_db
 from .base_validator import BaseValidator
@@ -27,6 +28,7 @@ class CorrectionRecord(BaseModel):
     original_semantic_type: str | None = None
     new_semantic_type: str | None = None
     duplicate_count: int | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class RelationshipCorrector(BaseValidator):
@@ -124,7 +126,7 @@ class RelationshipCorrector(BaseValidator):
             List of (best_relationship, duplicates_to_delete) tuples
         """
         # Group by (source, target, semantic_type) for RELATES_TO only
-        relationship_groups = {}
+        relationship_groups: dict[tuple[Any, Any, str], list[dict]] = {}
 
         for rel in relationships:
             # Skip MENTIONS - never duplicate those
@@ -262,7 +264,7 @@ class RelationshipCorrector(BaseValidator):
         Returns:
             List of corrections that were applied (or would be applied in dry_run)
         """
-        corrections = []
+        corrections: list[CorrectionRecord] = []
         neo4j_db = await get_neo4j_db()
 
         # 1. Handle duplicate removal

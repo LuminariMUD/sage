@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
@@ -277,7 +278,7 @@ class ReactService:
 
         return graph
 
-    async def _reason_step(self, state: ReActState) -> dict[str, Any]:
+    async def _reason_step(self, state: ReActState) -> ReActState:
         """Reasoning step: Determine next action based on scratchpad."""
 
         # Build reasoning context from scratchpad
@@ -540,7 +541,7 @@ CRITICAL: You MUST complete ALL content creation before finalizing!
 
         return state
 
-    async def _act_step(self, state: ReActState) -> dict[str, Any]:
+    async def _act_step(self, state: ReActState) -> ReActState:
         """Acting step: Execute the planned tools."""
 
         if not state["current_step"]:
@@ -779,7 +780,7 @@ CRITICAL: You MUST complete ALL content creation before finalizing!
 
         return state
 
-    async def _observe_step(self, state: ReActState) -> dict[str, Any]:
+    async def _observe_step(self, state: ReActState) -> ReActState:
         """Observation step: Process results and update scratchpad."""
 
         if not state["current_step"] or "result" not in state["current_step"]:
@@ -806,7 +807,7 @@ CRITICAL: You MUST complete ALL content creation before finalizing!
 
         return state
 
-    async def _decide_step(self, state: ReActState) -> dict[str, Any]:
+    async def _decide_step(self, state: ReActState) -> ReActState:
         """Decision step: Just passes through (routing happens in _should_continue)."""
         return state
 
@@ -874,7 +875,7 @@ CRITICAL: You MUST complete ALL content creation before finalizing!
         # Continue reasoning
         return "continue"
 
-    async def _finalize_step(self, state: ReActState) -> dict[str, Any]:
+    async def _finalize_step(self, state: ReActState) -> ReActState:
         """Finalize step: Compile and format the final result."""
 
         logger.info(f"Finalizing result with {len(state['created_content'])} content pieces")
@@ -893,7 +894,9 @@ CRITICAL: You MUST complete ALL content creation before finalizing!
         }
 
         # Add final message
-        state["messages"].append(AIMessage(content=json.dumps(final_result)))
+        messages = list(state["messages"])
+        messages.append(AIMessage(content=json.dumps(final_result)))
+        state["messages"] = messages
 
         return state
 
@@ -945,7 +948,7 @@ CRITICAL: You MUST complete ALL content creation before finalizing!
         # Add content summary
         if state["created_content"]:
             parts.append("\n=== CONTENT CREATED ===")
-            content_types = {}
+            content_types: dict[str, int] = {}
             for c in state["created_content"]:
                 content_types[c["type"]] = content_types.get(c["type"], 0) + 1
 
@@ -964,14 +967,18 @@ CRITICAL: You MUST complete ALL content creation before finalizing!
         intent = state.get("request_intent", "informational")
 
         if intent == "informational":
-            plan_steps = [
+            informational_plan = [
                 {"step": "Search lore for supporting material", "status": "pending"},
                 {"step": "Answer the user's question with the gathered lore", "status": "pending"},
                 {"step": "Review answer and finalize", "status": "pending"},
             ]
-            state["plan"] = plan_steps
+            state["plan"] = informational_plan
             state["scratchpad"].append(
-                {"step": "plan", "timestamp": datetime.now().isoformat(), "plan": plan_steps}
+                {
+                    "step": "plan",
+                    "timestamp": datetime.now().isoformat(),
+                    "plan": informational_plan,
+                }
             )
             return
 
@@ -1282,7 +1289,7 @@ Respond with a simple list, one action per line."""
         intent = self._infer_request_intent(message, history)
 
         # Build message history
-        messages = []
+        messages: list[BaseMessage] = []
         if history:
             for msg in history[-10:]:  # Keep last 10 messages for context
                 role = msg.get("role", "user")
@@ -1324,7 +1331,10 @@ Respond with a simple list, one action per line."""
                 )
 
         # Configure thread
-        config = {"configurable": {"thread_id": thread_id or "default"}, "recursion_limit": 60}
+        config: RunnableConfig = {
+            "configurable": {"thread_id": thread_id or "default"},
+            "recursion_limit": 60,
+        }
 
         # Stream execution
         try:
@@ -1339,7 +1349,7 @@ Respond with a simple list, one action per line."""
                 # Stream action execution
                 elif event["event"] == "on_chain_start" and event["name"] == "act":
                     if event.get("data"):
-                        state_data = event["data"].get("input", {})
+                        state_data: dict[str, Any] = event["data"].get("input", {})
                         if state_data.get("current_step", {}).get("tool_calls"):
                             for tc in state_data["current_step"]["tool_calls"]:
                                 yield {
@@ -1655,7 +1665,7 @@ Respond with a simple list, one action per line."""
             return "I searched the lore but didn't generate a complete response. Please try again."
 
         # Group content by type
-        by_type = {}
+        by_type: dict[str, list[Any]] = {}
         for item in created_content:
             content_type = item["type"]
             if content_type not in by_type:

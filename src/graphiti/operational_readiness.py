@@ -24,13 +24,13 @@ class OperationalThresholds:
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise ValueError(f"{label} must be a positive integer")
-        for value, label in (
+        for percentage, label in (
             (self.retry_storm_percent, "Retry-storm percentage"),
             (self.provider_failure_percent, "Provider-failure percentage"),
         ):
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
+            if isinstance(percentage, bool) or not isinstance(percentage, (int, float)):
                 raise ValueError(f"{label} must be numeric")
-            if not 0 < float(value) <= 100:
+            if not 0 < float(percentage) <= 100:
                 raise ValueError(f"{label} must be greater than 0 and at most 100")
 
     def as_dict(self) -> dict[str, int | float]:
