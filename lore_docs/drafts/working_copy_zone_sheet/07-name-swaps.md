@@ -10,15 +10,15 @@ The first column is the original Excel row number; lettered columns preserve the
 | ---: | --- | --- | --- | --- |
 | 1 |  | Old Name | New Name | Notes |
 | 2 |  | Faerun | Lumia |  |
-| 3 |  | Menzoberranzan |  |  |
-| 4 |  | Thugrak Gol |  |  |
+| 3 |  | Menzoberranzan | Nharavel | Proposed in `lore_docs/drafts/the_underways.md`; pending canon promotion. |
+| 4 |  | Thugrak Gol | Rootfast | Draft settlement in Hir's Sunkwater March; proposed in `lore_docs/drafts/the_sunkwater_and_whitehook.md`; pending canon promotion. |
 | 5 |  | Corm Orp |  | Canonical parent: Selerish; settlement-level replacement pending evaluation. |
-| 6 |  | Gracklstugh |  |  |
+| 6 |  | Gracklstugh | Ordrum | Proposed in `lore_docs/drafts/the_underways.md`; pending canon promotion. |
 | 7 |  | Hardbuckler |  | Canonical parent: Carstan; settlement-level replacement pending evaluation. |
 | 8 |  | Mithril Hall |  | Canonical parent: Kellust; settlement-level replacement pending evaluation. |
 | 9 |  | Evereskea |  | Canonical parent: Quechian; settlement-level replacement pending evaluation. |
 | 10 |  | Waterdeep | Ashenport |  |
-| 11 |  | Neverwinter |  |  |
+| 11 |  | Neverwinter | Koorvik | Draft settlement on Oorpii's Whitehook; proposed in `lore_docs/drafts/the_sunkwater_and_whitehook.md`; pending canon promotion. |
 | 12 |  | Auril | Glacius | , goddess of winter |
 | 13 |  | Azuth | Aethyra | , god of wizards |
 | 14 |  | Bane | Ghorak | , god of tyranny |
