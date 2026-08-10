@@ -38,7 +38,7 @@ The Luminari Sage validation system is a comprehensive framework for analyzing a
 1. **Never Auto-Modify**: All validations produce findings for human review
 2. **Confidence-Based**: Every finding includes confidence score and explanation
 3. **Complete Audit Trail**: All findings stored in PostgreSQL for tracking
-4. **LLM-Enhanced**: Uses GPT-4o-mini for semantic understanding
+4. **LLM-Enhanced**: Uses gpt-5.6-luna for semantic understanding
 5. **GraphRAG-Aware**: Optimizes for hybrid vector + graph retrieval
 
 ---
@@ -340,7 +340,7 @@ Confidence: 0.6 (Medium - semantic context matters)
 Suggested Action: Review if reverse allied_with relationship should exist
 ```
 
-**LLM Enhancement**: Uses GPT-4o-mini to analyze semantic appropriateness and suggest better relationship types.
+**LLM Enhancement**: Uses gpt-5.6-luna to analyze semantic appropriateness and suggest better relationship types.
 
 ### 2. Mutual Exclusivity
 
@@ -704,7 +704,7 @@ See [API_REFERENCE.md](API_REFERENCE.md) for complete API documentation.
 
 ### Semantic Appropriateness Analysis
 
-Uses GPT-4o-mini to analyze whether relationship types make semantic sense between entity types.
+Uses gpt-5.6-luna to analyze whether relationship types make semantic sense between entity types.
 
 **LLM Prompt Pattern**:
 

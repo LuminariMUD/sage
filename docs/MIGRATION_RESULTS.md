@@ -79,9 +79,9 @@
 
 ## Limitations Identified
 
-1. **Quality Gap**: 10-20% quality reduction vs GPT-4
+1. **Quality Gap**: 10-20% quality reduction vs gpt-5.6-luna
 2. **Latency**: 2-4x slower than OpenAI API
-3. **Context Size**: Limited to 4096-8192 tokens (vs 128k for GPT-4)
+3. **Context Size**: Limited to 4096-8192 tokens (vs 252k+ for gpt-5.6-luna)
 4. **Model Selection**: Limited to open-source models
 5. **Hardware Dependency**: Requires GPU for acceptable performance
 
@@ -262,7 +262,7 @@ The local LLM migration has been **successful**, achieving the primary goal of z
 
 ### Trade-offs Accepted
 
-1. Slightly lower quality (80-90% of GPT-4)
+1. Slightly lower quality (80-90% of gpt-5.6-luna)
 2. Higher latency (2-4x slower)
 3. Hardware requirements (GPU recommended)
 4. Maintenance overhead (model management)

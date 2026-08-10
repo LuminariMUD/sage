@@ -20,6 +20,7 @@ from src.graphiti.benchmark import (
     load_benchmark_corpus,
     score_benchmark_case,
 )
+from src.graphiti.entity_grounding_policy import EntityGroundingReport
 from src.graphiti.provider_config import create_graphiti_llm_client
 from src.graphiti.provider_tracking import ProviderCallTracker
 from src.graphiti.relationship_policy import (
@@ -32,7 +33,8 @@ from src.llm.retry import ModelSchemaValidationError
 from src.scripts import benchmark_graphiti
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CORPUS_PATH = PROJECT_ROOT / "benchmarks" / "graphiti_extraction_v2.json"
+CORPUS_PATH = PROJECT_ROOT / "benchmarks" / "graphiti_extraction_v3.json"
+LEGACY_CORPUS_PATH = PROJECT_ROOT / "benchmarks" / "graphiti_extraction_v2.json"
 
 
 def _candidate():
@@ -78,6 +80,7 @@ def _extraction(
     *,
     proposed_edges=None,
     normalized_edges=0,
+    grounding_quality=None,
 ):
     accepted_edges = len(edges)
     proposed_edges = accepted_edges if proposed_edges is None else proposed_edges
@@ -94,20 +97,30 @@ def _extraction(
             rejected_edges=rejected_edges,
             rejected_unknown_type=rejected_edges,
         ),
+        entity_grounding_quality=grounding_quality,
     )
 
 
 def test_checked_in_corpus_is_versioned_bounded_and_referentially_valid():
     corpus = load_benchmark_corpus(CORPUS_PATH)
 
-    assert corpus.schema_version == 2
-    assert corpus.corpus_id == "luminari-graphiti-extraction:v2"
+    assert corpus.schema_version == 3
+    assert corpus.corpus_id == "luminari-graphiti-extraction:v3"
     assert corpus.fingerprint.startswith("corpus:sha256:")
-    assert len(corpus.cases) == 3
+    assert len(corpus.cases) == 4
     assert all(case.expect_parse_success for case in corpus.cases)
     assert all(case.expect_schema_success for case in corpus.cases)
     assert all(case.expected_entities for case in corpus.cases)
+    assert all(case.forbidden_entities for case in corpus.cases)
     assert all(case.expected_relationships for case in corpus.cases)
+
+
+def test_prior_v2_benchmark_remains_readable_without_negative_expectations():
+    corpus = load_benchmark_corpus(LEGACY_CORPUS_PATH)
+
+    assert corpus.schema_version == 2
+    assert corpus.corpus_id == "luminari-graphiti-extraction:v2"
+    assert all(not case.forbidden_entities for case in corpus.cases)
 
 
 def test_corpus_rejects_relationships_that_reference_unknown_entities(tmp_path):
@@ -145,6 +158,14 @@ def test_corpus_requires_explicit_outcomes_and_canonical_relationship_types(tmp_
     with pytest.raises(BenchmarkConfigurationError, match="must require"):
         load_benchmark_corpus(path)
 
+    payload = json.loads(CORPUS_PATH.read_text(encoding="utf-8"))
+    payload["cases"][0]["forbidden_entities"][0]["id"] = "crimson_loom"
+    path = tmp_path / "overlapping-negative.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(BenchmarkConfigurationError, match="must be disjoint"):
+        load_benchmark_corpus(path)
+
 
 def test_case_scoring_reports_counts_without_extracted_content():
     case = load_benchmark_corpus(CORPUS_PATH).cases[0]
@@ -164,6 +185,7 @@ def test_case_scoring_reports_counts_without_extracted_content():
     score = score_benchmark_case(case, nodes, edges)
 
     assert score["entity_recall"] == 1
+    assert score["matched_forbidden_entities"] == 0
     assert score["relationship_recall"] == 1
     assert "sensitive extracted fact" not in str(score)
     assert "Crimson Spindle" not in str(score)
@@ -230,6 +252,59 @@ async def test_staged_benchmark_extraction_applies_policy_before_edges(monkeypat
     assert result.relationship_quality.accepted_edges == 1
     assert result.relationship_quality.normalized_edges == 1
     assert result.relationship_quality.rejected_unknown_type == 1
+
+
+async def test_staged_extraction_applies_literal_entity_grounding_before_edges(monkeypatch):
+    class Delegate:
+        async def generate_response(self, *args, **kwargs):
+            if kwargs.get("prompt_name", "").startswith("extract_nodes."):
+                return {
+                    "extracted_entities": [
+                        {"name": "Lumia", "entity_type_id": 0},
+                        {"name": "AAN conference", "entity_type_id": 0},
+                    ]
+                }
+            return {"edges": []}
+
+    async def fake_extract_nodes(clients, *args):
+        response = await clients.llm_client.generate_response(
+            [],
+            prompt_name="extract_nodes.extract_text",
+        )
+        nodes = [
+            SimpleNamespace(uuid=f"node-{index}", name=entity["name"])
+            for index, entity in enumerate(response["extracted_entities"])
+        ]
+        return nodes, {node.uuid: [0] for node in nodes}
+
+    async def fake_extract_edges(clients, *args):
+        await clients.llm_client.generate_response([], prompt_name="extract_edges.edge")
+        return []
+
+    monkeypatch.setattr(benchmark_module, "extract_nodes", fake_extract_nodes)
+    monkeypatch.setattr(benchmark_module, "extract_edges", fake_extract_edges)
+    episode = SimpleNamespace(
+        group_id="benchmark",
+        uuid="episode",
+        content="The world of Lumia",
+    )
+
+    result = await extract_staged_policy_graph(
+        SimpleNamespace(llm_client=Delegate()),
+        episode,
+        [],
+        entity_types={},
+        edge_types={},
+        edge_type_map={},
+        custom_extraction_instructions="bounded",
+        entity_grounding_policy="literal_v1",
+    )
+
+    assert [node.name for node in result.nodes] == ["Lumia"]
+    assert result.entity_grounding_quality is not None
+    assert result.entity_grounding_quality.proposed == 2
+    assert result.entity_grounding_quality.accepted == 1
+    assert result.entity_grounding_quality.rejected_not_literal == 1
 
 
 @pytest.mark.asyncio
@@ -313,11 +388,121 @@ async def test_candidate_benchmark_scores_fixed_cases_without_persistence_or_con
     assert report["schema_success_cases"] == len(corpus.cases)
     assert report["structured_expectation_matches"] == len(corpus.cases)
     assert report["relationship_quality"]["evidence_cases"] == len(corpus.cases)
-    assert report["relationship_quality"]["proposed_edges"] == 4
-    assert report["relationship_quality"]["accepted_edges"] == 3
+    assert report["relationship_quality"]["proposed_edges"] == 5
+    assert report["relationship_quality"]["accepted_edges"] == 4
     assert report["relationship_quality"]["rejection_reasons"]["rejected_unknown_type"] == 1
+    assert report["matched_forbidden_entities"] == 0
     assert "sensitive extracted fact" not in str(report)
     assert all(case.episode not in str(report) for case in corpus.cases)
+
+
+async def test_candidate_benchmark_aggregates_enabled_entity_grounding_evidence():
+    corpus = load_benchmark_corpus(CORPUS_PATH)
+    candidate = _candidate()
+    cases = {case.id: case for case in corpus.cases}
+
+    async def extractor(clients, episode, previous, **kwargs):
+        assert kwargs["entity_grounding_policy"] == "literal_v1"
+        await clients.llm_client.client.chat.completions.create(
+            model=candidate.model,
+            messages=[],
+        )
+        case = cases[episode.name.removeprefix("benchmark-")]
+        nodes = [
+            SimpleNamespace(uuid=entity.id, name=entity.aliases[0])
+            for entity in case.expected_entities
+        ]
+        edges = [
+            SimpleNamespace(
+                source_node_uuid=relationship.source,
+                target_node_uuid=relationship.target,
+                name=relationship.types[0],
+            )
+            for relationship in case.expected_relationships
+        ]
+        return _extraction(
+            nodes,
+            edges,
+            grounding_quality=EntityGroundingReport(
+                proposed=len(nodes) + 1,
+                accepted=len(nodes),
+                rejected_not_literal=1,
+                rejected_empty_name=0,
+            ),
+        )
+
+    report = await benchmark_candidate(
+        corpus,
+        candidate,
+        route_fingerprint="route:test",
+        sync_profile_fingerprint="sync:literal-test",
+        prompt_version="prompt:v1",
+        schema_version="schema:v1",
+        relationship_vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
+        max_entities=25,
+        max_relationships=25,
+        maximum_provider_calls=2,
+        concurrency=1,
+        client_factory=lambda selected: _fake_client(selected)[0],
+        extractor=extractor,
+        entity_grounding_policy="literal_v1",
+    )
+
+    quality = report["entity_grounding_quality"]
+    assert report["status"] == "passed"
+    assert report["entity_grounding_policy"] == "literal_v1"
+    assert quality["evidence_cases"] == len(corpus.cases)
+    assert quality["missing_evidence_cases"] == 0
+    assert quality["rejected_entities"] == len(corpus.cases)
+    assert quality["rejection_reasons"]["rejected_not_literal"] == len(corpus.cases)
+    assert report["matched_forbidden_entities"] == 0
+
+
+async def test_candidate_benchmark_fails_on_forbidden_prompt_example_without_content_leakage():
+    corpus = load_benchmark_corpus(CORPUS_PATH)
+    candidate = _candidate()
+    cases = {case.id: case for case in corpus.cases}
+
+    async def extractor(clients, episode, previous, **kwargs):
+        await clients.llm_client.client.chat.completions.create(
+            model=candidate.model,
+            messages=[],
+        )
+        case = cases[episode.name.removeprefix("benchmark-")]
+        nodes = [
+            SimpleNamespace(uuid=entity.id, name=entity.aliases[0])
+            for entity in case.expected_entities
+        ]
+        nodes.append(SimpleNamespace(uuid="forbidden", name="AAN conference"))
+        edges = [
+            SimpleNamespace(
+                source_node_uuid=relationship.source,
+                target_node_uuid=relationship.target,
+                name=relationship.types[0],
+            )
+            for relationship in case.expected_relationships
+        ]
+        return _extraction(nodes, edges)
+
+    report = await benchmark_candidate(
+        corpus,
+        candidate,
+        route_fingerprint="route:test",
+        sync_profile_fingerprint="sync:test",
+        prompt_version="prompt:v1",
+        schema_version="schema:v1",
+        relationship_vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
+        max_entities=25,
+        max_relationships=25,
+        maximum_provider_calls=2,
+        concurrency=1,
+        client_factory=lambda selected: _fake_client(selected)[0],
+        extractor=extractor,
+    )
+
+    assert report["status"] == "failed"
+    assert report["matched_forbidden_entities"] == len(corpus.cases)
+    assert "AAN conference" not in str(report)
 
 
 async def test_candidate_benchmark_rejects_relationship_policy_drift_before_client():
@@ -552,9 +737,11 @@ async def test_cli_can_compare_declared_candidates_without_exposing_secret(capsy
         max_relationships=25,
     )
     seen = []
+    seen_grounding_policies = []
 
     async def runner(corpus, candidate, **kwargs):
         seen.append(candidate.connection.provider)
+        seen_grounding_policies.append(kwargs["entity_grounding_policy"])
         return {
             "status": "passed",
             "provider": candidate.connection.provider,
@@ -588,6 +775,7 @@ async def test_cli_can_compare_declared_candidates_without_exposing_secret(capsy
     output = capsys.readouterr().out
     assert result == 0
     assert seen == ["ollama", "openrouter"]
+    assert seen_grounding_policies == ["off", "off"]
     assert secret not in output
 
 
@@ -610,4 +798,4 @@ def test_legacy_benchmark_is_inert_and_corpus_is_mounted_read_only():
     assert "UPDATE episodes" not in legacy
     assert "docker exec" not in legacy
     assert "./benchmarks:/app/benchmarks:ro" in compose
-    assert benchmark_graphiti.DEFAULT_CORPUS.name == "graphiti_extraction_v2.json"
+    assert benchmark_graphiti.DEFAULT_CORPUS.name == "graphiti_extraction_v3.json"

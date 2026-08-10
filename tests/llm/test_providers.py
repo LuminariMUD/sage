@@ -105,10 +105,10 @@ def test_openai_provider_initialization(monkeypatch):
     monkeypatch.setenv("TEXT_PROVIDER", "openai")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "unit-test-key")
-    monkeypatch.setenv("LLM_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5.6-luna")
 
     provider = OpenAIProvider()
-    assert provider.default_model == "gpt-4o-mini"
+    assert provider.default_model == "gpt-5.6-luna"
 
 
 def test_ollama_provider_model_info_includes_all_models(monkeypatch):
@@ -134,11 +134,11 @@ def test_openai_provider_model_info_includes_models(monkeypatch):
     monkeypatch.setenv("TEXT_PROVIDER", "openai")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "unit-test-key")
-    monkeypatch.setenv("LLM_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5.6-luna")
     monkeypatch.setenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
     provider = OpenAIProvider()
     info = provider.get_model_info()
 
-    assert info["chat_model"] == "gpt-4o-mini"
+    assert info["chat_model"] == "gpt-5.6-luna"
     assert "embedding_model" not in info

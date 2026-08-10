@@ -28,7 +28,7 @@ async def test_arcana_golem_questline():
     print("Testing Arcana Golem Questline Theme Preservation")
     print("=" * 60)
 
-    service = ModernLangChainService(model_name="gpt-4o-mini", temperature=0.7)
+    service = ModernLangChainService(model_name="gpt-5.6-luna", temperature=0.7)
 
     # The exact request that was losing theme
     query = """Create 4 connected quests about discovering the arcana golem origins,
@@ -104,7 +104,7 @@ async def test_generic_questline():
     print("Testing Crystal Dwarf Mining Questline")
     print("=" * 60)
 
-    service = ModernLangChainService(model_name="gpt-4o-mini", temperature=0.7)
+    service = ModernLangChainService(model_name="gpt-5.6-luna", temperature=0.7)
 
     query = """Create 3 quests about Crystal Dwarves discovering a new vein of
     living crystal, establishing a mining operation, and uncovering ancient secrets"""

@@ -49,8 +49,8 @@ async def test_modern_service():
         print("⚠️  OPENAI_API_KEY not set. Skipping modern service tests.")
         return
 
-    # Use a smaller model for testing if GPT-4 not available
-    model = os.getenv("TEST_MODEL", "gpt-4o-mini")
+    # Use a smaller model for testing if gpt-5.6-luna not available
+    model = os.getenv("TEST_MODEL", "gpt-5.6-luna")
     service = ModernLangChainService(model_name=model)
 
     for test_case in TEST_CASES:

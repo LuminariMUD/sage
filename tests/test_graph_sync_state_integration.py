@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -208,7 +207,7 @@ def _provider_call() -> ProviderCallRecord:
     )
 
 
-async def test_two_workers_claim_distinct_jobs_and_verified_success_projects(
+async def test_single_writer_owns_run_claims_and_verified_success_projects(
     state_store,
 ):
     postgres, repository, _ = state_store
@@ -223,19 +222,30 @@ async def test_two_workers_claim_distinct_jobs_and_verified_success_projects(
     )
     policy = GraphSyncPolicy(max_job_attempts=2, max_provider_calls=1)
 
-    first, second = await asyncio.gather(
-        repository.claim_jobs(
-            run_id=run.id,
-            worker_id="worker-a",
-            route_fingerprint="route:test",
-            policy=policy,
-        ),
-        repository.claim_jobs(
+    with pytest.raises(RunUnavailableError, match="owned by another graph writer"):
+        await repository.start_or_join_run(
+            worker_id="worker-b",
+            sync_profile_fingerprint=SYNC_PROFILE,
+        )
+    with pytest.raises(RunUnavailableError, match="owned by another graph writer"):
+        await repository.claim_jobs(
             run_id=run.id,
             worker_id="worker-b",
             route_fingerprint="route:test",
             policy=policy,
-        ),
+        )
+
+    first = await repository.claim_jobs(
+        run_id=run.id,
+        worker_id="worker-a",
+        route_fingerprint="route:test",
+        policy=policy,
+    )
+    second = await repository.claim_jobs(
+        run_id=run.id,
+        worker_id="worker-a",
+        route_fingerprint="route:test",
+        policy=policy,
     )
 
     leases = [first[0], second[0]]
@@ -363,7 +373,7 @@ async def test_expired_lease_quarantines_then_explicit_retry_resets_only_budget(
     retried = (
         await repository.claim_jobs(
             run_id=run.id,
-            worker_id="worker-b",
+            worker_id="worker-a",
             route_fingerprint="route:test",
             policy=GraphSyncPolicy(max_job_attempts=1),
         )

@@ -241,7 +241,7 @@ class BaseValidator:
             create_text_model(
                 "extraction",
                 legacy_openai_api_key=openai_api_key,
-                legacy_openai_model="gpt-4o-mini",
+                legacy_openai_model="gpt-5.6-luna",
             ),
             system_prompt=self._get_system_prompt(),
         )

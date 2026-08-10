@@ -393,7 +393,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from typing import Dict, Any
 
 class MyAgent(Runnable):
-    def __init__(self, model: str = "gpt-4o-mini", temperature: float = 0.7):
+    def __init__(self, model: str = "gpt-5.6-luna", temperature: float = 0.7):
         self.llm = ChatOpenAI(model=model, temperature=temperature)
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", "You are a helpful assistant."),

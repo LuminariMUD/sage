@@ -24,7 +24,7 @@ def create_text_model(
     *,
     candidate: TextModelCandidate | None = None,
     legacy_openai_api_key: str | None = None,
-    legacy_openai_model: str = "gpt-4o",
+    legacy_openai_model: str = "gpt-5.6-luna",
 ) -> OpenAIChatModel:
     """Create a PydanticAI model from a validated provider-neutral candidate.
 
@@ -69,7 +69,7 @@ def create_text_model(
 
 def create_openai_chat_model(
     api_key: str,
-    model_name: str = "gpt-4o",
+    model_name: str = "gpt-5.6-luna",
 ) -> OpenAIChatModel:
     """Deprecated direct-OpenAI compatibility wrapper for existing imports."""
     if not api_key:

@@ -1,0 +1,225 @@
+{
+  "schema_version": 3,
+  "corpus_id": "luminari-graphiti-extraction:v3",
+  "description": "Fixed synthetic and canon-derived checks for grounded entity extraction, forbidden prompt-example leakage, and canonical relationships.",
+  "thresholds": {
+    "entity_recall": 0.8,
+    "relationship_recall": 0.66
+  },
+  "cases": [
+    {
+      "id": "crimson_guard",
+      "episode": "The Order of the Crimson Loom protects the Crimson Spindle.",
+      "expect_parse_success": true,
+      "expect_schema_success": true,
+      "expected_entities": [
+        {
+          "id": "crimson_loom",
+          "aliases": [
+            "Order of the Crimson Loom",
+            "Crimson Loom"
+          ]
+        },
+        {
+          "id": "crimson_spindle",
+          "aliases": [
+            "Crimson Spindle"
+          ]
+        }
+      ],
+      "forbidden_entities": [
+        {
+          "id": "aan_conference",
+          "aliases": [
+            "AAN conference"
+          ]
+        },
+        {
+          "id": "amara_osei",
+          "aliases": [
+            "Dr. Amara Osei",
+            "Amara Osei"
+          ]
+        },
+        {
+          "id": "osei_colleague",
+          "aliases": [
+            "Dr. Osei's colleague",
+            "Osei's colleague"
+          ]
+        }
+      ],
+      "expected_relationships": [
+        {
+          "source": "crimson_loom",
+          "target": "crimson_spindle",
+          "types": [
+            "Protects"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "blade_creation",
+      "episode": "The Emberglass Blade was created by the Phoenix Smiths.",
+      "expect_parse_success": true,
+      "expect_schema_success": true,
+      "expected_entities": [
+        {
+          "id": "emberglass_blade",
+          "aliases": [
+            "Emberglass Blade"
+          ]
+        },
+        {
+          "id": "phoenix_smiths",
+          "aliases": [
+            "Phoenix Smiths",
+            "Phoenix Smith"
+          ]
+        }
+      ],
+      "forbidden_entities": [
+        {
+          "id": "aan_conference",
+          "aliases": [
+            "AAN conference"
+          ]
+        },
+        {
+          "id": "amara_osei",
+          "aliases": [
+            "Dr. Amara Osei",
+            "Amara Osei"
+          ]
+        },
+        {
+          "id": "osei_colleague",
+          "aliases": [
+            "Dr. Osei's colleague",
+            "Osei's colleague"
+          ]
+        }
+      ],
+      "expected_relationships": [
+        {
+          "source": "emberglass_blade",
+          "target": "phoenix_smiths",
+          "types": [
+            "CreatedBy"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sworn_service",
+      "episode": "Aldra serves under the Sundered Dawn.",
+      "expect_parse_success": true,
+      "expect_schema_success": true,
+      "expected_entities": [
+        {
+          "id": "aldra",
+          "aliases": [
+            "Aldra"
+          ]
+        },
+        {
+          "id": "sundered_dawn",
+          "aliases": [
+            "Sundered Dawn",
+            "Order of the Sundered Dawn"
+          ]
+        }
+      ],
+      "forbidden_entities": [
+        {
+          "id": "aan_conference",
+          "aliases": [
+            "AAN conference"
+          ]
+        },
+        {
+          "id": "amara_osei",
+          "aliases": [
+            "Dr. Amara Osei",
+            "Amara Osei"
+          ]
+        },
+        {
+          "id": "osei_colleague",
+          "aliases": [
+            "Dr. Osei's colleague",
+            "Osei's colleague"
+          ]
+        }
+      ],
+      "expected_relationships": [
+        {
+          "source": "aldra",
+          "target": "sundered_dawn",
+          "types": [
+            "ServesUnder"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crystal_dwarf_prompt_leak_regression",
+      "episode": "The Crystal Dwarves of Nagburim were thought to be legend until rediscovery made myth truth. Their meticulous records--preserved since before the Last War--carried knowledge of forgotten magics, relics of the Darklings and Luminari, and designs for the first arcana golems, of which only crude imitations walk Lumia today. They are scholars and guardians of Arcanite. Born of it, they sense its fields with uncanny precision and became its foremost miners and refiners, yet they limit extraction and brook no rivals.",
+      "expect_parse_success": true,
+      "expect_schema_success": true,
+      "expected_entities": [
+        {
+          "id": "crystal_dwarves",
+          "aliases": [
+            "Crystal Dwarves of Nagburim",
+            "Crystal Dwarves"
+          ]
+        },
+        {
+          "id": "arcanite",
+          "aliases": [
+            "Arcanite"
+          ]
+        },
+        {
+          "id": "lumia",
+          "aliases": [
+            "Lumia"
+          ]
+        }
+      ],
+      "forbidden_entities": [
+        {
+          "id": "aan_conference",
+          "aliases": [
+            "AAN conference"
+          ]
+        },
+        {
+          "id": "amara_osei",
+          "aliases": [
+            "Dr. Amara Osei",
+            "Amara Osei"
+          ]
+        },
+        {
+          "id": "osei_colleague",
+          "aliases": [
+            "Dr. Osei's colleague",
+            "Osei's colleague"
+          ]
+        }
+      ],
+      "expected_relationships": [
+        {
+          "source": "crystal_dwarves",
+          "target": "arcanite",
+          "types": [
+            "Protects"
+          ]
+        }
+      ]
+    }
+  ]
+}

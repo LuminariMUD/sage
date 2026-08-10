@@ -10,7 +10,7 @@ The Luminari Sage agent system consists of multiple specialized AI agents that w
 
 **Purpose**: Provide conversational interface for lore queries with streaming responses.
 
-**Model**: GPT-4o
+**Model**: gpt-5.6-luna
 
 **Location**: `src/agents/lore_chat_agent_streaming.py`
 
@@ -50,7 +50,7 @@ async for event in agent.stream_chat("Tell me about the Sundering"):
 
 **Purpose**: Create new non-canon stories, characters, and locations while respecting established lore.
 
-**Model**: GPT-4o-mini
+**Model**: gpt-5.6-luna
 
 **Location**: `src/agents/langchain/chains/story_development.py`
 
@@ -95,7 +95,7 @@ who is secretly building an Arcana Golem.
 
 **Purpose**: Generate structured quests with phases, objectives, and key entities.
 
-**Model**: GPT-4o-mini
+**Model**: gpt-5.6-luna
 
 **Location**: `src/agents/langchain/chains/quest_planner.py`
 
@@ -146,7 +146,7 @@ who is secretly building an Arcana Golem.
 
 **Purpose**: Write atmospheric prose and scenes based on canonical lore.
 
-**Model**: GPT-4o-mini
+**Model**: gpt-5.6-luna
 
 **Location**: `src/agents/langchain/chains/narrative.py`
 
@@ -192,7 +192,7 @@ who is secretly building an Arcana Golem.
 
 **Purpose**: Provide comprehensive, conversational answers about lore.
 
-**Model**: GPT-4o-mini
+**Model**: gpt-5.6-luna
 
 **Location**: `src/agents/langchain/chains/direct_answer.py`
 
@@ -267,7 +267,7 @@ chunks = result.get("raw", {}).get("chunks", [])
 
 **Purpose**: Provide comprehensive, grounded answers to lore questions using retrieved context.
 
-**Model**: GPT-4.1 (default) or configurable
+**Model**: gpt-5.6-luna (default) or configurable
 
 **Location**: `src/agents/langchain/chains/direct_answer.py`
 
@@ -318,7 +318,7 @@ If graph details contradict the prose or entity summary, trust the canon sources
 from src.agents.langchain.chains.direct_answer import DirectAnswerChain
 
 direct_answer = DirectAnswerChain(
-    model_name="gpt-4.1",
+    model_name="gpt-5.6-luna",
     temperature=0.0
 )
 
@@ -365,7 +365,7 @@ answer = result.get("answer")
 
 **Purpose**: Coordinate multiple agents for complex multi-step operations.
 
-**Model**: GPT-4o-mini (for planning)
+**Model**: gpt-5.6-luna (for planning)
 
 **Location**: `src/agents/langchain/chains/agent_orchestrator.py`
 
@@ -433,7 +433,7 @@ The validation and correction system provides autonomous graph quality assurance
 
 **Purpose**: Validate entity relationships in the Neo4j knowledge graph with LLM-enhanced semantic analysis.
 
-**Model**: GPT-4o-mini (for semantic analysis)
+**Model**: gpt-5.6-luna (for semantic analysis)
 
 **Agent ID**: `relationship_validator_v1_llm`
 
@@ -917,7 +917,7 @@ CREATE TABLE relationship_corrections (
 
 ### LLM-Based Classification
 
-**Model**: GPT-4o-mini
+**Model**: gpt-5.6-luna
 
 **Location**: `src/agents/langchain/util/classifier.py`
 
@@ -1080,7 +1080,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 class CustomAgent(Runnable):
-    def __init__(self, model="gpt-4o-mini", temperature=0.7):
+    def __init__(self, model="gpt-5.6-luna", temperature=0.7):
         self.llm = ChatOpenAI(model=model, temperature=temperature)
 
     def invoke(self, input: Dict[str, Any]) -> Dict[str, Any]:

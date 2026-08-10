@@ -417,8 +417,8 @@ This installation checklist breaks down the deployment into manageable phases. C
   OPENAI_API_KEY=
 
   # OpenAI Models
-  LLM_MODEL=gpt-4o-mini
-  GRAPHITI_LLM_MODEL=gpt-4o-mini
+  LLM_MODEL=gpt-5.6-luna
+  GRAPHITI_LLM_MODEL=gpt-5.6-luna
   EMBEDDING_MODEL=text-embedding-3-small
 
   # Embedding Configuration

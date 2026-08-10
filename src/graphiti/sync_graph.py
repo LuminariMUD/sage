@@ -9,6 +9,7 @@ from typing import Any
 from graphiti_core.nodes import EpisodeType
 
 from src.graphiti.edge_types import EDGE_TYPES
+from src.graphiti.entity_grounding_policy import EntityGroundingReport
 from src.graphiti.entity_types import ENTITY_TYPES
 from src.graphiti.relationship_policy import RelationshipQualityReport
 from src.graphiti.sync_models import GraphCounts, JobLease, StableIdVerification
@@ -34,6 +35,7 @@ class GraphProcessingResult:
     reused_existing: bool
     degraded: bool = False
     relationship_quality: RelationshipQualityReport | None = None
+    entity_grounding_quality: EntityGroundingReport | None = None
 
 
 @dataclass(frozen=True)
@@ -98,12 +100,18 @@ class GraphitiEpisodeProcessor:
 
         verification = self._verification(lease, state)
         if verification.is_exact:
-            quality = self._consume_relationship_quality(stable_id)
+            relationship_quality = self._consume_relationship_quality(stable_id)
+            grounding_quality = self._consume_entity_grounding_quality(stable_id)
             return GraphProcessingResult(
                 verification=verification,
-                graph_counts=self._graph_counts(None, quality),
+                graph_counts=self._graph_counts(
+                    None,
+                    relationship_quality,
+                    grounding_quality,
+                ),
                 reused_existing=True,
-                relationship_quality=quality,
+                relationship_quality=relationship_quality,
+                entity_grounding_quality=grounding_quality,
             )
 
         add_result = None
@@ -127,12 +135,18 @@ class GraphitiEpisodeProcessor:
         # Consume it before losing that identity so quality evidence reaches
         # the same atomic completion as the graph counts.
         quality_key = self._created_episode_uuid(add_result) or stable_id
-        quality = self._consume_relationship_quality(quality_key)
+        relationship_quality = self._consume_relationship_quality(quality_key)
+        grounding_quality = self._consume_entity_grounding_quality(quality_key)
         return GraphProcessingResult(
             verification=verification,
-            graph_counts=self._graph_counts(add_result, quality),
+            graph_counts=self._graph_counts(
+                add_result,
+                relationship_quality,
+                grounding_quality,
+            ),
             reused_existing=reused_existing,
-            relationship_quality=quality,
+            relationship_quality=relationship_quality,
+            entity_grounding_quality=grounding_quality,
         )
 
     async def _inspect(self, lease: JobLease) -> _EpisodeState:
@@ -295,6 +309,14 @@ class GraphitiEpisodeProcessor:
         consume_quality = getattr(self.graphiti.graphiti, "consume_relationship_quality", None)
         return consume_quality(stable_id) if callable(consume_quality) else None
 
+    def _consume_entity_grounding_quality(self, stable_id: str) -> EntityGroundingReport | None:
+        consume_quality = getattr(
+            self.graphiti.graphiti,
+            "consume_entity_grounding_quality",
+            None,
+        )
+        return consume_quality(stable_id) if callable(consume_quality) else None
+
     @staticmethod
     def _created_episode_uuid(result: Any) -> str | None:
         episode = getattr(result, "episode", None) if result is not None else None
@@ -304,17 +326,36 @@ class GraphitiEpisodeProcessor:
     @staticmethod
     def _graph_counts(
         result: Any,
-        quality: RelationshipQualityReport | None,
+        relationship_quality: RelationshipQualityReport | None,
+        grounding_quality: EntityGroundingReport | None,
     ) -> GraphCounts:
         nodes = getattr(result, "nodes", None) if result is not None else None
         edges = getattr(result, "edges", None) if result is not None else None
         return GraphCounts(
-            accepted_entities=len(nodes) if nodes is not None else None,
-            proposed_edges=quality.proposed_edges if quality is not None else None,
-            accepted_edges=(
-                quality.accepted_edges
-                if quality is not None
-                else len(edges) if edges is not None else None
+            proposed_entities=(
+                grounding_quality.proposed if grounding_quality is not None else None
             ),
-            rejected_edges=quality.rejected_edges if quality is not None else None,
+            accepted_entities=(
+                grounding_quality.accepted
+                if grounding_quality is not None
+                else len(nodes)
+                if nodes is not None
+                else None
+            ),
+            rejected_entities=(
+                grounding_quality.rejected if grounding_quality is not None else None
+            ),
+            proposed_edges=(
+                relationship_quality.proposed_edges if relationship_quality is not None else None
+            ),
+            accepted_edges=(
+                relationship_quality.accepted_edges
+                if relationship_quality is not None
+                else len(edges)
+                if edges is not None
+                else None
+            ),
+            rejected_edges=(
+                relationship_quality.rejected_edges if relationship_quality is not None else None
+            ),
         )

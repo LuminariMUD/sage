@@ -107,7 +107,7 @@ class GraphSyncRepository:
     async def start_or_join_run(
         self, *, worker_id: str, sync_profile_fingerprint: str
     ) -> RunRecord:
-        """Start one run or join the active compatible run under a DB lock."""
+        """Start one run or rejoin it only as its durable single writer."""
         worker_id = validate_label(worker_id, "Worker ID")
         sync_profile_fingerprint = validate_label(
             sync_profile_fingerprint, "Sync profile fingerprint"
@@ -130,6 +130,8 @@ class GraphSyncRepository:
                         raise RunUnavailableError("Active run uses a different sync profile")
                     if active["state"] != RunState.RUNNING.value:
                         raise RunUnavailableError("Active run is not accepting claims")
+                    if active["worker_id"] != worker_id:
+                        raise RunUnavailableError("Active run is owned by another graph writer")
                     refreshed = await connection.fetchrow(
                         """
                         UPDATE graph_sync_runs
@@ -384,7 +386,7 @@ class GraphSyncRepository:
             async with connection.transaction():
                 run = await connection.fetchrow(
                     """
-                    SELECT id, state, sync_profile_fingerprint
+                    SELECT id, state, worker_id, sync_profile_fingerprint
                     FROM graph_sync_runs
                     WHERE id = $1
                     FOR KEY SHARE
@@ -393,6 +395,8 @@ class GraphSyncRepository:
                 )
                 if run is None or run["state"] != RunState.RUNNING.value:
                     raise RunUnavailableError("Run is not accepting claims")
+                if run["worker_id"] != worker_id:
+                    raise RunUnavailableError("Run is owned by another graph writer")
 
                 candidates = await connection.fetch(
                     """

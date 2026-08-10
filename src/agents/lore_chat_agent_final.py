@@ -2,7 +2,7 @@
 Final Luminari Lore Chat Agent - Simple architecture with excellent UX.
 
 Combines:
-- Simple single-tool architecture (GPT-4 handles complexity)
+- Simple single-tool architecture (gpt-5.6-luna handles complexity)
 - Rich formatting and UI from original agent
 - Tool call transparency
 - Proper streaming with status updates
@@ -52,7 +52,7 @@ class FinalLoreChatAgent:
     Final implementation with simple architecture and rich UI.
 
     Features:
-    - Single search tool (GPT-4 decides usage)
+    - Single search tool (gpt-5.6-luna decides usage)
     - Rich formatted responses
     - Tool call transparency
     - Suggested follow-up questions

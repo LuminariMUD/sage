@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class LangChainChatService:
     """Clean implementation following LangChain best practices."""
 
-    def __init__(self, model_name: str = "gpt-4o", temperature: float = 0.7):
+    def __init__(self, model_name: str = "gpt-5.6-luna", temperature: float = 0.7):
         """Initialize with proper configuration."""
         self.model_name = model_name
         self.temperature = temperature

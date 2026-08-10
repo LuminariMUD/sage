@@ -7,7 +7,7 @@ import hashlib
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Add parent directory to path
@@ -27,7 +27,8 @@ console = Console()
 
 # Document type mapping based on new directory structure
 DOCUMENT_TYPE_MAP = {
-    "world": "worldbuilding",
+    # Keep these values aligned with the PostgreSQL ``document_type`` enum.
+    "world": "world",
     "cultures": "culture",
     "factions": "faction",
     "characters": "character",
@@ -180,11 +181,11 @@ class DocumentLoader:
             file_stat = file_path.stat()
             metadata = {
                 "file_size": file_stat.st_size,
-                "file_modified_at": datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                "file_modified_at": datetime.fromtimestamp(file_stat.st_mtime, UTC).isoformat(),
                 "line_count": content.count("\n"),
                 "word_count": len(content.split()),
                 "has_headers": "# " in content,
-                "loaded_at": datetime.utcnow().isoformat(),
+                "loaded_at": datetime.now(UTC).isoformat(),
                 "source": doc_source,
             }
 
@@ -200,16 +201,22 @@ class DocumentLoader:
                 content_changed = existing_hash != content_hash
 
                 if content_changed:
-                    # Content changed - update and reset Graphiti status
+                    # Content changed - refresh all derived document metadata and
+                    # make the document eligible for episode regeneration. Graph
+                    # synchronization is driven by the episode lifecycle, so the
+                    # document-level status is only a compatibility projection.
                     await db.execute(
                         """
                         UPDATE lore_documents
-                        SET body_md = $1, summary = $2, canonical = $3,
-                            metadata = $4, updated_at = NOW(),
-                            graphiti_content_hash = $5, graphiti_status = 'pending',
-                            graphiti_processed_at = NULL
-                        WHERE source_file = $6
+                        SET title = $1, document_type = $2, body_md = $3,
+                            summary = $4, canonical = $5, metadata = $6,
+                            updated_at = NOW(), graphiti_content_hash = $7,
+                            graphiti_status = 'pending',
+                            processing_status = 'pending', processed_at = NULL
+                        WHERE source_file = $8
                     """,
+                        title,
+                        doc_type,
                         content,
                         summary,
                         canonical,

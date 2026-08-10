@@ -105,7 +105,7 @@ services:
       GRAPHITI_PROVIDER: ${GRAPHITI_PROVIDER:-${TEXT_PROVIDER:-${LLM_PROVIDER:-openai}}}
       GRAPHITI_TEXT_PROVIDER: ${GRAPHITI_TEXT_PROVIDER:-}
       GRAPHITI_EMBEDDING_PROVIDER: ${GRAPHITI_EMBEDDING_PROVIDER:-}
-      LLM_MODEL: ${LLM_MODEL:-gpt-4.1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-5.6-luna}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       OPENAI_EMBEDDING_DIMENSIONS: ${OPENAI_EMBEDDING_DIMENSIONS:-1536}
@@ -165,7 +165,7 @@ services:
       SENTENCE_TRANSFORMERS_HOME: /opt/sentence_transformers_cache
       MCP_PORT: 8004
       USE_MODERN_LANGCHAIN: true
-      LANGCHAIN_MODEL: gpt-4.1
+      LANGCHAIN_MODEL: gpt-5.6-luna
       ENABLE_REACT: true
       REACT_THRESHOLD: auto
       # Authentication

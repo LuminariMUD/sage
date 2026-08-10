@@ -3,7 +3,7 @@
 import tiktoken
 
 
-def count_tokens(text: str, model: str = "gpt-4") -> int:
+def count_tokens(text: str, model: str = "gpt-5.6-luna") -> int:
     """
     Count tokens in text (approximate for Ollama models).
 
@@ -23,7 +23,7 @@ def count_tokens(text: str, model: str = "gpt-4") -> int:
     return len(enc.encode(text))
 
 
-def truncate_text(text: str, max_tokens: int, model: str = "gpt-4") -> str:
+def truncate_text(text: str, max_tokens: int, model: str = "gpt-5.6-luna") -> str:
     """
     Truncate text to fit within token limit.
 
@@ -51,7 +51,7 @@ def truncate_text(text: str, max_tokens: int, model: str = "gpt-4") -> str:
 
 
 def select_texts_within_budget(
-    scored_texts: list[tuple[str, float]], max_tokens: int, model: str = "gpt-4"
+    scored_texts: list[tuple[str, float]], max_tokens: int, model: str = "gpt-5.6-luna"
 ) -> list[int]:
     """
     Choose the highest-scoring texts that fit within a token budget.
@@ -89,7 +89,7 @@ def select_texts_within_budget(
 
 
 def truncate_context_with_priority(
-    context_chunks: list[tuple[str, float]], max_tokens: int, model: str = "gpt-4"
+    context_chunks: list[tuple[str, float]], max_tokens: int, model: str = "gpt-5.6-luna"
 ) -> str:
     """
     Truncate context chunks prioritizing by relevance score.

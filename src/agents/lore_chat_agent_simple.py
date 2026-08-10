@@ -1,10 +1,10 @@
 """
 Simplified Luminari Lore Chat Agent using pydantic-ai.
 
-This agent lets GPT-4 do the heavy lifting for tool selection, context management,
+This agent lets gpt-5.6-luna do the heavy lifting for tool selection, context management,
 and response synthesis. The architecture is intentionally simple:
 - Single search tool that calls GraphRAG directly
-- Let GPT-4 handle intent classification and tool choice
+- Let gpt-5.6-luna handle intent classification and tool choice
 - Focus on good prompting rather than complex pre-processing
 """
 
@@ -34,11 +34,11 @@ class LoreSearchResult(BaseModel):
 
 class SimpleLoreChatAgent:
     """
-    Simplified chat agent that lets GPT-4 handle complexity.
+    Simplified chat agent that lets gpt-5.6-luna handle complexity.
 
     Architecture:
     - One tool: search_lore (calls GraphRAG endpoint)
-    - GPT-4 decides when and how to use it
+    - gpt-5.6-luna decides when and how to use it
     - Focus on synthesis and accuracy
     """
 
@@ -49,7 +49,7 @@ class SimpleLoreChatAgent:
     ):
         self.api_base_url = api_base_url
 
-        # Create the pydantic-ai agent with GPT-4
+        # Create the pydantic-ai agent with gpt-5.6-luna
         self.agent = Agent(
             create_text_model("tools", legacy_openai_api_key=openai_api_key),
             output_type=str,  # Expect string responses
@@ -63,7 +63,7 @@ class SimpleLoreChatAgent:
         logger.info("✅ Simplified Lore Chat Agent initialized")
 
     def _create_system_prompt(self) -> str:
-        """Create the system prompt that guides GPT-4."""
+        """Create the system prompt that guides gpt-5.6-luna."""
         return """You are the Luminari Lore Expert, a knowledgeable guide to the rich fantasy world of Luminari MUD.
 
 You have access to a comprehensive knowledge graph containing:
@@ -149,7 +149,7 @@ Remember: You're not just searching - you're a knowledgeable guide helping users
             Agent's response
         """
         try:
-            # Let GPT-4 handle everything - no pre-processing needed!
+            # Let gpt-5.6-luna handle everything - no pre-processing needed!
             result = await self.agent.run(message, deps=self)
             return result.output
 

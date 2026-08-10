@@ -75,7 +75,7 @@ class ReactService:
 
     def __init__(
         self,
-        model_name: str = "gpt-4.1",
+        model_name: str = "gpt-5.6-luna",
         temperature: float = 0.7,
         max_iterations: int = 20,  # More iterations for smaller tools
     ):

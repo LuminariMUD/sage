@@ -47,7 +47,7 @@ This guide covers deploying Luminari Sage on Ubuntu Linux. The system uses Docke
    - NVIDIA GPU with 8GB+ VRAM (RTX 3060, RTX 4060, RTX 5070, etc.)
    - CUDA 11.0+ support
    - No API costs - runs entirely offline
-   - Slightly lower quality than GPT-4, but excellent for development
+   - Slightly lower quality than gpt-5.6-luna, but excellent for development
 
 2. **Cloud API Mode (OpenAI)**:
    - No GPU required
@@ -456,8 +456,8 @@ LLM_PROVIDER=openai              # Use OpenAI cloud API
 OPENAI_API_KEY=
 
 # OpenAI Models
-LLM_MODEL=gpt-4o-mini           # Chat model
-GRAPHITI_LLM_MODEL=gpt-4o-mini  # Entity extraction
+LLM_MODEL=gpt-5.6-luna          # Chat model
+GRAPHITI_LLM_MODEL=gpt-5.6-luna # Entity extraction
 EMBEDDING_MODEL=text-embedding-3-small
 
 # Embedding Configuration
@@ -485,7 +485,7 @@ USE_LOCAL_EMBEDDINGS=true
 # Graphiti uses OpenAI for best quality extraction
 GRAPHITI_PROVIDER=openai         # Override for Graphiti only
 OPENAI_API_KEY=
-GRAPHITI_LLM_MODEL=gpt-4o-mini
+GRAPHITI_LLM_MODEL=gpt-5.6-luna
 
 # Estimated cost: ~$20-30/month (Graphiti only)
 ```

@@ -548,7 +548,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Phase 5 Testing Results (2025-11-13)** ✅ ALL TESTS PASSED
   - **Configuration Loading**: Multi-provider config working correctly
     - Ollama configuration loads properly (deepseek-r1:8b, nomic-embed-text, 768D)
-    - OpenAI configuration loads properly (gpt-4o-mini, text-embedding-3-small, 1536D)
+    - OpenAI configuration loads properly (gpt-5.6-luna, text-embedding-3-small, 1536D)
     - Provider switching validated via `GRAPHITI_PROVIDER` env var
   - **Client Instantiation**: Factory pattern working correctly
     - LLM Client: OpenAIClient (using Ollama's OpenAI-compatible API)
@@ -671,7 +671,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Set `USE_LOCAL_EMBEDDINGS=true` + `LLM_PROVIDER!=ollama` for sentence-transformers (384D)
 - **Graphiti Provider Switching**:
   - Set `GRAPHITI_PROVIDER=ollama` for zero-cost local entity extraction (deepseek-r1:8b, nomic-embed-text)
-  - Set `GRAPHITI_PROVIDER=openai` for cloud-based extraction (gpt-4o-mini, text-embedding-3-small)
+  - Set `GRAPHITI_PROVIDER=openai` for cloud-based extraction (gpt-5.6-luna, text-embedding-3-small)
   - Defaults to `LLM_PROVIDER` if `GRAPHITI_PROVIDER` not set
   - Supports hybrid mode: Ollama for chat/embeddings, OpenAI for Graphiti
 - **Type Safety**: Full type hints for all methods and parameters

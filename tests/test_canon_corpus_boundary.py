@@ -51,6 +51,33 @@ def test_document_loader_scans_only_canon_and_rejects_direct_draft_paths(tmp_pat
         loader.canon_relative_path(draft_file)
 
 
+def test_document_loader_maps_world_directory_to_live_enum_value(tmp_path):
+    world_file = tmp_path / "canon" / "world" / "roads.md"
+    world_file.parent.mkdir(parents=True)
+    world_file.write_text("# Roads\n", encoding="utf-8")
+
+    assert DocumentLoader(str(tmp_path)).get_document_type(world_file) == "world"
+
+
+async def test_document_loader_requeues_changed_documents_for_episode_processing(tmp_path):
+    world_file = tmp_path / "canon" / "world" / "roads.md"
+    world_file.parent.mkdir(parents=True)
+    world_file.write_text("# Roads\n\nThe road has changed.\n", encoding="utf-8")
+    database = SimpleNamespace(
+        fetchrow=AsyncMock(return_value={"id": "document-id", "graphiti_content_hash": "old"}),
+        execute=AsyncMock(),
+    )
+
+    assert await DocumentLoader(str(tmp_path)).load_document(world_file, database)
+
+    query = database.execute.await_args.args[0]
+    arguments = database.execute.await_args.args[1:]
+    assert "processing_status = 'pending'" in query
+    assert "processed_at = NULL" in query
+    assert "graphiti_processed_at" not in query
+    assert arguments[1] == "world"
+
+
 def test_document_loader_rejects_symlinks_that_escape_canon(tmp_path):
     canon_dir = tmp_path / "canon"
     draft_file = tmp_path / "drafts" / "noise.md"
@@ -87,6 +114,40 @@ async def test_episode_creation_selects_and_resets_only_canon_documents():
     for query in (reset_query, selection_query):
         assert "canonical IS TRUE" in query
         assert "source_file LIKE 'canon/%'" in query
+
+
+async def test_episode_creation_invalidates_vectors_when_source_text_changes():
+    document = {
+        "id": "document-id",
+        "title": "Changed Lore",
+        "body_md": "Changed body",
+        "document_type": "lore",
+        "source_file": "canon/world/changed.md",
+    }
+    database = SimpleNamespace(
+        execute=AsyncMock(),
+        fetch=AsyncMock(side_effect=[[document], []]),
+        disconnect=AsyncMock(),
+    )
+    creator = SimpleNamespace(split_text_into_episodes=lambda *_args: ["Changed episode"])
+
+    with (
+        patch.object(
+            create_episodes_from_documents,
+            "get_postgres_db",
+            AsyncMock(return_value=database),
+        ),
+        patch.object(create_episodes_from_documents, "EpisodeCreator", return_value=creator),
+    ):
+        assert await create_episodes_from_documents.create_episodes_from_documents()
+
+    upsert_query = next(
+        call.args[0]
+        for call in database.execute.await_args_list
+        if "INSERT INTO episodes" in call.args[0]
+    )
+    assert "episodes.text IS DISTINCT FROM EXCLUDED.text" in upsert_query
+    assert "THEN NULL" in upsert_query
 
 
 async def test_embedding_generation_fetches_only_canon_episodes():

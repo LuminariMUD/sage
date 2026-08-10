@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class UnifiedCreativeTool:
     """A flexible creative tool that adapts to any content generation need."""
 
-    def __init__(self, model_name: str = "gpt-4o", temperature: float = 0.7):
+    def __init__(self, model_name: str = "gpt-5.6-luna", temperature: float = 0.7):
         # Use creative task for content generation with provider abstraction
         self.llm = get_chat_model(
             task="creative", temperature=temperature, streaming=False, max_tokens=4000

@@ -36,7 +36,7 @@ def get_chat_service(force_legacy: bool = False, enable_react: bool | None = Non
         enable_react = os.getenv("ENABLE_REACT", "true").lower() == "true"
 
     # Get model configuration
-    model = os.getenv("LANGCHAIN_MODEL", "gpt-4o-mini")
+    model = os.getenv("LANGCHAIN_MODEL", "gpt-5.6-luna")
 
     if not text_profile_is_ready("tools"):
         from .legacy_service import LangChainChatService as LegacyLangChainService

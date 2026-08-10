@@ -239,7 +239,7 @@ class DirectAnswerChain(Runnable):
 
     def __init__(
         self,
-        model_name: str = "gpt-4.1",
+        model_name: str = "gpt-5.6-luna",
         temperature: float = 0.0,
         enable_reflection: bool = False,  # Kept for API compatibility; ignored.
     ) -> None:

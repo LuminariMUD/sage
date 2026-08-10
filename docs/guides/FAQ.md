@@ -540,7 +540,7 @@ No, corrections require **explicit approval**. The system:
 **AI:**
 
 - OpenAI API latency
-- Model choice (GPT-4 vs GPT-3.5)
+- Model choice
 - Context size
 
 **System:**
@@ -568,7 +568,7 @@ No, corrections require **explicit approval**. The system:
    - Pagination for large sets
 
 4. **Use faster models:**
-   - GPT-3.5-turbo instead of GPT-4
+   - gpt-5.6-luna instead of gpt-5.6-terra/sol
    - Local embeddings instead of OpenAI
 
 5. **Cache results:**

@@ -27,7 +27,7 @@ from src.llm.provider_config import (
 )
 
 BENCHMARK_CONFIRMATION = "RUN_GRAPHITI_BENCHMARK"
-DEFAULT_CORPUS = Path("/app/benchmarks/graphiti_extraction_v2.json")
+DEFAULT_CORPUS = Path("/app/benchmarks/graphiti_extraction_v3.json")
 
 
 def _emit(report: Mapping[str, object], *, as_json: bool, error: bool = False) -> None:
@@ -56,6 +56,9 @@ def _emit(report: Mapping[str, object], *, as_json: bool, error: bool = False) -
         relationship_quality = result["relationship_quality"]
         if not isinstance(relationship_quality, Mapping):
             raise ValueError("Benchmark relationship-quality result is invalid")
+        entity_grounding_quality = result.get("entity_grounding_quality")
+        if not isinstance(entity_grounding_quality, Mapping):
+            entity_grounding_quality = {}
         accepted_rate = relationship_quality["accepted_of_proposed"]
         accepted_rate_text = (
             "unavailable" if accepted_rate is None else f"{float(accepted_rate):.3f}"
@@ -66,7 +69,13 @@ def _emit(report: Mapping[str, object], *, as_json: bool, error: bool = False) -
             f"status={result['status']} cases={result['case_count']} "
             f"structured={result['schema_success_cases']}/{result['case_count']} "
             f"entity_recall={float(result['entity_recall']):.3f} "
+            "forbidden_entity_matches="
+            f"{result.get('matched_forbidden_entities', 0)} "
             f"relationship_recall={float(result['relationship_recall']):.3f} "
+            "entity_grounding_policy="
+            f"{result.get('entity_grounding_policy', 'off')} "
+            "entity_grounding_acceptance="
+            f"{entity_grounding_quality.get('accepted_of_proposed')} "
             f"relationship_acceptance={accepted_rate_text} "
             f"provider_calls={result['provider_calls']}",
             file=destination,
@@ -170,6 +179,7 @@ async def run(
                     relationship_vocabulary_fingerprint=(
                         profile.relationship_vocabulary_fingerprint
                     ),
+                    entity_grounding_policy=profile.entity_grounding_policy,
                     max_entities=profile.max_entities,
                     max_relationships=profile.max_relationships,
                     maximum_provider_calls=maximum_provider_calls,
@@ -199,6 +209,7 @@ async def run(
         "prompt_version": profile.prompt_version,
         "schema_version_id": profile.schema_version,
         "relationship_vocabulary_fingerprint": (profile.relationship_vocabulary_fingerprint),
+        "entity_grounding_policy": profile.entity_grounding_policy,
         "candidate_selection": args.candidate,
         "concurrency": args.concurrency,
         "maximum_provider_calls_per_case": maximum_provider_calls,

@@ -24,8 +24,17 @@ from graphiti_core.utils.maintenance.node_operations import extract_nodes
 from pydantic import BaseModel
 
 from src.graphiti.edge_types import EDGE_TYPES
+from src.graphiti.entity_grounding_policy import (
+    ENTITY_GROUNDING_POLICY_LITERAL_V1,
+    EntityGroundingReport,
+    resolve_entity_grounding_policy,
+)
 from src.graphiti.entity_types import ENTITY_TYPES
-from src.graphiti.policy_graphiti import RelationshipPolicyLLMProxy
+from src.graphiti.policy_graphiti import (
+    EntityGroundingLLMProxy,
+    RelationshipPolicyLLMProxy,
+    bind_entity_grounding_episode,
+)
 from src.graphiti.provider_config import create_graphiti_llm_client
 from src.graphiti.provider_tracking import ProviderCallTracker, ProviderTrackingError
 from src.graphiti.relationship_policy import (
@@ -39,7 +48,7 @@ from src.llm.retry import classify_provider_failure
 _CASE_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 _SAFE_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._:/+@()-]{0,254}$")
 _MAX_CORPUS_BYTES = 1_048_576
-BENCHMARK_EXTRACTION_VERSION = "staged-relationship-policy:v1"
+BENCHMARK_EXTRACTION_VERSION = "staged-entity-grounding-negative-relationship-policy:v3"
 logger = logging.getLogger(__name__)
 
 
@@ -71,6 +80,7 @@ class BenchmarkCase:
     expect_parse_success: bool
     expect_schema_success: bool
     expected_entities: tuple[ExpectedEntity, ...]
+    forbidden_entities: tuple[ExpectedEntity, ...]
     expected_relationships: tuple[ExpectedRelationship, ...]
 
 
@@ -92,6 +102,7 @@ class BenchmarkExtractionResult:
     edges: list[object]
     node_episode_index_map: dict[str, list[int]]
     relationship_quality: RelationshipQualityReport
+    entity_grounding_quality: EntityGroundingReport | None = None
 
 
 def _mapping(value: object, label: str) -> Mapping[str, object]:
@@ -182,7 +193,7 @@ def _parse_case(value: object, schema_version: int) -> BenchmarkCase:
         )
         if not expect_parse_success or not expect_schema_success:
             raise BenchmarkConfigurationError(
-                "Version 2 benchmark cases must require parse and schema success"
+                "Versioned benchmark cases must require parse and schema success"
             )
     entities = tuple(
         _parse_entity(item)
@@ -193,6 +204,22 @@ def _parse_case(value: object, schema_version: int) -> BenchmarkCase:
     entity_ids = frozenset(entity.id for entity in entities)
     if len(entity_ids) != len(entities):
         raise BenchmarkConfigurationError("Expected entity IDs must be unique")
+    forbidden_entities = (
+        tuple(
+            _parse_entity(item)
+            for item in _sequence(
+                payload.get("forbidden_entities"),
+                "Forbidden entities",
+            )
+        )
+        if schema_version >= 3
+        else ()
+    )
+    forbidden_entity_ids = frozenset(entity.id for entity in forbidden_entities)
+    if len(forbidden_entities) > 100 or len(forbidden_entity_ids) != len(forbidden_entities):
+        raise BenchmarkConfigurationError("Forbidden entity IDs must be unique and bounded")
+    if entity_ids & forbidden_entity_ids:
+        raise BenchmarkConfigurationError("Expected and forbidden entity IDs must be disjoint")
     relationships = tuple(
         _parse_relationship(item, entity_ids)
         for item in _sequence(
@@ -208,6 +235,7 @@ def _parse_case(value: object, schema_version: int) -> BenchmarkCase:
         expect_parse_success=expect_parse_success,
         expect_schema_success=expect_schema_success,
         expected_entities=entities,
+        forbidden_entities=forbidden_entities,
         expected_relationships=relationships,
     )
 
@@ -231,7 +259,7 @@ def load_benchmark_corpus(path: Path) -> BenchmarkCorpus:
     if (
         isinstance(schema_version, bool)
         or not isinstance(schema_version, int)
-        or schema_version not in (1, 2)
+        or schema_version not in (1, 2, 3)
     ):
         raise BenchmarkConfigurationError("Benchmark corpus schema version is unsupported")
     corpus_id = _label(root.get("corpus_id"), "Benchmark corpus ID")
@@ -284,6 +312,10 @@ def score_benchmark_case(
             if _name_matches(getattr(node, "name", ""), entity_expectation.aliases)
         }
     matched_entities = sum(bool(matches) for matches in matched_node_ids.values())
+    matched_forbidden_entities = sum(
+        any(_name_matches(getattr(node, "name", ""), forbidden.aliases) for node in nodes)
+        for forbidden in case.forbidden_entities
+    )
     matched_relationships = 0
     for relationship_expectation in case.expected_relationships:
         allowed_types = {_normalize(value) for value in relationship_expectation.types}
@@ -303,6 +335,8 @@ def score_benchmark_case(
         "matched_entities": matched_entities,
         "extracted_entities": len(nodes),
         "entity_recall": matched_entities / expected_entity_count,
+        "forbidden_entities": len(case.forbidden_entities),
+        "matched_forbidden_entities": matched_forbidden_entities,
         "expected_relationships": expected_relationship_count,
         "matched_relationships": matched_relationships,
         "extracted_relationships": len(edges),
@@ -440,20 +474,40 @@ async def extract_staged_policy_graph(
     edge_types: dict[str, type[BaseModel]],
     edge_type_map: dict[tuple[str, str], list[str]],
     custom_extraction_instructions: str,
+    entity_grounding_policy: str = "off",
 ) -> BenchmarkExtractionResult:
     """Run the production staged extraction boundary without graph maintenance."""
-    typed_clients = cast(GraphitiClients, clients)
-    nodes, node_episode_index_map = await extract_nodes(
-        typed_clients,
-        episode,
-        previous_episodes,
-        entity_types,
-        None,
-        custom_extraction_instructions,
-    )
     llm_client = getattr(clients, "llm_client", None)
     if llm_client is None:
         raise BenchmarkConfigurationError("Benchmark extraction client is unavailable")
+    grounding_policy = resolve_entity_grounding_policy(entity_grounding_policy)
+    grounding_proxy: EntityGroundingLLMProxy | None = None
+    node_llm_client = llm_client
+    if grounding_policy == ENTITY_GROUNDING_POLICY_LITERAL_V1:
+        grounding_proxy = EntityGroundingLLMProxy(llm_client)
+        node_llm_client = grounding_proxy
+    typed_clients = cast(GraphitiClients, SimpleNamespace(llm_client=node_llm_client))
+    if grounding_proxy is None:
+        nodes, node_episode_index_map = await extract_nodes(
+            typed_clients,
+            episode,
+            previous_episodes,
+            entity_types,
+            None,
+            custom_extraction_instructions,
+        )
+    else:
+        with bind_entity_grounding_episode(episode.content):
+            nodes, node_episode_index_map = await extract_nodes(
+                typed_clients,
+                episode,
+                previous_episodes,
+                entity_types,
+                None,
+                custom_extraction_instructions,
+            )
+        if grounding_proxy.report is None:
+            raise BenchmarkConfigurationError("Benchmark entity grounding did not produce evidence")
     proxy = RelationshipPolicyLLMProxy(llm_client, nodes)
     edge_clients = cast(GraphitiClients, SimpleNamespace(llm_client=proxy))
     edges = await extract_edges(
@@ -473,6 +527,7 @@ async def extract_staged_policy_graph(
         edges=list(edges),
         node_episode_index_map=node_episode_index_map,
         relationship_quality=proxy.report,
+        entity_grounding_quality=(grounding_proxy.report if grounding_proxy is not None else None),
     )
 
 
@@ -544,6 +599,42 @@ def _aggregate_relationship_quality(
     }
 
 
+def _aggregate_entity_grounding_quality(
+    case_results: Sequence[Mapping[str, object]],
+    policy: str,
+) -> dict[str, object]:
+    reports = [
+        result["entity_grounding_quality"]
+        for result in case_results
+        if isinstance(result.get("entity_grounding_quality"), Mapping)
+    ]
+    enabled = policy == ENTITY_GROUNDING_POLICY_LITERAL_V1
+    expected_evidence_cases = len(case_results) if enabled else 0
+
+    def total(name: str) -> int:
+        return sum(int(report[name]) for report in reports if isinstance(report, Mapping))
+
+    proposed = total("proposed")
+    accepted = total("accepted")
+    rejected = total("rejected")
+    return {
+        "policy": policy,
+        "expected_evidence_cases": expected_evidence_cases,
+        "evidence_cases": len(reports),
+        "missing_evidence_cases": max(0, expected_evidence_cases - len(reports)),
+        "unexpected_evidence_cases": 0 if enabled else len(reports),
+        "proposed_entities": proposed,
+        "accepted_entities": accepted,
+        "rejected_entities": rejected,
+        "accepted_of_proposed": _rate(accepted, proposed),
+        "rejected_of_proposed": _rate(rejected, proposed),
+        "rejection_reasons": {
+            "rejected_not_literal": total("rejected_not_literal"),
+            "rejected_empty_name": total("rejected_empty_name"),
+        },
+    }
+
+
 async def benchmark_candidate(
     corpus: BenchmarkCorpus,
     candidate: TextModelCandidate,
@@ -559,12 +650,14 @@ async def benchmark_candidate(
     client_factory: ClientFactory = create_graphiti_llm_client,
     relationship_vocabulary_fingerprint: str = RELATIONSHIP_VOCABULARY_FINGERPRINT,
     extractor: Extractor = extract_staged_policy_graph,
+    entity_grounding_policy: str = "off",
 ) -> dict[str, object]:
     """Benchmark one candidate against every case without persistence."""
     if not 1 <= concurrency <= 2:
         raise BenchmarkConfigurationError("Benchmark concurrency must be one or two")
     if relationship_vocabulary_fingerprint != RELATIONSHIP_VOCABULARY_FINGERPRINT:
         raise BenchmarkConfigurationError("Benchmark relationship vocabulary is not current")
+    grounding_policy = resolve_entity_grounding_policy(entity_grounding_policy)
     semaphore = asyncio.Semaphore(concurrency)
 
     async def run_case(case: BenchmarkCase) -> dict[str, object]:
@@ -603,10 +696,25 @@ async def benchmark_candidate(
                         edge_types=EDGE_TYPES,
                         edge_type_map={("Entity", "Entity"): list(EDGE_TYPES)},
                         custom_extraction_instructions=instructions,
+                        entity_grounding_policy=grounding_policy,
                     )
                 if budget.rejected_calls:
                     raise BenchmarkCallBudgetExceeded("Benchmark provider-call budget was exceeded")
                 relationship_quality = extraction.relationship_quality
+                grounding_quality = extraction.entity_grounding_quality
+                if (
+                    grounding_policy == ENTITY_GROUNDING_POLICY_LITERAL_V1
+                    and grounding_quality is None
+                ):
+                    raise BenchmarkConfigurationError(
+                        "Enabled entity grounding did not produce benchmark evidence"
+                    )
+                if grounding_policy != ENTITY_GROUNDING_POLICY_LITERAL_V1 and (
+                    grounding_quality is not None
+                ):
+                    raise BenchmarkConfigurationError(
+                        "Disabled entity grounding produced unexpected benchmark evidence"
+                    )
                 if (
                     relationship_quality.vocabulary_fingerprint
                     != relationship_vocabulary_fingerprint
@@ -627,6 +735,9 @@ async def benchmark_candidate(
                         case.expect_parse_success and case.expect_schema_success
                     ),
                     "relationship_quality": relationship_quality.as_dict(),
+                    "entity_grounding_quality": (
+                        grounding_quality.as_dict() if grounding_quality is not None else None
+                    ),
                     **score,
                     **budget.sanitized_summary(),
                 }
@@ -652,10 +763,13 @@ async def benchmark_candidate(
                         and schema_success is case.expect_schema_success
                     ),
                     "relationship_quality": None,
+                    "entity_grounding_quality": None,
                     "expected_entities": len(case.expected_entities),
                     "matched_entities": 0,
                     "extracted_entities": 0,
                     "entity_recall": 0.0,
+                    "forbidden_entities": len(case.forbidden_entities),
+                    "matched_forbidden_entities": 0,
                     "expected_relationships": len(case.expected_relationships),
                     "matched_relationships": 0,
                     "extracted_relationships": 0,
@@ -689,6 +803,10 @@ async def benchmark_candidate(
     case_results = list(await asyncio.gather(*(run_case(case) for case in corpus.cases)))
     expected_entities = sum(_result_count(result, "expected_entities") for result in case_results)
     matched_entities = sum(_result_count(result, "matched_entities") for result in case_results)
+    forbidden_entities = sum(_result_count(result, "forbidden_entities") for result in case_results)
+    matched_forbidden_entities = sum(
+        _result_count(result, "matched_forbidden_entities") for result in case_results
+    )
     expected_relationships = sum(
         _result_count(result, "expected_relationships") for result in case_results
     )
@@ -706,11 +824,18 @@ async def benchmark_candidate(
         result["structured_expectation_match"] is True for result in case_results
     )
     relationship_quality = _aggregate_relationship_quality(case_results)
+    entity_grounding_quality = _aggregate_entity_grounding_quality(
+        case_results,
+        grounding_policy,
+    )
     passed = (
         failed_cases == 0
         and structured_expectation_matches == len(case_results)
         and relationship_quality["evidence_cases"] == len(case_results)
         and relationship_quality["vocabulary_fingerprints"] == [relationship_vocabulary_fingerprint]
+        and entity_grounding_quality["missing_evidence_cases"] == 0
+        and entity_grounding_quality["unexpected_evidence_cases"] == 0
+        and matched_forbidden_entities == 0
         and entity_recall >= corpus.entity_recall_threshold
         and relationship_recall >= corpus.relationship_recall_threshold
     )
@@ -723,6 +848,7 @@ async def benchmark_candidate(
         "prompt_version": prompt_version,
         "schema_version": schema_version,
         "relationship_vocabulary_fingerprint": relationship_vocabulary_fingerprint,
+        "entity_grounding_policy": grounding_policy,
         "maximum_provider_calls_per_case": maximum_provider_calls,
         "concurrency": concurrency,
     }
@@ -759,9 +885,13 @@ async def benchmark_candidate(
         "structured_expectation_matches": structured_expectation_matches,
         "entity_recall": entity_recall,
         "entity_recall_threshold": corpus.entity_recall_threshold,
+        "forbidden_entities": forbidden_entities,
+        "matched_forbidden_entities": matched_forbidden_entities,
         "relationship_recall": relationship_recall,
         "relationship_recall_threshold": corpus.relationship_recall_threshold,
         "relationship_quality": relationship_quality,
+        "entity_grounding_policy": grounding_policy,
+        "entity_grounding_quality": entity_grounding_quality,
         "provider_calls": sum(_result_count(result, "provider_calls") for result in case_results),
         "maximum_provider_calls_per_case": maximum_provider_calls,
         "usage": dict(sorted(usage.items())),

@@ -231,7 +231,14 @@ async def create_episodes_from_documents(
                                     INSERT INTO episodes (document_id, episode_index, text, created_at)
                                     VALUES ($1, $2, $3, NOW())
                                     ON CONFLICT (document_id, episode_index)
-                                    DO UPDATE SET text = EXCLUDED.text, updated_at = NOW()
+                                    DO UPDATE SET
+                                        text = EXCLUDED.text,
+                                        embedding = CASE
+                                            WHEN episodes.text IS DISTINCT FROM EXCLUDED.text
+                                                THEN NULL
+                                            ELSE episodes.embedding
+                                        END,
+                                        updated_at = NOW()
                                 """,
                                     document_id,
                                     episode_index,

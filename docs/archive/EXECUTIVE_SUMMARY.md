@@ -127,7 +127,7 @@ Handle complex requests requiring multiple operations:
 
 ### AI Components
 
-- **GPT-4 Models**: Content generation and planning
+- **gpt-5.6-luna Model**: Content generation and planning
 - **PydanticAI**: Type-safe agent framework
 - **LangChain**: Chain orchestration and tool integration
 - **Custom Classifiers**: Intent recognition and routing

@@ -126,7 +126,7 @@ def _format_context_blocks(blocks: list[str]) -> str:
 class ReflectionChain(Runnable):
     """Chain for reflecting on and improving responses."""
 
-    def __init__(self, model_name: str = "gpt-4.1", temperature: float = 0.0):
+    def __init__(self, model_name: str = "gpt-5.6-luna", temperature: float = 0.0):
         """Initialize with low temperature for consistent evaluation."""
         self.llm = None
 

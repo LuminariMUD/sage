@@ -31,7 +31,7 @@ This guide covers deploying Luminari Sage in production environments. The system
 - **OpenAI API Key**: Required for embeddings and LLM operations
   - Get from: https://platform.openai.com/api-keys
   - Estimated cost: $50-100/month for moderate usage
-  - Models used: GPT-4 (chat), text-embedding-ada-002 or sentence-transformers (embeddings)
+  - Models used: gpt-5.6-luna (chat), text-embedding-ada-002 or sentence-transformers (embeddings)
 
 ## Quick Start Deployment
 

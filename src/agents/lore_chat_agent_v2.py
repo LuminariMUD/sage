@@ -1,7 +1,7 @@
 """
 Enhanced Luminari Lore Chat Agent with Transparency.
 
-Simplified architecture with GPT-4 handling complexity, but adds:
+Simplified architecture with gpt-5.6-luna handling complexity, but adds:
 - Transparent tool usage display
 - Source citations
 - Entity tracking for context

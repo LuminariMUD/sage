@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import pytest
 
+from src.graphiti.entity_grounding_policy import EntityGroundingReport
 from src.graphiti.relationship_policy import (
     RELATIONSHIP_VOCABULARY_FINGERPRINT,
     RelationshipQualityReport,
@@ -130,6 +131,8 @@ class FakeGraphitiCore:
         self.crash_after_write = False
         self.quality_report = None
         self.quality_report_key = None
+        self.grounding_report = None
+        self.grounding_report_key = None
         self.last_add_kwargs = None
 
     def consume_relationship_quality(self, episode_uuid):
@@ -138,6 +141,14 @@ class FakeGraphitiCore:
         report = self.quality_report
         self.quality_report = None
         self.quality_report_key = None
+        return report
+
+    def consume_entity_grounding_quality(self, episode_uuid):
+        if self.grounding_report_key is not None and episode_uuid != self.grounding_report_key:
+            return None
+        report = self.grounding_report
+        self.grounding_report = None
+        self.grounding_report_key = None
         return report
 
     async def add_episode(self, **kwargs):
@@ -163,6 +174,8 @@ class FakeGraphitiCore:
             raise InjectedCrash("after graph write")
         if self.quality_report is not None:
             self.quality_report_key = created_uuid
+        if self.grounding_report is not None:
+            self.grounding_report_key = created_uuid
         return SimpleNamespace(
             episode=SimpleNamespace(uuid=created_uuid),
             nodes=[object(), object()],
@@ -337,3 +350,22 @@ async def test_verified_success_uses_premaintenance_relationship_quality_counts(
     assert result.relationship_quality is not None
     assert result.relationship_quality.normalized_edges == 1
     assert core.quality_report is None
+
+
+async def test_verified_success_records_entity_grounding_counts():
+    processor, _, core = _processor()
+    lease = _lease()
+    core.grounding_report = EntityGroundingReport(
+        proposed=5,
+        accepted=3,
+        rejected_not_literal=1,
+        rejected_empty_name=1,
+    )
+
+    result = await processor.process(lease)
+
+    assert result.graph_counts.proposed_entities == 5
+    assert result.graph_counts.accepted_entities == 3
+    assert result.graph_counts.rejected_entities == 2
+    assert result.entity_grounding_quality is not None
+    assert core.grounding_report is None

@@ -188,7 +188,7 @@ class EntityData(BaseModel):
     confidence: float
 
 entity_agent = Agent(
-    model='gpt-4',  # or local model
+    model='gpt-5.6-luna',  # or local model
     system_prompt="Extract entities from Luminari lore text",
     result_type=list[EntityData]
 )

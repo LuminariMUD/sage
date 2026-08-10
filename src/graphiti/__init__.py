@@ -54,6 +54,7 @@ class LuminariGraphiti:
         neo4j_password: str | None = None,
         llm_client: Any | None = None,
         embedder: Any | None = None,
+        entity_grounding_policy: str | None = None,
         verbose: bool = False,
     ):
         """Initialize Graphiti for Luminari Sage."""
@@ -103,6 +104,7 @@ class LuminariGraphiti:
             password=resolved_neo4j_password,
             embedder=self.embedder,
             llm_client=llm_client,
+            entity_grounding_policy=entity_grounding_policy,
         )
 
         # Add LLM logging to see what relationship types are being generated
@@ -751,6 +753,7 @@ async def initialize_graphiti(
     verbose: bool = False,
     llm_client: Any | None = None,
     embedder: Any | None = None,
+    entity_grounding_policy: str | None = None,
 ) -> LuminariGraphiti:
     """Initialize and return a configured Graphiti instance."""
     graphiti = LuminariGraphiti(
@@ -759,6 +762,7 @@ async def initialize_graphiti(
         neo4j_password=neo4j_password,
         llm_client=llm_client,
         embedder=embedder,
+        entity_grounding_policy=entity_grounding_policy,
         verbose=verbose,
     )
 
@@ -835,22 +839,9 @@ async def initialize_graphiti(
 
     # Create indexes and constraints in Neo4j
     async with graphiti.driver.session() as session:
-        # Create indexes for better performance
-        await session.run("CREATE INDEX entity_name IF NOT EXISTS FOR (n:Entity) ON (n.name)")
-        await session.run("CREATE INDEX entity_type IF NOT EXISTS FOR (n:Entity) ON (n.`type`)")
-        await session.run(
-            "CREATE INDEX entity_stable_id IF NOT EXISTS FOR (n:Entity) ON (n.stable_id)"
-        )
-
-        # Create indexes for Episodic nodes (critical for GraphRAG performance)
-        await session.run(
-            "CREATE INDEX episodic_stable_id IF NOT EXISTS FOR (ep:Episodic) ON (ep.stable_id)"
-        )
-        await session.run(
-            "CREATE INDEX episodic_source_description IF NOT EXISTS FOR (ep:Episodic) ON (ep.source_description)"
-        )
-
-        # Create constraint for unique stable_id on entities
+        # A uniqueness constraint owns its backing range index. Creating a standalone
+        # index for the same label/property first prevents Neo4j from creating the
+        # constraint, even when both statements use IF NOT EXISTS.
         try:
             await session.run(
                 "CREATE CONSTRAINT entity_stable_id_unique IF NOT EXISTS FOR (n:Entity) REQUIRE n.stable_id IS UNIQUE"
@@ -860,6 +851,18 @@ async def initialize_graphiti(
                 "Unable to verify the entity stable-id constraint (%s)",
                 type(constraint_error).__name__,
             )
+
+        # Create indexes for better performance
+        await session.run("CREATE INDEX entity_name IF NOT EXISTS FOR (n:Entity) ON (n.name)")
+        await session.run("CREATE INDEX entity_type IF NOT EXISTS FOR (n:Entity) ON (n.`type`)")
+
+        # Create indexes for Episodic nodes (critical for GraphRAG performance)
+        await session.run(
+            "CREATE INDEX episodic_stable_id IF NOT EXISTS FOR (ep:Episodic) ON (ep.stable_id)"
+        )
+        await session.run(
+            "CREATE INDEX episodic_source_description IF NOT EXISTS FOR (ep:Episodic) ON (ep.source_description)"
+        )
 
         # Note: We don't create unique constraint on Episodic.stable_id since multiple episodes
         # might theoretically reference the same PostgreSQL episode in edge cases

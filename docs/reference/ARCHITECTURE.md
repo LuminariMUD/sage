@@ -125,7 +125,7 @@ class HybridRAG:
 
 ```python
 class BaseAgent:
-    def __init__(self, model="gpt-4o-mini"):
+    def __init__(self, model="gpt-5.6-luna"):
         self.llm = ChatOpenAI(model=model)
         self.tools = self.register_tools()
 
@@ -138,7 +138,7 @@ class BaseAgent:
 
 ###### Chat Agent (PydanticAI)
 
-- **Model**: GPT-4o
+- **Model**: gpt-5.6-luna
 - **Purpose**: Conversational interface
 - **Features**:
   - Streaming responses
@@ -148,7 +148,7 @@ class BaseAgent:
 
 ###### Story Development Agent
 
-- **Model**: GPT-4o-mini
+- **Model**: gpt-5.6-luna
 - **Purpose**: Create non-canon stories
 - **Features**:
   - [STORY] entity marking
@@ -158,7 +158,7 @@ class BaseAgent:
 
 ###### Quest Planner Agent
 
-- **Model**: GPT-4o-mini
+- **Model**: gpt-5.6-luna
 - **Purpose**: Structure quest generation
 - **Output Schema**:
   ```json
@@ -179,7 +179,7 @@ class BaseAgent:
 
 ###### Narrative Generator
 
-- **Model**: GPT-4o-mini
+- **Model**: gpt-5.6-luna
 - **Purpose**: Write prose scenes
 - **Features**:
   - Outline generation (3-7 beats)
@@ -189,7 +189,7 @@ class BaseAgent:
 
 ###### Agent Orchestrator
 
-- **Model**: GPT-4o-mini (planning)
+- **Model**: gpt-5.6-luna (planning)
 - **Purpose**: Multi-step operation coordination
 - **Process**:
   1. Analyze request

@@ -914,11 +914,11 @@ class ProviderSettingsResolver:
                 )
             return model
         defaults = {
-            "chat": self._value("LLM_MODEL", "gpt-4o-mini"),
-            "creative": self._value("LLM_MODEL", "gpt-4o-mini"),
-            "reasoning": self._value("LLM_MODEL", "gpt-4o-mini"),
-            "extraction": self._value("LLM_MODEL", "gpt-4o-mini"),
-            "tools": self._value("LLM_MODEL", "gpt-4o-mini"),
+            "chat": self._value("LLM_MODEL", "gpt-5.6-luna"),
+            "creative": self._value("LLM_MODEL", "gpt-5.6-luna"),
+            "reasoning": self._value("LLM_MODEL", "gpt-5.6-luna"),
+            "extraction": self._value("LLM_MODEL", "gpt-5.6-luna"),
+            "tools": self._value("LLM_MODEL", "gpt-5.6-luna"),
         }
         return self._value(f"OPENAI_{task.upper()}_MODEL", defaults[task])
 

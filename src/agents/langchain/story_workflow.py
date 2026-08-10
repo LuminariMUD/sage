@@ -55,7 +55,7 @@ class StoryState(TypedDict):
 class StoryWorkflow:
     """Structured workflow that produces multi-section stories."""
 
-    def __init__(self, model_planning: str = "gpt-4.1", model_writing: str = "gpt-4o") -> None:
+    def __init__(self, model_planning: str = "gpt-5.6-luna", model_writing: str = "gpt-5.6-luna") -> None:
         # Use reasoning task for story planning (lower temperature)
         self.brief_llm = get_chat_model(task="reasoning", temperature=0.6, streaming=False)
         # Use creative task for story writing (higher temperature)

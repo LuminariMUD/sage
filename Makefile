@@ -4,7 +4,7 @@
 .PHONY: pipeline pipeline-canon pipeline-draft pipeline-all resume rebuild
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
-.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-quality-report graph-quality-report-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined graph-rebuild-status graph-rebuild-plan graph-rebuild-prepare graph-rebuild-finalize backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate embedding-space-initialize-empty embedding-shadow-status embedding-shadow-status-json embedding-shadow-register embedding-shadow-backfill embedding-shadow-recover-run embedding-shadow-build-index retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-shadow-retrieval benchmark-shadow-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe operational-readiness operational-readiness-json
+.PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-semantic-audit graph-semantic-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-quality-report graph-quality-report-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined graph-rebuild-status graph-rebuild-plan graph-rebuild-prepare graph-rebuild-finalize backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate embedding-space-initialize-empty embedding-shadow-status embedding-shadow-status-json embedding-shadow-register embedding-shadow-backfill embedding-shadow-recover-run embedding-shadow-build-index retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-shadow-retrieval benchmark-shadow-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe operational-readiness operational-readiness-json
 
 # Capability-aware host launcher. It reuses the model-profile resolver and
 # applies the no-Ollama override only when every selected capability is cloud.
@@ -47,6 +47,8 @@ help:
 	@echo "  make graphiti-status           - Show Graphiti/Neo4j statistics"
 	@echo "  make graph-audit              - Reconcile PostgreSQL and Neo4j (read-only)"
 	@echo "  make graph-audit-json         - Emit machine-readable reconciliation JSON"
+	@echo "  make graph-semantic-audit     - Review entity grounding, names, and types"
+	@echo "  make graph-semantic-audit-json - Emit semantic review signals as JSON"
 	@echo "  make graph-sync-status        - Show durable graph job/run state (read-only)"
 	@echo "  make graph-sync-run-summary   - Show latest durable throughput/ETA/failures"
 	@echo "  make graph-sync-run-summary-json - Emit latest durable run summary as JSON"
@@ -343,6 +345,16 @@ graph-audit:
 .PHONY: graph-audit-json
 graph-audit-json:
 	@docker compose exec -T api python src/scripts/graph_audit.py --json
+
+.PHONY: graph-semantic-audit
+graph-semantic-audit:
+	@docker compose exec -T api python src/scripts/graph_semantic_audit.py \
+		--sample-limit "$(or $(SEMANTIC_AUDIT_SAMPLE_LIMIT),20)"
+
+.PHONY: graph-semantic-audit-json
+graph-semantic-audit-json:
+	@docker compose exec -T api python src/scripts/graph_semantic_audit.py --json \
+		--sample-limit "$(or $(SEMANTIC_AUDIT_SAMPLE_LIMIT),20)"
 
 .PHONY: graph-sync-status
 graph-sync-status:

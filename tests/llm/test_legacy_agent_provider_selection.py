@@ -74,7 +74,7 @@ def test_base_validator_defaults_to_extraction_route(monkeypatch):
             "extraction",
             {
                 "legacy_openai_api_key": None,
-                "legacy_openai_model": "gpt-4o-mini",
+                "legacy_openai_model": "gpt-5.6-luna",
             },
         )
     ]

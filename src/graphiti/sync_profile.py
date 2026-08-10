@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
+from src.graphiti.entity_grounding_policy import resolve_entity_grounding_policy
 from src.graphiti.relationship_policy import RELATIONSHIP_VOCABULARY_FINGERPRINT
 from src.graphiti.sync_models import validate_label
 from src.llm.provider_config import resolve_provider_settings
@@ -77,6 +78,7 @@ class GraphSyncExecutionProfile:
     max_relationships: int
     model_revision: str | None = None
     relationship_vocabulary_fingerprint: str = RELATIONSHIP_VOCABULARY_FINGERPRINT
+    entity_grounding_policy: str = "off"
 
     def __post_init__(self) -> None:
         for value, label in (
@@ -92,10 +94,15 @@ class GraphSyncExecutionProfile:
                 self.relationship_vocabulary_fingerprint,
                 "Relationship vocabulary fingerprint",
             ),
+            (self.entity_grounding_policy, "Entity grounding policy"),
         ):
             validate_label(value, label)
         if self.model_revision is not None:
             validate_label(self.model_revision, "Model revision")
+        if resolve_entity_grounding_policy(self.entity_grounding_policy) != (
+            self.entity_grounding_policy
+        ):
+            raise ValueError("Entity grounding policy must use its canonical identifier")
         if self.max_entities <= 0 or self.max_relationships <= 0:
             raise ValueError("Graph extraction limits must be positive")
 
@@ -123,6 +130,9 @@ class GraphSyncExecutionProfile:
             _environment_value("GRAPHITI_MAX_RELATIONSHIPS_PER_EPISODE", default="25"),
             "Maximum relationships per episode",
         )
+        entity_grounding_policy = resolve_entity_grounding_policy(
+            os.getenv("GRAPH_ENTITY_GROUNDING_POLICY")
+        )
 
         embedding_fingerprint = embedding_profile.fingerprint
         candidate_fingerprint = candidate.fingerprint
@@ -145,6 +155,10 @@ class GraphSyncExecutionProfile:
             "max_entities": max_entities,
             "max_relationships": max_relationships,
         }
+        # Preserve the deployed v1/off fingerprint for restart compatibility.
+        # Any enabled policy becomes explicit profile provenance.
+        if entity_grounding_policy != "off":
+            sync_payload["entity_grounding_policy"] = entity_grounding_policy
         sync_fingerprint = canonical_fingerprint("sync", sync_payload)
         configured_fingerprint = os.getenv("GRAPH_SYNC_PROFILE_FINGERPRINT")
         if configured_fingerprint and configured_fingerprint != sync_fingerprint:
@@ -163,6 +177,7 @@ class GraphSyncExecutionProfile:
             max_entities=max_entities,
             max_relationships=max_relationships,
             relationship_vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
+            entity_grounding_policy=entity_grounding_policy,
         )
 
     def sanitized_summary(self) -> dict[str, str | int | None]:
@@ -180,4 +195,5 @@ class GraphSyncExecutionProfile:
             "max_entities": self.max_entities,
             "max_relationships": self.max_relationships,
             "relationship_vocabulary_fingerprint": self.relationship_vocabulary_fingerprint,
+            "entity_grounding_policy": self.entity_grounding_policy,
         }

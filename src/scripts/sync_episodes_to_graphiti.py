@@ -43,14 +43,16 @@ class CanonCorpusViolation(RuntimeError):
 
 async def require_canon_episode_corpus(postgres: PostgresDB) -> None:
     """Fail closed unless every stored episode belongs to ``lore_docs/canon``."""
-    excluded_count = int(await postgres.fetchval("""
+    excluded_count = int(
+        await postgres.fetchval("""
             SELECT count(*)
             FROM episodes AS episode
             LEFT JOIN lore_documents AS document ON document.id = episode.document_id
             WHERE document.id IS NULL
                OR document.canonical IS NOT TRUE
                OR COALESCE(document.source_file, '') NOT LIKE 'canon/%'
-            """))
+            """)
+    )
     if excluded_count:
         raise CanonCorpusViolation(
             f"Graph sync blocked: {excluded_count} episode(s) are outside lore_docs/canon"
@@ -120,6 +122,7 @@ async def _run_worker(args: argparse.Namespace) -> int:
         )
         graphiti = await initialize_graphiti(
             llm_client=route_client,
+            entity_grounding_policy=profile.entity_grounding_policy,
             verbose=args.verbose,
         )
         repository = GraphSyncRepository(postgres)

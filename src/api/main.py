@@ -364,6 +364,27 @@ class RelationshipInfo(BaseModel):
     metadata: dict[str, Any] | None = None  # For Graphiti's rich semantic properties
 
 
+def _resolve_relationship_target(
+    target_uuid: str,
+    entities_by_uuid: dict[str, EntityResponse],
+    relationship_properties: object,
+) -> tuple[str, str]:
+    """Resolve relationship endpoint display fields from the fetched target entity."""
+    target_entity = entities_by_uuid.get(target_uuid)
+    if target_entity is not None:
+        return target_entity.name, target_entity.type
+
+    if isinstance(relationship_properties, dict):
+        target_name = relationship_properties.get("target_name")
+        target_type = relationship_properties.get("target_type")
+        return (
+            target_name if isinstance(target_name, str) and target_name else "Unknown",
+            target_type if isinstance(target_type, str) and target_type else "unknown",
+        )
+
+    return "Unknown", "unknown"
+
+
 class RAGQueryResponse(BaseModel):
     """RAG query response with hybrid Graph RAG support."""
 
@@ -1347,21 +1368,15 @@ async def rag_query(request: RAGQueryRequest):
         all_entities.append(entity_response)
 
     # Process Graphiti relationships
+    entities_by_uuid = {entity.uuid: entity for entity in all_entities}
     for graphiti_rel in graphiti_relationships:
         if graphiti_rel["source"] and graphiti_rel["target"]:
-            # Get target entity name from properties or set default
-            target_name = "Unknown"
-            target_type = "unknown"
-
-            # Try to find target entity name from the properties
             relationship_properties = graphiti_rel.get("properties")
-            if isinstance(relationship_properties, dict):
-                property_name = relationship_properties.get("name")
-                property_type = relationship_properties.get("type")
-                if isinstance(property_name, str):
-                    target_name = property_name
-                if isinstance(property_type, str):
-                    target_type = property_type
+            target_name, target_type = _resolve_relationship_target(
+                graphiti_rel["target"],
+                entities_by_uuid,
+                relationship_properties,
+            )
 
             # Include ALL Graphiti properties in the relationship
             enhanced_rel = {
@@ -1551,7 +1566,7 @@ async def rag_query(request: RAGQueryRequest):
         keep_indices = select_texts_within_budget(
             [(chunk.text, chunk.similarity) for chunk in chunks],
             max_tokens=max_context_tokens,
-            model="gpt-4",  # Use as approximation for token counting
+            model="gpt-5.6-luna",  # Use as approximation for token counting
         )
         chunks = [chunks[i] for i in keep_indices]
 
