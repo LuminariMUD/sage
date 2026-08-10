@@ -9,54 +9,54 @@ The first column is the original Excel row number; lettered columns preserve the
 | Source row | A | B | C | D |
 | ---: | --- | --- | --- | --- |
 | 1 |  | Old Name | New Name | Notes |
-| 2 |  | Faerun | Luminari |  |
-| 3 |  | Menzoberranzan | Teyrvaselleh |  |
-| 4 |  | Thugrak Gol | Shaard |  |
-| 5 |  | Corm Orp | Hallowberry |  |
-| 6 |  | Gracklstugh | Al'Kath |  |
-| 7 |  | Hardbuckler | Fizzletwist |  |
-| 8 |  | Mithril Hall | Tallenshaft |  |
-| 9 |  | Evereskea | Carrowath |  |
+| 2 |  | Faerun | Lumia |  |
+| 3 |  | Menzoberranzan |  |  |
+| 4 |  | Thugrak Gol |  |  |
+| 5 |  | Corm Orp |  | Canonical parent: Selerish; settlement-level replacement pending evaluation. |
+| 6 |  | Gracklstugh |  |  |
+| 7 |  | Hardbuckler |  | Canonical parent: Carstan; settlement-level replacement pending evaluation. |
+| 8 |  | Mithril Hall |  | Canonical parent: Kellust; settlement-level replacement pending evaluation. |
+| 9 |  | Evereskea |  | Canonical parent: Quechian; settlement-level replacement pending evaluation. |
 | 10 |  | Waterdeep | Ashenport |  |
 | 11 |  | Neverwinter |  |  |
-| 12 |  | Auril | Tosereth | , goddess of winter |
-| 13 |  | Azuth | Luminari | , god of wizards |
-| 14 |  | Bane | The Prisoner | , god of tyranny |
-| 15 |  | Beshaba | Fea | , goddess of misfortune |
-| 16 |  | Bhaal | Iluai | , god of murder |
-| 17 |  | Chauntea | Jisko | , goddess of agriculture |
-| 18 |  | Cyric | Vatro | , god of lies |
-| 19 |  | Deneir | Jisko | , god of writing |
-| 20 |  | Eldath | Aeleaka | , goddess of peace |
-| 21 |  | Gond | Oretaxis | , god of craft |
-| 22 |  | Helm | Ellios | , god of protection |
-| 23 |  | Ilmater | Er'sh | , god of endurance |
-| 24 |  | Kelemvor | Iluai | , god of the dead |
-| 25 |  | Lathander | Taix | , god of birth and renewal |
-| 26 |  | Leira | Fea | , goddess of illusion |
-| 27 |  | Lliira | Aeleaka | , goddess of joy |
-| 28 |  | Lloth | Iluai | goddess of Spiders, evil, darkness, chaos, assassins, drow |
-| 29 |  | Loviatar | Iluai | , goddess of pain |
-| 30 |  | Malar | Eru | , god of the hunt |
-| 31 |  | Mask | Vatro | , god of thieves |
-| 32 |  | Mielikki | Jisko | , goddess of forests |
-| 33 |  | Milil | Ranna | , god of poetry and song |
+| 12 |  | Auril | Glacius | , goddess of winter |
+| 13 |  | Azuth | Aethyra | , god of wizards |
+| 14 |  | Bane | Ghorak | , god of tyranny |
+| 15 |  | Beshaba |  | , goddess of misfortune |
+| 16 |  | Bhaal | Velara | , god of murder |
+| 17 |  | Chauntea | Seraphine | , goddess of agriculture |
+| 18 |  | Cyric | Vespera | , god of lies |
+| 19 |  | Deneir | Aethyra | , god of writing |
+| 20 |  | Eldath | Myrr | , goddess of peace |
+| 21 |  | Gond | Borhild | , god of craft |
+| 22 |  | Helm | Skarn | , god of protection |
+| 23 |  | Ilmater | Orith | , god of endurance |
+| 24 |  | Kelemvor | Nethris | , god of the dead |
+| 25 |  | Lathander | Seraphine | , god of birth and renewal |
+| 26 |  | Leira | Vespera | , goddess of illusion |
+| 27 |  | Lliira | Willow | , goddess of joy |
+| 28 |  | Lloth | Spider Queen | goddess of Spiders, evil, darkness, chaos, assassins, drow |
+| 29 |  | Loviatar | Yurga | , goddess of pain |
+| 30 |  | Malar | Zorren | , god of the hunt |
+| 31 |  | Mask | Brandoc | , god of thieves |
+| 32 |  | Mielikki | Viridara | , goddess of forests |
+| 33 |  | Milil | Lirael | , god of poetry and song |
 | 34 |  | Myrkul | Iluai | , god of death |
-| 35 |  | Mystra | Luminari | , goddess of magic |
-| 36 |  | Oghma | Jisko | , god of knowledge |
-| 37 |  | Savras | Fea | , god of divination and fate |
-| 38 |  | Selûne | Fea | , goddess of the moon |
-| 39 |  | Shar | Vatro | , goddess of darkness and loss |
-| 40 |  | Silvanus | Jisko | , god of wild nature |
-| 41 |  | Sune | Aeleaka | , goddess of love and beauty |
-| 42 |  | Talona | Elykra | , goddess of disease and poison |
-| 43 |  | Talos | Batai | , god of storms |
-| 44 |  | Tempus | Ellios | , god of war |
-| 45 |  | Torm | Ellios | , god of courage and self-sacrifice |
-| 46 |  | Tymora | Fea | , goddess of good fortune |
-| 47 |  | Tyr | Ellios | , god of justice |
-| 48 |  | Umberlee | Orolro | , goddess of the sea |
-| 49 |  | Waukeen | Orolro | , goddess of trade |
+| 35 |  | Mystra | Aethyra | , goddess of magic |
+| 36 |  | Oghma | Kaelthir | , god of knowledge |
+| 37 |  | Savras | Kaelthir | , god of divination and fate |
+| 38 |  | Selûne | Selithiel | , goddess of the moon |
+| 39 |  | Shar | Nyxara | , goddess of darkness and loss |
+| 40 |  | Silvanus | Verdania | , god of wild nature |
+| 41 |  | Sune | Calystral | , goddess of love and beauty |
+| 42 |  | Talona | Yurga | , goddess of disease and poison |
+| 43 |  | Talos | Thalassa | , god of storms |
+| 44 |  | Tempus | Kordran | , god of war |
+| 45 |  | Torm | Kordran | , god of courage and self-sacrifice |
+| 46 |  | Tymora | Lumerion | , goddess of good fortune |
+| 47 |  | Tyr | Thalos | , god of justice |
+| 48 |  | Umberlee | Thalassa | , goddess of the sea |
+| 49 |  | Waukeen | Erix | , goddess of trade |
 
 ## Workbook formatting metadata
 
