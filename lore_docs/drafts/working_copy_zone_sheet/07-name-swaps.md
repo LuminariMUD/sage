@@ -104,7 +104,6 @@ before production use.
 | — | 1387 | Dragon Cult Fortress | Void Crown Fortress | Medium likeness; working label from `fr-zones.md`; canon promotion required. |
 | — | 1425 | Daggerford | Cerax | Low likeness; existing canon name from `fr-zones.md`. |
 | — | 1433 | Thethyr Bandit Castle | Hearthbreak | High likeness; existing canon name from `fr-zones.md`. |
-| — | 1440 | Ardeep Forest | Onduis Oldwood | High likeness; working label from `fr-zones.md`; canon promotion required. |
 | — | 1455 | Sloopdilmonpolop | Deepcurrent Haven | High likeness; working label from `fr-zones.md`; canon promotion required. |
 | — | 1468 | Trollbark Forest | Thornwake Forest | High likeness; working label from `fr-zones.md`; canon promotion required. |
 | — | 1507 | Hulburg Trail | Lenadrian Ruined Trail | High likeness; working label from `fr-zones.md`; canon promotion required. |
@@ -131,7 +130,7 @@ before production use.
 ## Mapping safeguards
 
 - Apply each swap within the VNum in column A, not as an unrestricted global
-  text replacement. This is required for repeated names such as `Ardeep Forest`.
+  text replacement.
 - VNum 1191 is already headed `Llawryn Keep`; its row covers only stale
   `Zhentil Keep` references in child content, travel data, and generated indexes.
 - The dagger notation from `fr-zones.md` is represented in Notes rather than
