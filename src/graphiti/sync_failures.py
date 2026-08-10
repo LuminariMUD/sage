@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 
+from src.graphiti.entity_stage_quality import EntityStageQualityError
 from src.graphiti.sync_graph import GraphIdentityConflictError, GraphVerificationError
 from src.graphiti.sync_models import (
     FailureClass,
@@ -75,6 +76,13 @@ def classify_sync_failure(error: BaseException, *, shutting_down: bool = False) 
             failure_class=FailureClass.VERIFICATION,
             code="graph_verification_failed",
             summary=error,
+            disposition=FailureDisposition.RETRY,
+        )
+    if isinstance(error, EntityStageQualityError):
+        return FailureRecord.build(
+            failure_class=FailureClass.GRAPH_VALIDATION,
+            code=error.code,
+            summary="Entity-stage response failed completeness validation",
             disposition=FailureDisposition.RETRY,
         )
     if (

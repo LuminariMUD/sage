@@ -39,6 +39,7 @@ from src.scripts.verify_provider_upgrade_backup import (
 
 PREPARE_CONFIRMATION = "PREPARE_DURABLE_GRAPH_REBUILD"
 FINALIZE_CONFIRMATION = "FINALIZE_DURABLE_GRAPH_REBUILD"
+ABORT_CONFIRMATION = "ABORT_INCOMPLETE_GRAPH_REBUILD"
 MAX_BACKUP_AGE = timedelta(hours=24)
 GRAPH_CLEAR_LOCK_ID = 731047850175
 
@@ -228,7 +229,12 @@ async def _prepare_rebuild_locked(
         if pre_audit["status"] != "clean":
             raise GraphRebuildError("A clean graph audit is required before rebuild preparation")
         restored_episode_count = int(backup["postgres_restore"]["episodes_total"])
-        current_episode_count = int(pre_audit["counts"]["postgres_total"])
+        current_episode_count = int(
+            pre_audit["counts"].get(
+                "postgres_stored_total",
+                pre_audit["counts"]["postgres_total"],
+            )
+        )
         if restored_episode_count != current_episode_count:
             raise GraphRebuildError(
                 "Verified backup episode count does not match the current audit"
@@ -328,7 +334,7 @@ def render_human(result: dict[str, Any]) -> str:
                 f"Operation: {operation['id']}",
                 f"State: {operation['state']}",
                 f"Sync profile: {operation['target_sync_profile_fingerprint']}",
-                "Embedding profile: " f"{operation['target_embedding_profile_fingerprint']}",
+                f"Embedding profile: {operation['target_embedding_profile_fingerprint']}",
                 f"Verified backup: {operation['backup_reference']}",
             ]
         )
@@ -337,7 +343,7 @@ def render_human(result: dict[str, Any]) -> str:
         lines.extend(
             [
                 f"Target sync profile: {target['sync_profile_fingerprint']}",
-                "Target embedding profile: " f"{target['embedding_profile_fingerprint']}",
+                f"Target embedding profile: {target['embedding_profile_fingerprint']}",
             ]
         )
     if "graph_counts" in result:
@@ -370,6 +376,12 @@ async def run(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    if args.command == "abort" and args.confirm != ABORT_CONFIRMATION:
+        print(
+            f"Graph rebuild command rejected: --confirm {ABORT_CONFIRMATION} is required",
+            file=sys.stderr,
+        )
+        return 1
 
     postgres = None
     neo4j = None
@@ -390,6 +402,16 @@ async def run(args: argparse.Namespace) -> int:
             result["status"] = (
                 result["operation"]["state"] if result["operation"] is not None else "no_rebuilds"
             )
+        elif args.command == "abort":
+            operation = await repository.abort(
+                args.operation_id,
+                reason_code=args.reason_code,
+            )
+            result = {
+                "schema_version": 1,
+                "status": "aborted",
+                "operation": operation,
+            }
         else:
             profile = GraphSyncExecutionProfile.from_environment()
             neo4j = Neo4jDB(read_only=args.command in {"plan", "finalize"})
@@ -475,6 +497,14 @@ def build_parser() -> argparse.ArgumentParser:
         "finalize", help="Activate rebuilt profiles after a clean final audit"
     )
     finalize.add_argument("--confirm", required=True)
+
+    abort = commands.add_parser(
+        "abort",
+        help="Terminally abort a stopped incomplete rebuild with durable evidence",
+    )
+    abort.add_argument("--operation-id", type=UUID, required=True)
+    abort.add_argument("--reason-code", required=True)
+    abort.add_argument("--confirm", required=True)
     return parser
 
 

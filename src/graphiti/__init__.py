@@ -55,6 +55,7 @@ class LuminariGraphiti:
         llm_client: Any | None = None,
         embedder: Any | None = None,
         entity_grounding_policy: str | None = None,
+        entity_response_policy: str | None = None,
         verbose: bool = False,
     ):
         """Initialize Graphiti for Luminari Sage."""
@@ -105,6 +106,7 @@ class LuminariGraphiti:
             embedder=self.embedder,
             llm_client=llm_client,
             entity_grounding_policy=entity_grounding_policy,
+            entity_response_policy=entity_response_policy,
         )
 
         # Add LLM logging to see what relationship types are being generated
@@ -754,6 +756,7 @@ async def initialize_graphiti(
     llm_client: Any | None = None,
     embedder: Any | None = None,
     entity_grounding_policy: str | None = None,
+    entity_response_policy: str | None = None,
 ) -> LuminariGraphiti:
     """Initialize and return a configured Graphiti instance."""
     graphiti = LuminariGraphiti(
@@ -763,6 +766,7 @@ async def initialize_graphiti(
         llm_client=llm_client,
         embedder=embedder,
         entity_grounding_policy=entity_grounding_policy,
+        entity_response_policy=entity_response_policy,
         verbose=verbose,
     )
 

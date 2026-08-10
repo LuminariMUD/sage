@@ -37,6 +37,7 @@ SNAPSHOT_ROWS_QUERY = """
       ON document.id = episode.document_id
     LEFT JOIN graph_sync_jobs AS job
       ON job.episode_id = episode.id
+    WHERE episode.retired_at IS NULL
     ORDER BY document.stable_id, episode.episode_index
 """
 
@@ -49,6 +50,7 @@ ACTIVE_EPISODE_SEARCH_QUERY = """
     JOIN lore_documents AS document
       ON document.id = episode.document_id
     WHERE episode.embedding IS NOT NULL
+      AND episode.retired_at IS NULL
     ORDER BY episode.embedding <=> $1::vector,
              document.stable_id,
              episode.episode_index

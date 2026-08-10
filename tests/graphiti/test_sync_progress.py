@@ -18,6 +18,7 @@ def _counts(**overrides: int) -> dict[str, int]:
         "retry_wait": 0,
         "quarantined": 0,
         "synced": 0,
+        "retired": 0,
     }
     counts.update(overrides)
     return counts
@@ -39,6 +40,8 @@ def test_progress_derives_profile_completion_rolling_rate_and_eta():
         "job_counts": _counts(pending=2, synced=8),
         "total_jobs": 10,
         "synced_jobs": 8,
+        "retired_jobs": 0,
+        "completed_jobs": 8,
         "remaining_jobs": 2,
         "completion_percent": 80.0,
         "run_elapsed_seconds": 300.0,

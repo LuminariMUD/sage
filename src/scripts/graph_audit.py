@@ -16,7 +16,12 @@ from src.db.postgres import PostgresDB
 from src.graphiti.audit import build_graph_audit
 
 POSTGRES_EPISODE_QUERY = """
-    SELECT id::text AS stable_id, text, graphiti_synced, graphiti_synced_at
+    SELECT id::text AS stable_id,
+           text,
+           graphiti_synced,
+           graphiti_synced_at,
+           retired_at,
+           graph_extraction_eligible
     FROM episodes
     ORDER BY id
 """
@@ -24,6 +29,7 @@ POSTGRES_EPISODE_QUERY = """
 POSTGRES_JOB_QUERY = """
     SELECT episode_id::text AS stable_id,
            state,
+           desired_operation,
            desired_source_fingerprint,
            sync_profile_fingerprint,
            verified_source_fingerprint,
@@ -75,8 +81,14 @@ def render_human(report: dict[str, Any]) -> str:
         f"State source: {report['state_source']}",
         (
             "PostgreSQL: "
-            f"{counts['postgres_total']} total, {counts['postgres_synced']} synced, "
+            f"{counts['postgres_total']} graph-active, {counts['postgres_synced']} synced, "
             f"{counts['postgres_non_synced']} non-synced"
+        ),
+        (
+            "PostgreSQL stored lifecycle: "
+            f"{counts['postgres_stored_total']} stored, "
+            f"{counts['postgres_retired']} retired, "
+            f"{counts['postgres_graph_ineligible']} active graph-ineligible"
         ),
         (
             "Neo4j Episodic: "

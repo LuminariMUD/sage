@@ -3,11 +3,20 @@
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import pytest
 
+from src.ingestion.chunk_manifest import (
+    ChunkingProfile,
+    build_chunk_manifest,
+    reconcile_document_manifest,
+)
 from src.scripts import create_episodes_from_documents, generate_embeddings
-from src.scripts.load_documents import DocumentLoader
+from src.scripts.load_documents import (
+    REQUIRED_LORE_DOCUMENT_COLUMN_TYPES,
+    DocumentLoader,
+)
 from src.scripts.sync_episodes_to_graphiti import (
     CanonCorpusViolation,
     require_canon_episode_corpus,
@@ -57,6 +66,43 @@ def test_document_loader_maps_world_directory_to_live_enum_value(tmp_path):
     world_file.write_text("# Roads\n", encoding="utf-8")
 
     assert DocumentLoader(str(tmp_path)).get_document_type(world_file) == "world"
+
+
+async def test_document_loader_preflight_validates_enum_and_write_column_types(tmp_path):
+    world_file = tmp_path / "canon" / "world" / "roads.md"
+    world_file.parent.mkdir(parents=True)
+    world_file.write_text("# Roads\n", encoding="utf-8")
+    columns = [
+        {"column_name": name, "udt_name": sorted(allowed)[0]}
+        for name, allowed in REQUIRED_LORE_DOCUMENT_COLUMN_TYPES.items()
+    ]
+    database = SimpleNamespace(
+        fetch=AsyncMock(
+            side_effect=[
+                [{"enumlabel": "world"}, {"enumlabel": "lore"}],
+                columns,
+            ]
+        )
+    )
+
+    result = await DocumentLoader(str(tmp_path)).preflight(database, [world_file])
+
+    assert result["inferred_types"] == ["world"]
+    assert result["required_columns"] == len(REQUIRED_LORE_DOCUMENT_COLUMN_TYPES)
+    enum_query = database.fetch.await_args_list[0].args[0]
+    assert "namespace.nspname = current_schema()" in enum_query
+
+
+async def test_document_loader_preflight_fails_before_writes_on_schema_drift(tmp_path):
+    world_file = tmp_path / "canon" / "world" / "roads.md"
+    world_file.parent.mkdir(parents=True)
+    world_file.write_text("# Roads\n", encoding="utf-8")
+    database = SimpleNamespace(fetch=AsyncMock(return_value=[{"enumlabel": "lore"}]))
+
+    with pytest.raises(RuntimeError, match="type absent"):
+        await DocumentLoader(str(tmp_path)).preflight(database, [world_file])
+
+    database.fetch.assert_awaited_once()
 
 
 async def test_document_loader_requeues_changed_documents_for_episode_processing(tmp_path):
@@ -116,36 +162,34 @@ async def test_episode_creation_selects_and_resets_only_canon_documents():
         assert "source_file LIKE 'canon/%'" in query
 
 
-async def test_episode_creation_invalidates_vectors_when_source_text_changes():
-    document = {
-        "id": "document-id",
-        "title": "Changed Lore",
-        "body_md": "Changed body",
-        "document_type": "lore",
-        "source_file": "canon/world/changed.md",
-    }
-    database = SimpleNamespace(
+async def test_episode_manifest_invalidates_vectors_when_source_text_changes():
+    profile = ChunkingProfile(
+        base_tokens=200,
+        min_tokens=100,
+        max_tokens=500,
+        overlap_percentage=0.25,
+        similarity_threshold=0.7,
+        complexity_factor=1.5,
+        embedding_model="test",
+        embedding_revision=None,
+        tokenizer="test",
+        sentence_segmenter="test",
+        content_role_policy="include_all_v1",
+    )
+    manifest = build_chunk_manifest(
+        "# Changed Lore\n\nChanged episode",
+        [{"text": "Changed episode"}],
+        profile,
+    )
+    connection = SimpleNamespace(
+        fetchval=AsyncMock(side_effect=[None, uuid4(), uuid4(), 1]),
+        fetch=AsyncMock(side_effect=[[], []]),
         execute=AsyncMock(),
-        fetch=AsyncMock(side_effect=[[document], []]),
-        disconnect=AsyncMock(),
     )
-    creator = SimpleNamespace(split_text_into_episodes=lambda *_args: ["Changed episode"])
 
-    with (
-        patch.object(
-            create_episodes_from_documents,
-            "get_postgres_db",
-            AsyncMock(return_value=database),
-        ),
-        patch.object(create_episodes_from_documents, "EpisodeCreator", return_value=creator),
-    ):
-        assert await create_episodes_from_documents.create_episodes_from_documents()
+    await reconcile_document_manifest(connection, {"id": uuid4()}, manifest)
 
-    upsert_query = next(
-        call.args[0]
-        for call in database.execute.await_args_list
-        if "INSERT INTO episodes" in call.args[0]
-    )
+    upsert_query = connection.fetchval.await_args_list[2].args[0]
     assert "episodes.text IS DISTINCT FROM EXCLUDED.text" in upsert_query
     assert "THEN NULL" in upsert_query
 

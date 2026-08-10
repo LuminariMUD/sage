@@ -1551,6 +1551,29 @@ immutable-profile run.
     not require SIGKILL/exit 137, and cover the complete pause/resume lifecycle
     in integration tests.
 
+## Code-side implementation update — 2026-08-10
+
+All 19 opportunities above now have checked-in code, migration, configuration,
+and focused test coverage. Migration `0009_full_run_controls` implements items
+1–3 and 10–13, 16–19 through retirement-aware manifests, audited priority,
+single-writer fencing, rebuild abort, stage-quality evidence, semantic snapshots,
+mutation provenance, and operator pause/resume state. The ingestion, Graphiti,
+audit, benchmark, CLI, and supervisor changes implement the corresponding runtime
+behavior. The checked-in `graph-sync` Compose profile and purpose-built heartbeat
+checks cover items 4–5; loader preflight covers item 6; retrieval corpus v2
+preserves v1 while matching the 26-document snapshot for item 7; graph benchmark
+v4 adds bounded calls, seeded repeated trials, component gates, confidence
+reporting, and thermal evidence for items 8 and 14; warning-as-error policy with
+one narrow upstream compatibility exception covers item 9; and the versioned
+content-role/source-grounding policies cover items 11 and 15–18.
+
+This is an implementation milestone, not a claim that the live full run is
+complete. The migration has been transactionally exercised with rollback and
+remains unapplied. The paused v1 run and running rebuild operation were not
+resumed, finalized, aborted, or otherwise mutated. Live rollout, replicated
+provider benchmarking, and the final corpus/embedding/graph gates below remain
+separate backup- and readiness-gated operations.
+
 ## Remaining completion gates
 
 - Synchronize all 2,430 durable graph jobs with zero pending, leased, retry, or

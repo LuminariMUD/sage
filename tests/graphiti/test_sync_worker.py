@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import uuid4
@@ -23,6 +24,7 @@ from src.graphiti.sync_models import (
     ProfileMismatchError,
     RunRecord,
     RunState,
+    RunUnavailableError,
     StableIdVerification,
 )
 from src.graphiti.sync_profile import GraphSyncExecutionProfile
@@ -110,10 +112,12 @@ class FakeRepository:
             "matching_jobs": 1,
             "matching_eligible": 1,
             "matching_expired_leases": 0,
+            "matching_nonterminal": 1,
+            "matching_quarantined": 0,
             "non_synced_other_profile": 0,
         }
 
-    async def profile_snapshot(self, fingerprint):
+    async def profile_snapshot(self, fingerprint, *, content_role_policy=None):
         self.events.append("profile")
         return self.profile_state
 
@@ -124,7 +128,7 @@ class FakeRepository:
     async def start_or_join_run(self, **kwargs):
         self.events.append("start")
         now = datetime.now(UTC)
-        return RunRecord(
+        self.run = RunRecord(
             id=self.lease.run_id,
             state=RunState.RUNNING,
             worker_id=kwargs["worker_id"],
@@ -132,6 +136,7 @@ class FakeRepository:
             started_at=now,
             heartbeat_at=now,
         )
+        return self.run
 
     async def claim_jobs(self, **kwargs):
         self.events.append("claim")
@@ -146,7 +151,7 @@ class FakeRepository:
         self.successes.append(kwargs)
         return CompletionStatus.SYNCED
 
-    async def complete_failure(self, lease, failure):
+    async def complete_failure(self, lease, failure, **kwargs):
         self.events.append("failure")
         self.failures.append(failure)
         if failure.disposition.value == "pause_systemic":
@@ -161,9 +166,17 @@ class FakeRepository:
 
     async def drain_run(self, run_id):
         self.events.append("drain")
+        self.run = replace(self.run, state=RunState.DRAINING)
+        return self.run
 
     async def stop_run(self, run_id):
         self.events.append("stop")
+        self.run = replace(self.run, state=RunState.STOPPED)
+        return self.run
+
+    async def get_run(self, run_id):
+        self.events.append("get_run")
+        return self.run
 
 
 class FakeProcessor:
@@ -220,6 +233,7 @@ async def test_worker_recovers_claims_verifies_and_stops_owned_run():
         "start",
         "claim",
         "success",
+        "get_run",
         "drain",
         "stop",
     ]
@@ -251,6 +265,7 @@ async def test_worker_records_routed_fallback_as_degraded_success():
     assert summary.synced == 1
     assert summary.degraded_synced == 1
     assert repository.successes[0]["degraded"] is True
+    assert repository.successes[0]["fallback_used"] is True
 
 
 async def test_worker_forwards_relationship_quality_to_atomic_completion():
@@ -337,3 +352,93 @@ async def test_profile_mismatch_fails_before_recovery_or_run():
         await worker.run()
 
     assert repository.events == ["profile"]
+
+
+async def test_managed_worker_waits_for_delayed_retry_then_finishes_queue():
+    lease = _lease()
+
+    class DelayedRepository(FakeRepository):
+        def __init__(self, current_lease):
+            super().__init__(current_lease)
+            self.retry_ready = False
+
+        async def claim_jobs(self, **kwargs):
+            self.events.append("claim")
+            if not self.retry_ready:
+                return []
+            if self.claim_count == 0:
+                self.claim_count += 1
+                return [self.lease]
+            return []
+
+        async def complete_verified_success(self, lease, verification, **kwargs):
+            status = await super().complete_verified_success(lease, verification, **kwargs)
+            self.profile_state["matching_nonterminal"] = 0
+            self.profile_state["matching_eligible"] = 0
+            return status
+
+    repository = DelayedRepository(lease)
+    worker = _worker(repository, FakeProcessor(lease))
+
+    async def make_retry_ready(seconds):
+        assert seconds == 2
+        repository.retry_ready = True
+
+    worker._wait_for_shutdown = make_retry_ready
+    summary = await worker.run(continuous=True, idle_poll_seconds=2)
+
+    assert summary.synced == 1
+    assert summary.attempted == 1
+    assert "heartbeat_run" in repository.events
+    assert repository.events[-2:] == ["drain", "stop"]
+
+
+async def test_managed_worker_idles_through_operator_pause_and_resumes():
+    lease = _lease()
+
+    class PausedRepository(FakeRepository):
+        def __init__(self, current_lease):
+            super().__init__(current_lease)
+            self.pause_observed = False
+
+        async def claim_jobs(self, **kwargs):
+            self.events.append("claim")
+            if not self.pause_observed:
+                self.pause_observed = True
+                self.run = replace(self.run, state=RunState.PAUSED_OPERATOR)
+                raise RunUnavailableError("operator pause")
+            if self.claim_count == 0:
+                self.claim_count += 1
+                return [self.lease]
+            return []
+
+        async def complete_verified_success(self, lease, verification, **kwargs):
+            status = await super().complete_verified_success(lease, verification, **kwargs)
+            self.profile_state["matching_nonterminal"] = 0
+            self.profile_state["matching_eligible"] = 0
+            return status
+
+    repository = PausedRepository(lease)
+    worker = _worker(repository, FakeProcessor(lease))
+
+    async def resume_after_wait(seconds):
+        assert seconds == 2
+        repository.run = replace(repository.run, state=RunState.RUNNING)
+
+    worker._wait_for_shutdown = resume_after_wait
+    summary = await worker.run(continuous=True, idle_poll_seconds=2)
+
+    assert summary.paused_operator == 1
+    assert summary.synced == 1
+    assert repository.events[-2:] == ["drain", "stop"]
+
+
+async def test_worker_rejects_invalid_idle_poll_interval_before_readiness():
+    lease = _lease()
+    repository = FakeRepository(lease)
+    worker = _worker(repository, FakeProcessor(lease))
+
+    with pytest.raises(ValueError, match="Idle poll interval"):
+        await worker.run(continuous=True, idle_poll_seconds=1)
+
+    assert repository.events == []

@@ -6,8 +6,10 @@ import asyncio
 import logging
 from contextlib import suppress
 from dataclasses import asdict, dataclass, replace
+from pathlib import Path
 from time import perf_counter
 
+from src.graphiti.heartbeat import touch_heartbeat
 from src.graphiti.provider_tracking import ProviderCallTracker
 from src.graphiti.sync_failures import classify_sync_failure
 from src.graphiti.sync_graph import GraphitiEpisodeProcessor, GraphProcessingResult
@@ -16,6 +18,8 @@ from src.graphiti.sync_models import (
     GraphSyncPolicy,
     JobLease,
     ProfileMismatchError,
+    RunState,
+    RunUnavailableError,
 )
 from src.graphiti.sync_profile import GraphSyncExecutionProfile
 from src.graphiti.sync_state import GraphSyncRepository
@@ -34,11 +38,13 @@ class WorkerRunSummary:
     attempted: int = 0
     synced: int = 0
     degraded_synced: int = 0
+    retired: int = 0
     reused_existing: int = 0
     retrying: int = 0
     quarantined: int = 0
     source_changed: int = 0
     paused_systemic: int = 0
+    paused_operator: int = 0
     already_completed: int = 0
     elapsed_seconds: float = 0.0
 
@@ -58,6 +64,7 @@ class GraphSyncWorker:
         profile: GraphSyncExecutionProfile,
         policy: GraphSyncPolicy,
         worker_id: str,
+        service_heartbeat_path: Path | None = None,
     ):
         self.repository = repository
         self.graph_processor = graph_processor
@@ -65,6 +72,7 @@ class GraphSyncWorker:
         self.profile = profile
         self.policy = policy
         self.worker_id = worker_id
+        self.service_heartbeat_path = service_heartbeat_path
         self.shutdown_event = asyncio.Event()
         self._running = False
 
@@ -72,26 +80,47 @@ class GraphSyncWorker:
         """Stop new claims and interrupt the current provider call, if any."""
         self.shutdown_event.set()
 
-    async def run(self, *, max_episodes: int | None = None) -> WorkerRunSummary:
-        """Run until idle, stopped, paused, or the optional finite limit is reached."""
+    async def run(
+        self,
+        *,
+        max_episodes: int | None = None,
+        continuous: bool = False,
+        idle_poll_seconds: int = 10,
+    ) -> WorkerRunSummary:
+        """Run until complete or stopped, waiting for delayed work when managed."""
         if self._running:
             raise RuntimeError("Graph sync worker is already running")
         if max_episodes is not None and max_episodes <= 0:
             raise ValueError("Maximum episodes must be positive")
+        if not 2 <= idle_poll_seconds <= 300:
+            raise ValueError("Idle poll interval must be between 2 and 300 seconds")
 
         self._running = True
         started = perf_counter()
         summary = WorkerRunSummary()
         run = None
         try:
+            self._touch_service_heartbeat()
             await self.graph_processor.verify_readiness()
             ProviderCallTracker.verify_client(self.llm_client)
             profile_state = await self.repository.profile_snapshot(
-                self.profile.sync_profile_fingerprint
+                self.profile.sync_profile_fingerprint,
+                content_role_policy=self.profile.content_role_policy,
             )
             if profile_state["non_synced_other_profile"]:
                 raise ProfileMismatchError("Non-synced jobs target a different graph sync profile")
+            if profile_state.get("nonterminal_other_content_role_policy", 0):
+                raise ProfileMismatchError(
+                    "Nonterminal episodes target a different content-role policy"
+                )
+            if profile_state.get("operation_mismatches", 0):
+                raise ProfileMismatchError("Durable job operations do not match episode state")
             if not profile_state["matching_jobs"]:
+                return summary
+            if (
+                "matching_nonterminal" in profile_state
+                and not profile_state["matching_nonterminal"]
+            ):
                 return summary
             recovered = await self.repository.recover_expired_leases()
             summary.recovered_expired = len(recovered)
@@ -102,28 +131,85 @@ class GraphSyncWorker:
             summary.run_id = str(run.id)
 
             while not self.shutdown_event.is_set():
+                self._touch_service_heartbeat()
                 if max_episodes is not None and summary.attempted >= max_episodes:
                     break
-                leases = await self.repository.claim_jobs(
-                    run_id=run.id,
-                    worker_id=self.worker_id,
-                    route_fingerprint=self.profile.route_fingerprint,
-                    policy=self.policy,
-                    limit=1,
-                )
+                try:
+                    leases = await self.repository.claim_jobs(
+                        run_id=run.id,
+                        worker_id=self.worker_id,
+                        route_fingerprint=self.profile.route_fingerprint,
+                        policy=self.policy,
+                        content_role_policy=self.profile.content_role_policy,
+                        limit=1,
+                    )
+                except RunUnavailableError:
+                    current_run = await self.repository.get_run(run.id)
+                    if current_run.state is RunState.PAUSED_OPERATOR and continuous:
+                        if not summary.paused_operator:
+                            summary.paused_operator = 1
+                        await self.repository.heartbeat_run(run.id)
+                        await self._wait_for_shutdown(idle_poll_seconds)
+                        continue
+                    if current_run.state in {
+                        RunState.DRAINING,
+                        RunState.PAUSED_OPERATOR,
+                        RunState.STOPPED,
+                    }:
+                        if current_run.state is RunState.PAUSED_OPERATOR:
+                            summary.paused_operator += 1
+                        break
+                    raise
                 if not leases:
-                    break
+                    if not continuous:
+                        break
+                    recovered = await self.repository.recover_expired_leases()
+                    summary.recovered_expired += len(recovered)
+                    profile_state = await self.repository.profile_snapshot(
+                        self.profile.sync_profile_fingerprint,
+                        content_role_policy=self.profile.content_role_policy,
+                    )
+                    if profile_state["non_synced_other_profile"]:
+                        raise ProfileMismatchError(
+                            "Non-synced jobs target a different graph sync profile"
+                        )
+                    if profile_state.get("nonterminal_other_content_role_policy", 0):
+                        raise ProfileMismatchError(
+                            "Nonterminal episodes target a different content-role policy"
+                        )
+                    if profile_state.get("operation_mismatches", 0):
+                        raise ProfileMismatchError(
+                            "Durable job operations do not match episode state"
+                        )
+                    quarantined = profile_state.get("matching_quarantined", 0)
+                    if quarantined:
+                        summary.quarantined += quarantined
+                        break
+                    if not profile_state.get(
+                        "matching_nonterminal",
+                        profile_state.get("matching_eligible", 0),
+                    ):
+                        break
+                    await self.repository.heartbeat_run(run.id)
+                    await self._wait_for_shutdown(idle_poll_seconds)
+                    continue
                 lease = leases[0]
                 summary.attempted += 1
                 status, result = await self._process_lease(lease)
                 self._record_status(summary, status, result)
-                if status is CompletionStatus.PAUSED_SYSTEMIC:
+                if status in {
+                    CompletionStatus.PAUSED_SYSTEMIC,
+                    CompletionStatus.QUARANTINED,
+                }:
                     break
 
         finally:
             if run is not None and run.worker_id == self.worker_id and not summary.paused_systemic:
-                await self.repository.drain_run(run.id)
-                await self.repository.stop_run(run.id)
+                current_run = await self.repository.get_run(run.id)
+                if current_run.state is RunState.RUNNING:
+                    current_run = await self.repository.drain_run(run.id)
+                if current_run.state is RunState.DRAINING:
+                    await self.repository.stop_run(run.id)
             summary.elapsed_seconds = round(perf_counter() - started, 3)
             self._running = False
         return summary
@@ -137,24 +223,34 @@ class GraphSyncWorker:
             self.llm_client,
             self.profile,
         )
+        fallback_used = False
         try:
             operation = getattr(self.llm_client, "operation", None)
             if callable(operation):
                 async with operation():
                     async with tracker.installed():
                         result = await self._process_with_heartbeats(lease)
-                if bool(getattr(self.llm_client, "last_operation_degraded", False)):
+                fallback_used = bool(getattr(self.llm_client, "last_operation_degraded", False))
+                if fallback_used:
                     result = replace(result, degraded=True)
             else:
                 async with tracker.installed():
                     result = await self._process_with_heartbeats(lease)
-            status = await self.repository.complete_verified_success(
-                lease,
-                result.verification,
-                degraded=result.degraded,
-                graph_counts=result.graph_counts,
-                relationship_quality=result.relationship_quality,
-            )
+            if result.retired:
+                status = await self.repository.complete_verified_retirement(
+                    lease,
+                    result.verification,
+                )
+            else:
+                status = await self.repository.complete_verified_success(
+                    lease,
+                    result.verification,
+                    degraded=result.degraded,
+                    fallback_used=fallback_used,
+                    graph_counts=result.graph_counts,
+                    relationship_quality=result.relationship_quality,
+                    entity_stage_quality=result.entity_stage_quality,
+                )
             return status, result
         except WorkerShutdownRequested as error:
             failure = classify_sync_failure(error, shutting_down=True)
@@ -171,7 +267,14 @@ class GraphSyncWorker:
                 failure.code,
                 failure.disposition.value,
             )
-            status = await self.repository.complete_failure(lease, failure)
+            quality = getattr(error, "entity_stage_quality", None)
+            if quality is None:
+                quality = getattr(error, "quality_report", None)
+            status = await self.repository.complete_failure(
+                lease,
+                failure,
+                entity_stage_quality=quality,
+            )
             return status, None
 
     async def _process_with_heartbeats(self, lease: JobLease) -> GraphProcessingResult:
@@ -216,11 +319,20 @@ class GraphSyncWorker:
         interval = max(10.0, min(60.0, self.policy.lease_seconds / 3))
         while True:
             await asyncio.sleep(interval)
+            self._touch_service_heartbeat()
             await self.repository.heartbeat_run(lease.run_id)
             await self.repository.heartbeat_lease(
                 lease,
                 lease_seconds=self.policy.lease_seconds,
             )
+
+    def _touch_service_heartbeat(self) -> None:
+        if self.service_heartbeat_path is not None:
+            touch_heartbeat(self.service_heartbeat_path)
+
+    async def _wait_for_shutdown(self, seconds: int) -> None:
+        with suppress(TimeoutError):
+            await asyncio.wait_for(self.shutdown_event.wait(), timeout=seconds)
 
     @staticmethod
     def _record_status(
@@ -232,6 +344,10 @@ class GraphSyncWorker:
             summary.synced += 1
             if result is not None and result.degraded:
                 summary.degraded_synced += 1
+            if result is not None and result.reused_existing:
+                summary.reused_existing += 1
+        elif status is CompletionStatus.RETIRED:
+            summary.retired += 1
             if result is not None and result.reused_existing:
                 summary.reused_existing += 1
         elif status is CompletionStatus.RETRY_WAIT:

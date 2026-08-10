@@ -7,7 +7,11 @@ import hashlib
 import inspect
 import json
 import logging
+import math
+import os
 import re
+import statistics
+import subprocess  # nosec B404 - fixed, content-free local metrics command
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -42,13 +46,20 @@ from src.graphiti.relationship_policy import (
     RelationshipPolicyError,
     RelationshipQualityReport,
 )
+from src.ingestion.chunk_manifest import (
+    CONTENT_ROLE_POLICY_INCLUDE_ALL,
+    WORLD_LORE,
+    classify_chunk_role,
+    parse_markdown_sections,
+    resolve_content_role_policy,
+)
 from src.llm.provider_config import TextModelCandidate
 from src.llm.retry import classify_provider_failure
 
 _CASE_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 _SAFE_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._:/+@()-]{0,254}$")
 _MAX_CORPUS_BYTES = 1_048_576
-BENCHMARK_EXTRACTION_VERSION = "staged-entity-grounding-negative-relationship-policy:v3"
+BENCHMARK_EXTRACTION_VERSION = "replicated-staged-extraction-quality:v4"
 logger = logging.getLogger(__name__)
 
 
@@ -64,6 +75,7 @@ class BenchmarkCallBudgetExceeded(RuntimeError):
 class ExpectedEntity:
     id: str
     aliases: tuple[str, ...]
+    types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -82,6 +94,8 @@ class BenchmarkCase:
     expected_entities: tuple[ExpectedEntity, ...]
     forbidden_entities: tuple[ExpectedEntity, ...]
     expected_relationships: tuple[ExpectedRelationship, ...]
+    content_role: str = WORLD_LORE
+    graph_extraction_eligible: bool = True
 
 
 @dataclass(frozen=True)
@@ -91,6 +105,7 @@ class BenchmarkCorpus:
     fingerprint: str
     entity_recall_threshold: float
     relationship_recall_threshold: float
+    entity_type_recall_threshold: float
     cases: tuple[BenchmarkCase, ...]
 
 
@@ -140,7 +155,7 @@ def _boolean(value: object, label: str) -> bool:
     return value
 
 
-def _parse_entity(value: object) -> ExpectedEntity:
+def _parse_entity(value: object, schema_version: int) -> ExpectedEntity:
     payload = _mapping(value, "Expected entity")
     entity_id = _label(payload.get("id"), "Expected entity ID", maximum=64)
     if not _CASE_ID.fullmatch(entity_id):
@@ -151,7 +166,17 @@ def _parse_entity(value: object) -> ExpectedEntity:
     )
     if not aliases or len(aliases) > 10 or len(set(aliases)) != len(aliases):
         raise BenchmarkConfigurationError("Expected entity aliases are invalid")
-    return ExpectedEntity(id=entity_id, aliases=aliases)
+    types = (
+        tuple(
+            _label(item, "Expected entity type", maximum=64)
+            for item in _sequence(payload.get("types", []), "Expected entity types")
+        )
+        if schema_version >= 4
+        else ()
+    )
+    if len(types) != len(set(types)) or any(item not in ENTITY_TYPES for item in types):
+        raise BenchmarkConfigurationError("Expected entity types are invalid")
+    return ExpectedEntity(id=entity_id, aliases=aliases, types=types)
 
 
 def _parse_relationship(value: object, entity_ids: frozenset[str]) -> ExpectedRelationship:
@@ -195,18 +220,37 @@ def _parse_case(value: object, schema_version: int) -> BenchmarkCase:
             raise BenchmarkConfigurationError(
                 "Versioned benchmark cases must require parse and schema success"
             )
+    content_role = (
+        _label(payload.get("content_role", WORLD_LORE), "Content role", maximum=64)
+        if schema_version >= 4
+        else WORLD_LORE
+    )
+    graph_extraction_eligible = (
+        _boolean(payload.get("graph_extraction_eligible", True), "Graph extraction eligibility")
+        if schema_version >= 4
+        else True
+    )
+    if content_role not in {
+        "world_lore",
+        "runtime_contract",
+        "presentation_guidance",
+        "schema_guidance",
+        "migration_guidance",
+        "mixed",
+    }:
+        raise BenchmarkConfigurationError("Content role is invalid")
     entities = tuple(
-        _parse_entity(item)
+        _parse_entity(item, schema_version)
         for item in _sequence(payload.get("expected_entities"), "Expected entities")
     )
-    if not entities or len(entities) > 100:
+    if len(entities) > 100 or (not entities and graph_extraction_eligible):
         raise BenchmarkConfigurationError("Expected entities are invalid")
     entity_ids = frozenset(entity.id for entity in entities)
     if len(entity_ids) != len(entities):
         raise BenchmarkConfigurationError("Expected entity IDs must be unique")
     forbidden_entities = (
         tuple(
-            _parse_entity(item)
+            _parse_entity(item, schema_version)
             for item in _sequence(
                 payload.get("forbidden_entities"),
                 "Forbidden entities",
@@ -227,8 +271,14 @@ def _parse_case(value: object, schema_version: int) -> BenchmarkCase:
             "Expected relationships",
         )
     )
-    if not relationships or len(relationships) > 200:
+    if len(relationships) > 200 or (
+        not relationships and graph_extraction_eligible and schema_version < 4
+    ):
         raise BenchmarkConfigurationError("Expected relationships are invalid")
+    if not graph_extraction_eligible and (entities or relationships):
+        raise BenchmarkConfigurationError(
+            "Graph-ineligible cases cannot require extracted entities or relationships"
+        )
     return BenchmarkCase(
         id=case_id,
         episode=episode,
@@ -237,6 +287,8 @@ def _parse_case(value: object, schema_version: int) -> BenchmarkCase:
         expected_entities=entities,
         forbidden_entities=forbidden_entities,
         expected_relationships=relationships,
+        content_role=content_role,
+        graph_extraction_eligible=graph_extraction_eligible,
     )
 
 
@@ -259,7 +311,7 @@ def load_benchmark_corpus(path: Path) -> BenchmarkCorpus:
     if (
         isinstance(schema_version, bool)
         or not isinstance(schema_version, int)
-        or schema_version not in (1, 2, 3)
+        or schema_version not in (1, 2, 3, 4)
     ):
         raise BenchmarkConfigurationError("Benchmark corpus schema version is unsupported")
     corpus_id = _label(root.get("corpus_id"), "Benchmark corpus ID")
@@ -282,6 +334,11 @@ def load_benchmark_corpus(path: Path) -> BenchmarkCorpus:
             thresholds.get("relationship_recall"),
             "Relationship recall",
         ),
+        entity_type_recall_threshold=(
+            _ratio(thresholds.get("entity_type_recall"), "Entity type recall")
+            if schema_version >= 4
+            else 0.0
+        ),
         cases=cases,
     )
 
@@ -298,6 +355,22 @@ def _name_matches(name: object, aliases: tuple[str, ...]) -> bool:
     )
 
 
+def _node_types(node: object) -> set[str]:
+    values: list[object] = []
+    for attribute in ("labels", "entity_types", "type"):
+        value = getattr(node, attribute, None)
+        if isinstance(value, str):
+            values.append(value)
+        elif isinstance(value, Sequence):
+            values.extend(value)
+    values.append(type(node).__name__.removesuffix("Node"))
+    return {
+        str(value)
+        for value in values
+        if str(value) in ENTITY_TYPES and str(value) not in {"Entity", "Entity_"}
+    }
+
+
 def score_benchmark_case(
     case: BenchmarkCase,
     nodes: Sequence[object],
@@ -305,11 +378,16 @@ def score_benchmark_case(
 ) -> dict[str, int | float]:
     """Score only counts and recall; never return extracted names or facts."""
     matched_node_ids: dict[str, set[str]] = {}
+    matched_nodes: dict[str, list[object]] = {}
     for entity_expectation in case.expected_entities:
-        matched_node_ids[entity_expectation.id] = {
-            str(getattr(node, "uuid", ""))
+        matching_nodes = [
+            node
             for node in nodes
             if _name_matches(getattr(node, "name", ""), entity_expectation.aliases)
+        ]
+        matched_nodes[entity_expectation.id] = matching_nodes
+        matched_node_ids[entity_expectation.id] = {
+            str(getattr(node, "uuid", "")) for node in matching_nodes
         }
     matched_entities = sum(bool(matches) for matches in matched_node_ids.values())
     matched_forbidden_entities = sum(
@@ -330,17 +408,39 @@ def score_benchmark_case(
             matched_relationships += 1
     expected_entity_count = len(case.expected_entities)
     expected_relationship_count = len(case.expected_relationships)
+    typed_expectations = [entity for entity in case.expected_entities if entity.types]
+    matched_typed_entities = sum(
+        any(_node_types(node).intersection(entity.types) for node in matched_nodes[entity.id])
+        for entity in typed_expectations
+    )
+    conflicting_typed_entities = sum(
+        len({entity_type for node in matched_nodes[entity.id] for entity_type in _node_types(node)})
+        > 1
+        for entity in typed_expectations
+    )
     return {
         "expected_entities": expected_entity_count,
         "matched_entities": matched_entities,
         "extracted_entities": len(nodes),
-        "entity_recall": matched_entities / expected_entity_count,
+        "entity_recall": (
+            matched_entities / expected_entity_count if expected_entity_count else 1.0
+        ),
+        "expected_typed_entities": len(typed_expectations),
+        "matched_typed_entities": matched_typed_entities,
+        "conflicting_typed_entities": conflicting_typed_entities,
+        "entity_type_recall": (
+            matched_typed_entities / len(typed_expectations) if typed_expectations else 1.0
+        ),
         "forbidden_entities": len(case.forbidden_entities),
         "matched_forbidden_entities": matched_forbidden_entities,
         "expected_relationships": expected_relationship_count,
         "matched_relationships": matched_relationships,
         "extracted_relationships": len(edges),
-        "relationship_recall": matched_relationships / expected_relationship_count,
+        "relationship_recall": (
+            matched_relationships / expected_relationship_count
+            if expected_relationship_count
+            else 1.0
+        ),
     }
 
 
@@ -353,12 +453,20 @@ def _value(value: object, name: str) -> object:
 class BenchmarkProviderCallBudget:
     """Count and cap the exact OpenAI-compatible request boundary in memory."""
 
-    def __init__(self, llm_client: object, candidate: TextModelCandidate, maximum_calls: int):
+    def __init__(
+        self,
+        llm_client: object,
+        candidate: TextModelCandidate,
+        maximum_calls: int,
+        *,
+        seed: int | None = None,
+    ):
         if not 1 <= maximum_calls <= 100:
             raise BenchmarkConfigurationError("Provider-call budget must be between 1 and 100")
         self.llm_client = llm_client
         self.candidate = candidate
         self.maximum_calls = maximum_calls
+        self.seed = seed
         self.calls = 0
         self.rejected_calls = 0
         self.failed_calls = 0
@@ -366,6 +474,7 @@ class BenchmarkProviderCallBudget:
         self.usage: dict[str, int] = {}
         self.actual_models: set[str] = set()
         self.upstream_providers: set[str] = set()
+        self.latencies_ms: list[int] = []
         self._installed = False
 
     def verify_ready(self) -> None:
@@ -399,6 +508,9 @@ class BenchmarkProviderCallBudget:
                 self.rejected_calls += 1
                 raise BenchmarkCallBudgetExceeded("Benchmark provider-call budget exhausted")
             self.calls += 1
+            if self.seed is not None:
+                kwargs.setdefault("seed", self.seed)
+            started = perf_counter()
             try:
                 response = await original_create(*args, **kwargs)
             except Exception as error:
@@ -407,6 +519,8 @@ class BenchmarkProviderCallBudget:
                 self.failed_calls += 1
                 self.failures[key] = self.failures.get(key, 0) + 1
                 raise
+            finally:
+                self.latencies_ms.append(max(0, round((perf_counter() - started) * 1000)))
             self._capture_response(response)
             return response
 
@@ -453,6 +567,8 @@ class BenchmarkProviderCallBudget:
             "usage": dict(sorted(self.usage.items())),
             "actual_models": sorted(self.actual_models),
             "upstream_providers": sorted(self.upstream_providers),
+            "seed_requested": self.seed,
+            "provider_latency_ms": list(self.latencies_ms),
         }
 
 
@@ -533,6 +649,7 @@ async def extract_staged_policy_graph(
 
 Extractor = Callable[..., Awaitable[BenchmarkExtractionResult]]
 ClientFactory = Callable[[TextModelCandidate], object]
+SystemMetricsSampler = Callable[[], Mapping[str, float]]
 
 
 def _structured_result_for_failure(
@@ -549,6 +666,96 @@ def _rate(numerator: int, denominator: int) -> float | None:
     return numerator / denominator if denominator else None
 
 
+def _distribution(values: Sequence[float | int]) -> dict[str, float | int | None]:
+    parsed = [float(value) for value in values]
+    if not parsed:
+        return {
+            "count": 0,
+            "minimum": None,
+            "maximum": None,
+            "mean": None,
+            "median": None,
+            "p95": None,
+        }
+    ordered = sorted(parsed)
+    p95_index = min(len(ordered) - 1, math.ceil(len(ordered) * 0.95) - 1)
+    return {
+        "count": len(ordered),
+        "minimum": round(ordered[0], 3),
+        "maximum": round(ordered[-1], 3),
+        "mean": round(statistics.fmean(ordered), 3),
+        "median": round(statistics.median(ordered), 3),
+        "p95": round(ordered[p95_index], 3),
+    }
+
+
+def _wilson_interval(successes: int, observations: int) -> dict[str, float | int | None]:
+    if observations <= 0:
+        return {"successes": successes, "observations": observations, "low": None, "high": None}
+    z = 1.959963984540054
+    proportion = successes / observations
+    denominator = 1 + (z * z / observations)
+    center = (proportion + (z * z / (2 * observations))) / denominator
+    margin = (
+        z
+        * math.sqrt(
+            (proportion * (1 - proportion) / observations)
+            + (z * z / (4 * observations * observations))
+        )
+        / denominator
+    )
+    return {
+        "successes": successes,
+        "observations": observations,
+        "low": round(max(0.0, center - margin), 6),
+        "high": round(min(1.0, center + margin), 6),
+    }
+
+
+def sample_system_metrics() -> dict[str, float]:
+    """Collect optional content-free host load and NVIDIA metrics."""
+    metrics: dict[str, float] = {}
+    try:
+        load_one, load_five, load_fifteen = os.getloadavg()
+        metrics.update(
+            {
+                "load_1m": round(load_one, 3),
+                "load_5m": round(load_five, 3),
+                "load_15m": round(load_fifteen, 3),
+            }
+        )
+    except OSError:
+        pass
+    try:
+        result = subprocess.run(  # nosec B603 - fixed local telemetry command
+            [
+                "nvidia-smi",
+                "--query-gpu=temperature.gpu,utilization.gpu,memory.used,power.draw",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=3,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return metrics
+    if result.returncode != 0:
+        return metrics
+    rows = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    parsed_rows = []
+    for row in rows:
+        try:
+            parsed_rows.append([float(value.strip()) for value in row.split(",")])
+        except ValueError:
+            continue
+    if parsed_rows:
+        names = ("gpu_temperature_c", "gpu_utilization_percent", "gpu_memory_mib", "gpu_power_w")
+        for index, name in enumerate(names):
+            metrics[name] = round(max(row[index] for row in parsed_rows), 3)
+    return metrics
+
+
 def _result_count(result: Mapping[str, object], name: str) -> int:
     value = result.get(name)
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -558,6 +765,8 @@ def _result_count(result: Mapping[str, object], name: str) -> int:
 
 def _aggregate_relationship_quality(
     case_results: Sequence[Mapping[str, object]],
+    *,
+    expected_evidence_cases: int | None = None,
 ) -> dict[str, object]:
     reports = [
         result["relationship_quality"]
@@ -583,9 +792,13 @@ def _aggregate_relationship_quality(
         "rejected_empty_fact",
         "rejected_duplicate",
     )
+    expected_count = (
+        len(case_results) if expected_evidence_cases is None else expected_evidence_cases
+    )
     return {
         "evidence_cases": len(reports),
-        "missing_evidence_cases": len(case_results) - len(reports),
+        "expected_evidence_cases": expected_count,
+        "missing_evidence_cases": max(0, expected_count - len(reports)),
         "vocabulary_fingerprints": fingerprints,
         "mixed_vocabulary": len(fingerprints) > 1,
         "proposed_edges": proposed,
@@ -602,6 +815,8 @@ def _aggregate_relationship_quality(
 def _aggregate_entity_grounding_quality(
     case_results: Sequence[Mapping[str, object]],
     policy: str,
+    *,
+    eligible_cases: int | None = None,
 ) -> dict[str, object]:
     reports = [
         result["entity_grounding_quality"]
@@ -609,7 +824,9 @@ def _aggregate_entity_grounding_quality(
         if isinstance(result.get("entity_grounding_quality"), Mapping)
     ]
     enabled = policy == ENTITY_GROUNDING_POLICY_LITERAL_V1
-    expected_evidence_cases = len(case_results) if enabled else 0
+    expected_evidence_cases = (
+        (len(case_results) if eligible_cases is None else eligible_cases) if enabled else 0
+    )
 
     def total(name: str) -> int:
         return sum(int(report[name]) for report in reports if isinstance(report, Mapping))
@@ -651,26 +868,85 @@ async def benchmark_candidate(
     relationship_vocabulary_fingerprint: str = RELATIONSHIP_VOCABULARY_FINGERPRINT,
     extractor: Extractor = extract_staged_policy_graph,
     entity_grounding_policy: str = "off",
+    content_role_policy: str = CONTENT_ROLE_POLICY_INCLUDE_ALL,
+    trials: int = 1,
+    seed: int | None = None,
+    system_metrics_sampler: SystemMetricsSampler = sample_system_metrics,
 ) -> dict[str, object]:
     """Benchmark one candidate against every case without persistence."""
     if not 1 <= concurrency <= 2:
         raise BenchmarkConfigurationError("Benchmark concurrency must be one or two")
+    if not 1 <= trials <= 20:
+        raise BenchmarkConfigurationError("Benchmark trials must be between one and twenty")
+    if seed is not None and (
+        isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed <= 2_147_483_647
+    ):
+        raise BenchmarkConfigurationError("Benchmark seed must be between zero and 2147483647")
     if relationship_vocabulary_fingerprint != RELATIONSHIP_VOCABULARY_FINGERPRINT:
         raise BenchmarkConfigurationError("Benchmark relationship vocabulary is not current")
     grounding_policy = resolve_entity_grounding_policy(entity_grounding_policy)
+    role_policy = resolve_content_role_policy(content_role_policy)
     semaphore = asyncio.Semaphore(concurrency)
 
-    async def run_case(case: BenchmarkCase) -> dict[str, object]:
+    async def run_case(case: BenchmarkCase, trial_index: int) -> dict[str, object]:
         async with semaphore:
             started = perf_counter()
+            before_metrics = dict(system_metrics_sampler())
             llm_client: object | None = None
             budget: BenchmarkProviderCallBudget | None = None
+            trial_seed = seed + trial_index if seed is not None else None
             try:
+                detected_role = classify_chunk_role(
+                    case.episode,
+                    parse_markdown_sections(case.episode),
+                )
+                detected_eligible = (
+                    role_policy == CONTENT_ROLE_POLICY_INCLUDE_ALL or detected_role == WORLD_LORE
+                )
+                if detected_role != case.content_role:
+                    raise BenchmarkConfigurationError(
+                        "Benchmark content-role classification differs from reviewed expectation"
+                    )
+                if detected_eligible != case.graph_extraction_eligible:
+                    raise BenchmarkConfigurationError(
+                        "Benchmark content-role policy differs from reviewed eligibility"
+                    )
+                if not detected_eligible:
+                    score = score_benchmark_case(case, [], [])
+                    return {
+                        "case_id": case.id,
+                        "trial": trial_index + 1,
+                        "seed_requested": trial_seed,
+                        "status": "completed",
+                        "latency_ms": max(0, round((perf_counter() - started) * 1000)),
+                        "expected_parse_success": case.expect_parse_success,
+                        "expected_schema_success": case.expect_schema_success,
+                        "parse_success": True,
+                        "schema_success": True,
+                        "structured_expectation_match": True,
+                        "content_role": detected_role,
+                        "graph_extraction_eligible": False,
+                        "policy_excluded": True,
+                        "relationship_quality": None,
+                        "entity_grounding_quality": None,
+                        "provider_calls": 0,
+                        "budget_rejections": 0,
+                        "failed_provider_calls": 0,
+                        "provider_failures": {},
+                        "provider_latency_ms": [],
+                        "usage": {},
+                        "actual_models": [],
+                        "upstream_providers": [],
+                        "system_metrics_before": before_metrics,
+                        "system_metrics_after": dict(system_metrics_sampler()),
+                        **score,
+                    }
                 llm_client = client_factory(candidate)
                 budget = BenchmarkProviderCallBudget(
                     llm_client,
                     candidate,
                     maximum_provider_calls,
+                    seed=trial_seed,
                 )
                 episode = EpisodicNode(
                     uuid=f"benchmark-{case.id}",
@@ -725,6 +1001,7 @@ async def benchmark_candidate(
                 score = score_benchmark_case(case, extraction.nodes, extraction.edges)
                 return {
                     "case_id": case.id,
+                    "trial": trial_index + 1,
                     "status": "completed" if budget.failed_calls == 0 else "degraded",
                     "latency_ms": max(0, round((perf_counter() - started) * 1000)),
                     "expected_parse_success": case.expect_parse_success,
@@ -734,12 +1011,17 @@ async def benchmark_candidate(
                     "structured_expectation_match": (
                         case.expect_parse_success and case.expect_schema_success
                     ),
+                    "content_role": detected_role,
+                    "graph_extraction_eligible": True,
+                    "policy_excluded": False,
                     "relationship_quality": relationship_quality.as_dict(),
                     "entity_grounding_quality": (
                         grounding_quality.as_dict() if grounding_quality is not None else None
                     ),
                     **score,
                     **budget.sanitized_summary(),
+                    "system_metrics_before": before_metrics,
+                    "system_metrics_after": dict(system_metrics_sampler()),
                 }
             except Exception as error:
                 if isinstance(error, BenchmarkCallBudgetExceeded):
@@ -752,6 +1034,8 @@ async def benchmark_candidate(
                 parse_success, schema_success = _structured_result_for_failure(failure_class)
                 return {
                     "case_id": case.id,
+                    "trial": trial_index + 1,
+                    "seed_requested": trial_seed,
                     "status": "failed",
                     "latency_ms": max(0, round((perf_counter() - started) * 1000)),
                     "expected_parse_success": case.expect_parse_success,
@@ -768,12 +1052,21 @@ async def benchmark_candidate(
                     "matched_entities": 0,
                     "extracted_entities": 0,
                     "entity_recall": 0.0,
+                    "expected_typed_entities": sum(
+                        bool(entity.types) for entity in case.expected_entities
+                    ),
+                    "matched_typed_entities": 0,
+                    "conflicting_typed_entities": 0,
+                    "entity_type_recall": 0.0,
                     "forbidden_entities": len(case.forbidden_entities),
                     "matched_forbidden_entities": 0,
                     "expected_relationships": len(case.expected_relationships),
                     "matched_relationships": 0,
                     "extracted_relationships": 0,
                     "relationship_recall": 0.0,
+                    "content_role": case.content_role,
+                    "graph_extraction_eligible": case.graph_extraction_eligible,
+                    "policy_excluded": False,
                     "failure_class": failure_class,
                     "failure_code": failure_code,
                     **(
@@ -787,8 +1080,11 @@ async def benchmark_candidate(
                             "usage": {},
                             "actual_models": [],
                             "upstream_providers": [],
+                            "provider_latency_ms": [],
                         }
                     ),
+                    "system_metrics_before": before_metrics,
+                    "system_metrics_after": dict(system_metrics_sampler()),
                 }
             finally:
                 if llm_client is not None:
@@ -800,9 +1096,22 @@ async def benchmark_candidate(
                             type(close_error).__name__,
                         )
 
-    case_results = list(await asyncio.gather(*(run_case(case) for case in corpus.cases)))
+    case_results = list(
+        await asyncio.gather(
+            *(run_case(case, trial_index) for trial_index in range(trials) for case in corpus.cases)
+        )
+    )
     expected_entities = sum(_result_count(result, "expected_entities") for result in case_results)
     matched_entities = sum(_result_count(result, "matched_entities") for result in case_results)
+    expected_typed_entities = sum(
+        _result_count(result, "expected_typed_entities") for result in case_results
+    )
+    matched_typed_entities = sum(
+        _result_count(result, "matched_typed_entities") for result in case_results
+    )
+    conflicting_typed_entities = sum(
+        _result_count(result, "conflicting_typed_entities") for result in case_results
+    )
     forbidden_entities = sum(_result_count(result, "forbidden_entities") for result in case_results)
     matched_forbidden_entities = sum(
         _result_count(result, "matched_forbidden_entities") for result in case_results
@@ -813,8 +1122,13 @@ async def benchmark_candidate(
     matched_relationships = sum(
         _result_count(result, "matched_relationships") for result in case_results
     )
-    entity_recall = matched_entities / expected_entities
-    relationship_recall = matched_relationships / expected_relationships
+    entity_recall = matched_entities / expected_entities if expected_entities else 1.0
+    entity_type_recall = (
+        matched_typed_entities / expected_typed_entities if expected_typed_entities else 1.0
+    )
+    relationship_recall = (
+        matched_relationships / expected_relationships if expected_relationships else 1.0
+    )
     failed_cases = sum(result["status"] != "completed" for result in case_results)
     parse_success_cases = sum(result["parse_success"] is True for result in case_results)
     parse_reported_cases = sum(result["parse_success"] is not None for result in case_results)
@@ -823,22 +1137,110 @@ async def benchmark_candidate(
     structured_expectation_matches = sum(
         result["structured_expectation_match"] is True for result in case_results
     )
-    relationship_quality = _aggregate_relationship_quality(case_results)
+    eligible_case_results = [
+        result for result in case_results if result.get("graph_extraction_eligible") is True
+    ]
+    relationship_quality = _aggregate_relationship_quality(
+        case_results,
+        expected_evidence_cases=len(eligible_case_results),
+    )
     entity_grounding_quality = _aggregate_entity_grounding_quality(
         case_results,
         grounding_policy,
+        eligible_cases=len(eligible_case_results),
     )
-    passed = (
-        failed_cases == 0
-        and structured_expectation_matches == len(case_results)
-        and relationship_quality["evidence_cases"] == len(case_results)
-        and relationship_quality["vocabulary_fingerprints"] == [relationship_vocabulary_fingerprint]
-        and entity_grounding_quality["missing_evidence_cases"] == 0
-        and entity_grounding_quality["unexpected_evidence_cases"] == 0
-        and matched_forbidden_entities == 0
-        and entity_recall >= corpus.entity_recall_threshold
-        and relationship_recall >= corpus.relationship_recall_threshold
-    )
+
+    trial_results: list[dict[str, object]] = []
+    for trial_index in range(trials):
+        trial_cases = [result for result in case_results if result["trial"] == trial_index + 1]
+        trial_eligible = [
+            result for result in trial_cases if result.get("graph_extraction_eligible") is True
+        ]
+        trial_expected_entities = sum(
+            _result_count(result, "expected_entities") for result in trial_cases
+        )
+        trial_matched_entities = sum(
+            _result_count(result, "matched_entities") for result in trial_cases
+        )
+        trial_expected_types = sum(
+            _result_count(result, "expected_typed_entities") for result in trial_cases
+        )
+        trial_matched_types = sum(
+            _result_count(result, "matched_typed_entities") for result in trial_cases
+        )
+        trial_type_conflicts = sum(
+            _result_count(result, "conflicting_typed_entities") for result in trial_cases
+        )
+        trial_expected_relationships = sum(
+            _result_count(result, "expected_relationships") for result in trial_cases
+        )
+        trial_matched_relationships = sum(
+            _result_count(result, "matched_relationships") for result in trial_cases
+        )
+        trial_forbidden_matches = sum(
+            _result_count(result, "matched_forbidden_entities") for result in trial_cases
+        )
+        trial_entity_recall = (
+            trial_matched_entities / trial_expected_entities if trial_expected_entities else 1.0
+        )
+        trial_type_recall = (
+            trial_matched_types / trial_expected_types if trial_expected_types else 1.0
+        )
+        trial_relationship_recall = (
+            trial_matched_relationships / trial_expected_relationships
+            if trial_expected_relationships
+            else 1.0
+        )
+        trial_relationship_quality = _aggregate_relationship_quality(
+            trial_cases,
+            expected_evidence_cases=len(trial_eligible),
+        )
+        trial_grounding_quality = _aggregate_entity_grounding_quality(
+            trial_cases,
+            grounding_policy,
+            eligible_cases=len(trial_eligible),
+        )
+        component_gates = {
+            "all_cases_completed": all(result["status"] == "completed" for result in trial_cases),
+            "structured_outputs": all(
+                result["structured_expectation_match"] is True for result in trial_cases
+            ),
+            "relationship_evidence": (
+                trial_relationship_quality["evidence_cases"] == len(trial_eligible)
+                and trial_relationship_quality["vocabulary_fingerprints"]
+                == ([relationship_vocabulary_fingerprint] if trial_eligible else [])
+            ),
+            "entity_grounding_evidence": (
+                trial_grounding_quality["missing_evidence_cases"] == 0
+                and trial_grounding_quality["unexpected_evidence_cases"] == 0
+            ),
+            "forbidden_entities": trial_forbidden_matches == 0,
+            "entity_recall": trial_entity_recall >= corpus.entity_recall_threshold,
+            "entity_type_recall": (
+                trial_type_recall >= corpus.entity_type_recall_threshold
+                and trial_type_conflicts == 0
+            ),
+            "relationship_recall": (
+                trial_relationship_recall >= corpus.relationship_recall_threshold
+            ),
+        }
+        trial_results.append(
+            {
+                "trial": trial_index + 1,
+                "seed_requested": seed + trial_index if seed is not None else None,
+                "status": "passed" if all(component_gates.values()) else "failed",
+                "component_gates": component_gates,
+                "entity_recall": trial_entity_recall,
+                "entity_type_recall": trial_type_recall,
+                "relationship_recall": trial_relationship_recall,
+                "matched_forbidden_entities": trial_forbidden_matches,
+                "provider_calls": sum(
+                    _result_count(result, "provider_calls") for result in trial_cases
+                ),
+                "latency_ms": sum(_result_count(result, "latency_ms") for result in trial_cases),
+            }
+        )
+    passed = all(result["status"] == "passed" for result in trial_results)
     contract = {
         "benchmark_extraction_version": BENCHMARK_EXTRACTION_VERSION,
         "corpus_fingerprint": corpus.fingerprint,
@@ -849,8 +1251,11 @@ async def benchmark_candidate(
         "schema_version": schema_version,
         "relationship_vocabulary_fingerprint": relationship_vocabulary_fingerprint,
         "entity_grounding_policy": grounding_policy,
+        "content_role_policy": role_policy,
         "maximum_provider_calls_per_case": maximum_provider_calls,
         "concurrency": concurrency,
+        "trials": trials,
+        "seed": seed,
     }
     benchmark_fingerprint = (
         "graphiti-benchmark:sha256:"
@@ -867,6 +1272,32 @@ async def benchmark_candidate(
             if not isinstance(name, str) or isinstance(count, bool) or not isinstance(count, int):
                 raise BenchmarkConfigurationError("Benchmark usage result is invalid")
             usage[name] = usage.get(name, 0) + count
+    metric_values: dict[str, list[float]] = {}
+    for result in case_results:
+        for field in ("system_metrics_before", "system_metrics_after"):
+            snapshot = result.get(field)
+            if not isinstance(snapshot, Mapping):
+                continue
+            for name, value in snapshot.items():
+                if (
+                    isinstance(name, str)
+                    and isinstance(value, (int, float))
+                    and not isinstance(
+                        value,
+                        bool,
+                    )
+                ):
+                    metric_values.setdefault(name, []).append(float(value))
+    provider_latencies = [
+        int(value)
+        for result in case_results
+        for value in (
+            result.get("provider_latency_ms")
+            if isinstance(result.get("provider_latency_ms"), list)
+            else []
+        )
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0
+    ]
     return {
         "status": "passed" if passed else "failed",
         "provider": candidate.connection.provider,
@@ -876,7 +1307,10 @@ async def benchmark_candidate(
         "benchmark_fingerprint": benchmark_fingerprint,
         "benchmark_extraction_version": BENCHMARK_EXTRACTION_VERSION,
         "cases": case_results,
-        "case_count": len(case_results),
+        "case_count": len(corpus.cases),
+        "case_trial_count": len(case_results),
+        "trial_count": trials,
+        "trials": trial_results,
         "failed_cases": failed_cases,
         "parse_success_cases": parse_success_cases,
         "parse_reported_cases": parse_reported_cases,
@@ -885,6 +1319,11 @@ async def benchmark_candidate(
         "structured_expectation_matches": structured_expectation_matches,
         "entity_recall": entity_recall,
         "entity_recall_threshold": corpus.entity_recall_threshold,
+        "entity_type_recall": entity_type_recall,
+        "entity_type_recall_threshold": corpus.entity_type_recall_threshold,
+        "expected_typed_entities": expected_typed_entities,
+        "matched_typed_entities": matched_typed_entities,
+        "conflicting_typed_entities": conflicting_typed_entities,
         "forbidden_entities": forbidden_entities,
         "matched_forbidden_entities": matched_forbidden_entities,
         "relationship_recall": relationship_recall,
@@ -892,7 +1331,40 @@ async def benchmark_candidate(
         "relationship_quality": relationship_quality,
         "entity_grounding_policy": grounding_policy,
         "entity_grounding_quality": entity_grounding_quality,
+        "content_role_policy": role_policy,
         "provider_calls": sum(_result_count(result, "provider_calls") for result in case_results),
         "maximum_provider_calls_per_case": maximum_provider_calls,
         "usage": dict(sorted(usage.items())),
+        "distributions": {
+            "entity_recall": _distribution(
+                [float(result["entity_recall"]) for result in trial_results]
+            ),
+            "entity_type_recall": _distribution(
+                [float(result["entity_type_recall"]) for result in trial_results]
+            ),
+            "relationship_recall": _distribution(
+                [float(result["relationship_recall"]) for result in trial_results]
+            ),
+            "trial_latency_ms": _distribution(
+                [int(result["latency_ms"]) for result in trial_results]
+            ),
+            "provider_calls": _distribution(
+                [int(result["provider_calls"]) for result in trial_results]
+            ),
+            "provider_latency_ms": _distribution(provider_latencies),
+        },
+        "confidence_95": {
+            "entity_recall": _wilson_interval(matched_entities, expected_entities),
+            "entity_type_recall": _wilson_interval(
+                matched_typed_entities,
+                expected_typed_entities,
+            ),
+            "relationship_recall": _wilson_interval(
+                matched_relationships,
+                expected_relationships,
+            ),
+        },
+        "system_metrics": {
+            name: _distribution(values) for name, values in sorted(metric_values.items())
+        },
     }

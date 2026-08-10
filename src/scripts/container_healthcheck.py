@@ -8,8 +8,17 @@ import urllib.request
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from src.graphiti.heartbeat import (
+    heartbeat_is_fresh,
+    heartbeat_max_age,
+    heartbeat_path,
+)
+
 API_ROLE = "api"
 GRAPH_WORKER_ROLE = "graph-worker"
+GRAPH_WATCHDOG_ROLE = "graph-watchdog"
+GRAPH_FINALIZER_ROLE = "graph-finalizer"
+HEARTBEAT_ROLES = {GRAPH_WORKER_ROLE, GRAPH_WATCHDOG_ROLE, GRAPH_FINALIZER_ROLE}
 DEFAULT_API_PORT = 8003
 API_HEALTH_TIMEOUT_SECONDS = 5
 
@@ -21,7 +30,16 @@ def healthcheck_status(
     """Return a Docker-compatible status without applying an API probe to workers."""
     values = os.environ if environment is None else environment
     role = values.get("SAGE_CONTAINER_ROLE", API_ROLE).strip().lower()
-    if role == GRAPH_WORKER_ROLE:
+    if role in HEARTBEAT_ROLES:
+        try:
+            path = heartbeat_path(values)
+            maximum_age = heartbeat_max_age(values)
+        except ValueError:
+            print("Container health check failed: invalid heartbeat configuration", file=sys.stderr)
+            return 1
+        if not heartbeat_is_fresh(path, max_age_seconds=maximum_age):
+            print("Container health check failed: heartbeat is missing or stale", file=sys.stderr)
+            return 1
         return 0
     if role != API_ROLE:
         print("Container health check failed: unsupported container role", file=sys.stderr)

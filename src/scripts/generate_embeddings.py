@@ -57,6 +57,7 @@ async def generate_embeddings(
         FROM episodes AS episode
         JOIN lore_documents AS document ON document.id = episode.document_id
         WHERE episode.embedding IS NULL
+          AND episode.retired_at IS NULL
           AND document.canonical IS TRUE
           AND document.source_file LIKE 'canon/%'
         ORDER BY episode.id
@@ -90,7 +91,11 @@ async def generate_embeddings(
             # Convert embedding to string format for pgvector
             embedding_str = "[" + ",".join(map(str, embedding)) + "]"
             await db.execute(
-                "UPDATE episodes SET embedding = $1::vector WHERE id = $2",
+                """
+                UPDATE episodes
+                SET embedding = $1::vector
+                WHERE id = $2 AND retired_at IS NULL
+                """,
                 embedding_str,
                 episode["id"],
             )

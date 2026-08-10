@@ -8,18 +8,26 @@ import asyncio
 import json
 import sys
 from typing import Any
+from uuid import UUID
 
 sys.path.insert(0, "/app")
 
 from src.db.neo4j_db import Neo4jDB
 from src.db.postgres import PostgresDB
 from src.graphiti.semantic_audit import build_semantic_graph_audit
+from src.graphiti.semantic_audit_store import SemanticAuditRepository
+from src.graphiti.sync_state import GraphSyncRepository
+
+PERSIST_CONFIRMATION = "PERSIST_SEMANTIC_AUDIT"
 
 POSTGRES_SYNCED_EPISODE_QUERY = """
     SELECT episode.id::text AS stable_id, episode.text
     FROM episodes AS episode
     JOIN graph_sync_jobs AS job ON job.episode_id = episode.id
     WHERE job.state = 'synced'
+      AND job.desired_operation = 'sync'
+      AND episode.retired_at IS NULL
+      AND episode.graph_extraction_eligible IS TRUE
     ORDER BY episode.id
 """
 
@@ -47,6 +55,7 @@ async def collect_semantic_graph_audit(
     neo4j: Neo4jDB,
     *,
     sample_limit: int = 20,
+    include_evidence: bool = False,
 ) -> dict[str, Any]:
     """Collect consistent read-only inputs and build the semantic report."""
     episode_rows = await postgres.fetch(POSTGRES_SYNCED_EPISODE_QUERY)
@@ -61,6 +70,7 @@ async def collect_semantic_graph_audit(
         document_rows,
         entity_rows,
         sample_limit=sample_limit,
+        include_evidence=include_evidence,
     )
 
 
@@ -125,10 +135,19 @@ def render_human(report: dict[str, Any]) -> str:
 
 async def run(args: argparse.Namespace) -> int:
     """Execute the audit with stable clean/review/incomplete exit codes."""
+    persist = bool(getattr(args, "persist", False))
+    confirmation = getattr(args, "confirm", None)
+    run_id = getattr(args, "run_id", None)
+    if persist and confirmation != PERSIST_CONFIRMATION:
+        print(
+            f"Semantic graph audit rejected: --confirm {PERSIST_CONFIRMATION} is required",
+            file=sys.stderr,
+        )
+        return 2
     postgres = None
     neo4j = None
     try:
-        postgres = PostgresDB(read_only=True)
+        postgres = PostgresDB(read_only=not persist)
         neo4j = Neo4jDB(read_only=True)
         await postgres.connect()
         await neo4j.connect()
@@ -136,7 +155,17 @@ async def run(args: argparse.Namespace) -> int:
             postgres,
             neo4j,
             sample_limit=args.sample_limit,
+            include_evidence=persist,
         )
+        report["entity_stage_quality"] = await GraphSyncRepository(
+            postgres
+        ).entity_stage_quality_report(run_id)
+        if persist:
+            persistence = await SemanticAuditRepository(postgres).persist(
+                report,
+                run_id=run_id,
+            )
+            report["persistence"] = persistence
     except Exception as error:
         incomplete = {
             "schema_version": 1,
@@ -163,10 +192,21 @@ async def run(args: argparse.Namespace) -> int:
                         file=sys.stderr,
                     )
 
+    visible_report = dict(report)
+    visible_report.pop("evidence", None)
     if args.json:
-        print(json.dumps(report, indent=2, sort_keys=True))
+        print(json.dumps(visible_report, indent=2, sort_keys=True, default=str))
     else:
-        print(render_human(report))
+        output = render_human(visible_report)
+        if persist:
+            persistence = visible_report["persistence"]
+            output += (
+                "\nPersisted snapshot: "
+                f"{persistence['snapshot_id']} "
+                f"(created={str(persistence['created']).lower()}, "
+                f"transitions={persistence['transition_count']})"
+            )
+        print(output)
     return 0 if report["status"] == "clean" else 1
 
 
@@ -181,6 +221,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=20,
         help="Maximum sample records per finding category (default: 20)",
     )
+    parser.add_argument(
+        "--persist",
+        action="store_true",
+        help="Persist content-free snapshot and entity transitions",
+    )
+    parser.add_argument("--confirm", help=f"Required with --persist: {PERSIST_CONFIRMATION}")
+    parser.add_argument("--run-id", type=UUID, help="Optional durable graph run association")
     return parser
 
 

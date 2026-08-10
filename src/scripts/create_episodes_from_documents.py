@@ -12,6 +12,7 @@ Environment variables used (from Docker container):
 
 import argparse
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -25,6 +26,13 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeRe
 from rich.table import Table
 
 from src.db import get_postgres_db
+from src.ingestion.chunk_manifest import (
+    CONTENT_ROLE_POLICY_INCLUDE_ALL,
+    ChunkingProfile,
+    build_chunk_manifest,
+    reconcile_document_manifest,
+    resolve_content_role_policy,
+)
 
 # Import semantic chunker
 try:
@@ -52,29 +60,45 @@ class EpisodeCreator:
         overlap_percentage: float = 0.25,
         similarity_threshold: float = 0.7,
         complexity_factor: float = 1.5,
+        content_role_policy: str = CONTENT_ROLE_POLICY_INCLUDE_ALL,
     ):
+        embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
+        embedding_revision = os.getenv("SAGE_SENTENCE_TRANSFORMERS_REVISION")
         self.semantic_chunker = SemanticChunker(
+            embedding_model=embedding_model,
             base_tokens=base_tokens,
             min_tokens=min_tokens,
             max_tokens=max_tokens,
             overlap_percentage=overlap_percentage,
             similarity_threshold=similarity_threshold,
             complexity_factor=complexity_factor,
+            embedding_revision=embedding_revision,
+        )
+        self.chunking_profile = ChunkingProfile(
+            base_tokens=base_tokens,
+            min_tokens=min_tokens,
+            max_tokens=max_tokens,
+            overlap_percentage=overlap_percentage,
+            similarity_threshold=similarity_threshold,
+            complexity_factor=complexity_factor,
+            embedding_model=embedding_model,
+            embedding_revision=embedding_revision,
+            tokenizer="tiktoken:cl100k_base",
+            sentence_segmenter="spacy:en_core_web_sm",
+            content_role_policy=resolve_content_role_policy(content_role_policy),
         )
 
-    def split_text_into_episodes(self, text: str, title: str = "") -> list[str]:
-        """Split text into semantically coherent episodes with intelligent overlap"""
+    def create_chunks(self, text: str, title: str = "") -> list[dict]:
+        """Split text into semantically coherent, manifest-ready chunks."""
 
         if not text.strip():
             return []
 
-        # Use semantic chunker to create chunks
-        chunks = self.semantic_chunker.create_semantic_chunks(text, title)
+        return self.semantic_chunker.create_semantic_chunks(text, title)
 
-        # Extract just the text from each chunk
-        episodes = [chunk["text"] for chunk in chunks]
-
-        return episodes
+    def split_text_into_episodes(self, text: str, title: str = "") -> list[str]:
+        """Compatibility helper returning only chunk text."""
+        return [chunk["text"] for chunk in self.create_chunks(text, title)]
 
 
 async def create_episodes_from_documents(
@@ -88,6 +112,7 @@ async def create_episodes_from_documents(
     complexity_factor: float = 1.5,
     max_documents: int | None = None,
     force_recreate: bool = False,
+    content_role_policy: str = CONTENT_ROLE_POLICY_INCLUDE_ALL,
 ):
     """Create episodes from canon documents in PostgreSQL."""
 
@@ -99,6 +124,7 @@ async def create_episodes_from_documents(
             f"[dim]Overlap percentage:[/dim] {overlap_percentage:.1%}\n"
             f"[dim]Similarity threshold:[/dim] {similarity_threshold}\n"
             f"[dim]Complexity factor:[/dim] {complexity_factor}x\n"
+            f"[dim]Content-role policy:[/dim] {content_role_policy}\n"
             f"[dim]Batch size:[/dim] {batch_size}\n"
             f"[dim]Force recreate:[/dim] {'Yes' if force_recreate else 'No'}",
             border_style="cyan",
@@ -123,6 +149,7 @@ async def create_episodes_from_documents(
         overlap_percentage=overlap_percentage,
         similarity_threshold=similarity_threshold,
         complexity_factor=complexity_factor,
+        content_role_policy=content_role_policy,
     )
     total_processed = 0
     total_episodes_created = 0
@@ -193,7 +220,6 @@ async def create_episodes_from_documents(
                         break
 
                     try:
-                        document_id = doc["id"]
                         title = (
                             doc["title"][:50] + "..." if len(doc["title"]) > 50 else doc["title"]
                         )
@@ -207,62 +233,26 @@ async def create_episodes_from_documents(
                             episodes=str(total_episodes_created),
                         )
 
-                        # Clear existing episodes if recreating
-                        if force_recreate:
-                            await postgres.execute(
-                                """
-                                DELETE FROM episodes WHERE document_id = $1
-                            """,
-                                document_id,
-                            )
-
-                        # Split document into regular episodes using semantic chunking
-                        episode_texts = episode_creator.split_text_into_episodes(
-                            body_md, doc["title"]
+                        chunks = episode_creator.create_chunks(body_md, doc["title"])
+                        manifest = build_chunk_manifest(
+                            body_md,
+                            chunks,
+                            episode_creator.chunking_profile,
                         )
-
-                        # Insert episodes
-                        episodes_created = 0
-                        for idx, episode_text in enumerate(episode_texts):
-                            episode_index = idx
-                            try:
-                                await postgres.execute(
-                                    """
-                                    INSERT INTO episodes (document_id, episode_index, text, created_at)
-                                    VALUES ($1, $2, $3, NOW())
-                                    ON CONFLICT (document_id, episode_index)
-                                    DO UPDATE SET
-                                        text = EXCLUDED.text,
-                                        embedding = CASE
-                                            WHEN episodes.text IS DISTINCT FROM EXCLUDED.text
-                                                THEN NULL
-                                            ELSE episodes.embedding
-                                        END,
-                                        updated_at = NOW()
-                                """,
-                                    document_id,
-                                    episode_index,
-                                    episode_text,
+                        async with postgres.acquire() as connection:
+                            async with connection.transaction():
+                                reconciliation = await reconcile_document_manifest(
+                                    connection,
+                                    doc,
+                                    manifest,
                                 )
-                                episodes_created += 1
-                            except Exception as e:
-                                if debug:
-                                    console.print(
-                                        f"   ❌ [red]Failed to insert episode {episode_index}[/red] "
-                                        f"({type(e).__name__})"
-                                    )
-
-                        # Mark document as processed
-                        await postgres.execute(
-                            """
-                            UPDATE lore_documents
-                            SET processing_status = 'completed',
-                                processed_at = NOW(),
-                                updated_at = NOW()
-                            WHERE id = $1
-                        """,
-                            document_id,
-                        )
+                        episodes_created = int(reconciliation["active"])
+                        if debug:
+                            console.print(
+                                "   [dim]Manifest "
+                                f"{reconciliation['manifest_fingerprint']} "
+                                f"retired={reconciliation['retired']}[/dim]"
+                            )
 
                         total_processed += 1
                         total_episodes_created += episodes_created
@@ -383,6 +373,7 @@ async def check_episode_status():
                 JOIN lore_documents AS document ON document.id = episode.document_id
                 WHERE document.canonical IS TRUE
                   AND document.source_file LIKE 'canon/%'
+                  AND episode.retired_at IS NULL
             """)
 
             await postgres.disconnect()
@@ -504,6 +495,12 @@ Examples:
         default=1.5,
         help="Maximum complexity multiplier for chunk sizing (default: 1.5)",
     )
+    parser.add_argument(
+        "--content-role-policy",
+        choices=["include_all_v1", "exclude_non_lore_v1"],
+        default=os.getenv("GRAPH_CONTENT_ROLE_POLICY", CONTENT_ROLE_POLICY_INCLUDE_ALL),
+        help="Versioned graph-extraction role policy (default: include_all_v1)",
+    )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument(
         "--max-documents",
@@ -536,6 +533,7 @@ Examples:
                 complexity_factor=args.complexity_factor,
                 max_documents=args.max_documents,
                 force_recreate=args.force_recreate,
+                content_role_policy=args.content_role_policy,
             )
         )
         sys.exit(0 if success else 1)

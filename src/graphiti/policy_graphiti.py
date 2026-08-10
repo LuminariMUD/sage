@@ -25,6 +25,14 @@ from src.graphiti.entity_grounding_policy import (
     filter_entity_extraction_response,
     resolve_entity_grounding_policy,
 )
+from src.graphiti.entity_stage_quality import (
+    ENTITY_RESPONSE_POLICY_OFF,
+    ENTITY_RESPONSE_POLICY_STRICT_V1,
+    EntityStageQualityAccumulator,
+    EntityStageQualityError,
+    EntityStageQualityReport,
+    resolve_entity_response_policy,
+)
 from src.graphiti.relationship_policy import (
     RelationshipPolicyError,
     RelationshipQualityReport,
@@ -34,6 +42,10 @@ from src.graphiti.relationship_policy import (
 logger = logging.getLogger(__name__)
 _CURRENT_EPISODE_TEXT: ContextVar[str | None] = ContextVar(
     "graphiti_current_episode_text",
+    default=None,
+)
+_CURRENT_ENTITY_STAGE_QUALITY: ContextVar[EntityStageQualityAccumulator | None] = ContextVar(
+    "graphiti_current_entity_stage_quality",
     default=None,
 )
 
@@ -75,6 +87,40 @@ class EntityGroundingLLMProxy:
         return filtered
 
 
+class EntityStageQualityLLMProxy:
+    """Observe or reject incomplete dedupe and summary responses."""
+
+    def __init__(self, delegate: Any, policy: str):
+        self.delegate = delegate
+        self.policy = resolve_entity_response_policy(policy)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.delegate, name)
+
+    async def generate_response(self, *args: Any, **kwargs: Any) -> Any:
+        response = await self.delegate.generate_response(*args, **kwargs)
+        prompt_name = str(kwargs.get("prompt_name") or "")
+        if prompt_name not in {
+            "dedupe_nodes.nodes",
+            "extract_nodes.extract_summaries_batch",
+            "extract_nodes.extract_entity_summaries_from_episodes",
+        }:
+            return response
+        accumulator = _CURRENT_ENTITY_STAGE_QUALITY.get()
+        if accumulator is None:
+            raise RuntimeError("Entity-stage quality has no current episode context")
+        prompt = args[0] if args else None
+        if prompt_name == "dedupe_nodes.nodes":
+            report = accumulator.record_dedupe(prompt, response)
+            code = "entity_dedupe_response_incomplete"
+        else:
+            report = accumulator.record_summary(prompt, response)
+            code = "entity_summary_response_incomplete"
+        if self.policy == ENTITY_RESPONSE_POLICY_STRICT_V1 and report.has_anomalies:
+            raise EntityStageQualityError(code, report)
+        return response
+
+
 class RelationshipPolicyLLMProxy:
     """Delegate provider calls while filtering only structured edge extraction."""
 
@@ -101,12 +147,28 @@ class PolicyGraphiti(Graphiti):
         self,
         *args: Any,
         entity_grounding_policy: str | None = None,
+        entity_response_policy: str | None = None,
         **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
         self._relationship_quality: dict[str, RelationshipQualityReport] = {}
         self._entity_grounding_quality: dict[str, EntityGroundingReport] = {}
+        self._entity_stage_quality: dict[str, EntityStageQualityReport] = {}
         self._entity_grounding_proxy: EntityGroundingLLMProxy | None = None
+        self._entity_stage_proxy: EntityStageQualityLLMProxy | None = None
+        self.entity_response_policy = resolve_entity_response_policy(
+            entity_response_policy
+            if entity_response_policy is not None
+            else os.getenv("GRAPH_ENTITY_RESPONSE_POLICY")
+        )
+        if self.entity_response_policy != ENTITY_RESPONSE_POLICY_OFF:
+            stage_proxy = EntityStageQualityLLMProxy(
+                self.llm_client,
+                self.entity_response_policy,
+            )
+            self._entity_stage_proxy = stage_proxy
+            self.llm_client = stage_proxy
+            self.clients = self.clients.model_copy(update={"llm_client": stage_proxy})
         self.entity_grounding_policy = resolve_entity_grounding_policy(
             entity_grounding_policy
             if entity_grounding_policy is not None
@@ -119,27 +181,49 @@ class PolicyGraphiti(Graphiti):
             self.clients = self.clients.model_copy(update={"llm_client": grounding_proxy})
 
     async def add_episode(self, *args: Any, **kwargs: Any) -> Any:
-        """Bind the current episode text while an enabled grounding proxy runs."""
-        if self.entity_grounding_policy != ENTITY_GROUNDING_POLICY_LITERAL_V1:
+        """Bind enabled entity policies to one context-local episode call."""
+        grounding_enabled = self.entity_grounding_policy == ENTITY_GROUNDING_POLICY_LITERAL_V1
+        entity_response_policy = getattr(
+            self,
+            "entity_response_policy",
+            ENTITY_RESPONSE_POLICY_OFF,
+        )
+        stage_enabled = entity_response_policy != ENTITY_RESPONSE_POLICY_OFF
+        if not grounding_enabled and not stage_enabled:
             return await super().add_episode(*args, **kwargs)
         grounding_proxy = self._entity_grounding_proxy
-        if grounding_proxy is None:
+        if grounding_enabled and grounding_proxy is None:
             raise RuntimeError("Entity grounding proxy is unavailable")
         episode_body = kwargs.get("episode_body")
         if episode_body is None and len(args) >= 2:
             episode_body = args[1]
         if not isinstance(episode_body, str):
             raise ValueError("Entity grounding requires episode text")
-        grounding_proxy.report = None
-        with bind_entity_grounding_episode(episode_body):
-            result = await super().add_episode(*args, **kwargs)
-        if grounding_proxy.report is None:
+        if grounding_proxy is not None:
+            grounding_proxy.report = None
+        accumulator = (
+            EntityStageQualityAccumulator(entity_response_policy) if stage_enabled else None
+        )
+        stage_token = _CURRENT_ENTITY_STAGE_QUALITY.set(accumulator)
+        try:
+            with bind_entity_grounding_episode(episode_body):
+                result = await super().add_episode(*args, **kwargs)
+        except Exception as error:
+            if accumulator is not None and not hasattr(error, "entity_stage_quality"):
+                error.entity_stage_quality = accumulator.report()
+            raise
+        finally:
+            _CURRENT_ENTITY_STAGE_QUALITY.reset(stage_token)
+        if grounding_enabled and (grounding_proxy is None or grounding_proxy.report is None):
             raise RuntimeError("Entity grounding produced no quality evidence")
         episode = getattr(result, "episode", None)
         episode_uuid = getattr(episode, "uuid", None)
         if not isinstance(episode_uuid, str) or not episode_uuid:
             raise RuntimeError("Entity grounding result has no episode identity")
-        self._entity_grounding_quality[episode_uuid] = grounding_proxy.report
+        if grounding_proxy is not None and grounding_proxy.report is not None:
+            self._entity_grounding_quality[episode_uuid] = grounding_proxy.report
+        if accumulator is not None:
+            self._entity_stage_quality[episode_uuid] = accumulator.report()
         return result
 
     async def _extract_and_resolve_edges(
@@ -198,3 +282,10 @@ class PolicyGraphiti(Graphiti):
     ) -> EntityGroundingReport | None:
         """Consume one content-free grounding report after exact verification."""
         return self._entity_grounding_quality.pop(episode_uuid, None)
+
+    def consume_entity_stage_quality(
+        self,
+        episode_uuid: str,
+    ) -> EntityStageQualityReport | None:
+        """Consume one content-free stage report after exact verification."""
+        return self._entity_stage_quality.pop(episode_uuid, None)

@@ -10,16 +10,30 @@ import sys
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from enum import Enum
+from time import monotonic
 from typing import Any
 from uuid import UUID
 
 sys.path.insert(0, "/app")
 
 from src.db.postgres import PostgresDB
-from src.graphiti.sync_models import GraphSyncStateError, JobState, sanitize_summary
+from src.graphiti.sync_models import (
+    GraphSyncStateError,
+    InvalidTransitionError,
+    JobState,
+    sanitize_summary,
+)
 from src.graphiti.sync_state import GraphSyncRepository
 
-READ_ONLY_COMMANDS = {"status", "list", "attempts", "run-summary", "quality-report"}
+READ_ONLY_COMMANDS = {
+    "status",
+    "list",
+    "attempts",
+    "run-summary",
+    "quality-report",
+    "entity-quality-report",
+}
+PAUSE_CONFIRMATION = "PAUSE_DURABLE_GRAPH_SYNC"
 
 
 def json_default(value: object) -> Any:
@@ -72,7 +86,7 @@ def render_status(snapshot: dict[str, Any]) -> str:
         lines.extend(
             [
                 "Profile completion: "
-                f"{progress['synced_jobs']}/{progress['total_jobs']} "
+                f"{progress['completed_jobs']}/{progress['total_jobs']} "
                 f"({float(progress['completion_percent']):.3f}%)",
                 "Rolling verified throughput: "
                 f"{float(progress['rolling_verified_per_minute']):.3f} episodes/min",
@@ -114,7 +128,7 @@ def render_run_summary(summary: dict[str, Any]) -> str:
         f"State: {run['state']}",
         f"Profile: {run['sync_profile_fingerprint']}",
         "Completion: "
-        f"{progress['synced_jobs']}/{progress['total_jobs']} "
+        f"{progress['completed_jobs']}/{progress['total_jobs']} "
         f"({float(progress['completion_percent']):.3f}%)",
         f"Remaining jobs: {progress['remaining_jobs']}",
         f"Eligible now: {progress['eligible_now']}",
@@ -210,6 +224,8 @@ async def execute_command(args: argparse.Namespace, repository: GraphSyncReposit
         )
     if args.command == "quality-report":
         return await repository.relationship_quality_report(args.run_id)
+    if args.command == "entity-quality-report":
+        return await repository.entity_stage_quality_report(args.run_id)
     if args.command == "recover-expired":
         return await repository.recover_expired_leases(limit=args.limit)
     if args.command == "retry-waiting":
@@ -218,10 +234,41 @@ async def execute_command(args: argparse.Namespace, repository: GraphSyncReposit
         if not args.confirm:
             raise ValueError("Quarantined retry requires --confirm")
         return {"updated": await repository.retry_quarantined(args.episode_ids)}
+    if args.command == "prioritize":
+        return await repository.prioritize_jobs(
+            priority=args.priority,
+            reason_code=args.reason_code,
+            episode_ids=args.episode_id,
+            source_files=args.source_file,
+        )
+    if args.command == "run-pause":
+        if args.confirm != PAUSE_CONFIRMATION:
+            raise ValueError(f"Operator pause requires --confirm {PAUSE_CONFIRMATION}")
+        if args.wait_seconds < 0:
+            raise ValueError("Pause wait seconds cannot be negative")
+        run = await repository.pause_run(args.run_id, reason_code=args.reason_code)
+        deadline = monotonic() + args.wait_seconds
+        active_leases = await repository.active_run_lease_count(args.run_id)
+        while active_leases and monotonic() < deadline:
+            await asyncio.sleep(min(1.0, max(0.0, deadline - monotonic())))
+            active_leases = await repository.active_run_lease_count(args.run_id)
+        if active_leases:
+            raise InvalidTransitionError(
+                "Operator pause is durable, but active leases did not drain before timeout"
+            )
+        return {
+            "run": run,
+            "active_leases": active_leases,
+            "lease_drain_complete": active_leases == 0,
+        }
     if args.command == "run-drain":
         return await repository.drain_run(args.run_id)
     if args.command == "run-resume":
-        return await repository.resume_run(args.run_id, readiness_verified=args.readiness_verified)
+        return await repository.resume_run(
+            args.run_id,
+            readiness_verified=args.readiness_verified,
+            reason_code=args.reason_code,
+        )
     if args.command == "run-stop":
         return await repository.stop_run(args.run_id)
     raise ValueError("Unsupported graph sync command")
@@ -241,10 +288,34 @@ def render_result(args: argparse.Namespace, result: Any) -> str:
         return render_run_summary(result)
     if args.command == "quality-report":
         return render_quality_report(result)
+    if args.command == "entity-quality-report":
+        if result.get("run") is None:
+            return "No graph sync runs"
+        evidence = result["evidence"]
+        return "\n".join(
+            [
+                "Graph entity-stage quality report",
+                f"Run: {result['run']['id']}",
+                "Evidence: "
+                f"{evidence['reported_attempts']}/{evidence['extraction_attempts']} attempts",
+                f"Policies: {', '.join(evidence['policies']) or 'none'}",
+                f"Anomalous attempts: {result['anomalous_attempts']}",
+                "Counts: "
+                + ", ".join(f"{name}={count}" for name, count in result["counts"].items()),
+            ]
+        )
     if args.command == "recover-expired":
         return f"Recovered expired leases: {len(result)}"
     if args.command in {"retry-waiting", "retry-quarantined"}:
         return f"Updated graph sync jobs: {result['updated']}"
+    if args.command == "prioritize":
+        return (
+            f"Priority {result['priority']}: matched={result['matched']}, "
+            f"changed={result['changed']}"
+        )
+    if args.command == "run-pause":
+        state = "complete" if result["lease_drain_complete"] else "timed out"
+        return f"Operator pause recorded; lease drain {state} ({result['active_leases']} active)"
     return json.dumps(result, sort_keys=True, default=json_default)
 
 
@@ -329,6 +400,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     quality_report.add_argument("--run-id", type=UUID)
 
+    entity_quality_report = commands.add_parser(
+        "entity-quality-report",
+        help="Show dedupe and summary completeness evidence",
+    )
+    entity_quality_report.add_argument("--run-id", type=UUID)
+
     recover = commands.add_parser("recover-expired", help="Requeue or quarantine expired leases")
     add_limit(recover)
 
@@ -347,6 +424,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Acknowledge explicit quarantined-job retry",
     )
 
+    prioritize = commands.add_parser(
+        "prioritize",
+        help="Set audited queue priority for documents or episodes",
+    )
+    prioritize.add_argument("--priority", type=int, required=True)
+    prioritize.add_argument("--reason-code", required=True)
+    prioritize.add_argument("--source-file", action="append", default=[])
+    prioritize.add_argument("--episode-id", type=UUID, action="append", default=[])
+
+    run_pause = commands.add_parser(
+        "run-pause",
+        help="Atomically pause claims and wait for the active lease to finish",
+    )
+    run_pause.add_argument("run_id", type=UUID)
+    run_pause.add_argument("--reason-code", required=True)
+    run_pause.add_argument("--wait-seconds", type=int, default=900)
+    run_pause.add_argument("--confirm")
+
     run_drain = commands.add_parser("run-drain", help="Stop new claims for an active run")
     run_drain.add_argument("run_id", type=UUID)
 
@@ -359,6 +454,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Assert that the required provider/database readiness check passed",
     )
+    run_resume.add_argument("--reason-code", default="operator_resume")
 
     run_stop = commands.add_parser("run-stop", help="Stop a run with no active leases")
     run_stop.add_argument("run_id", type=UUID)

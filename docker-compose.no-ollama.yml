@@ -19,3 +19,12 @@ services:
       ollama-init:
         condition: service_completed_successfully
         required: false
+
+  graph-sync-worker:
+    depends_on:
+      ollama:
+        condition: service_healthy
+        required: false
+      ollama-init:
+        condition: service_completed_successfully
+        required: false

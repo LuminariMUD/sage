@@ -199,6 +199,11 @@ async def test_cli_uses_read_only_clients_and_stable_exit_codes():
             "collect_semantic_graph_audit",
             AsyncMock(return_value={"status": "review_required"}),
         ),
+        patch.object(
+            graph_semantic_audit,
+            "GraphSyncRepository",
+            return_value=SimpleNamespace(entity_stage_quality_report=AsyncMock(return_value={})),
+        ),
         patch.object(graph_semantic_audit, "json") as json_module,
     ):
         json_module.dumps.return_value = "{}"

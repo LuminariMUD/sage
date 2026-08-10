@@ -12,7 +12,8 @@ from uuid import UUID, uuid4
 import asyncpg
 import pytest
 
-from src.graphiti.rebuild import GraphRebuildRepository
+from src.graphiti.entity_stage_quality import EntityStageQualityReport
+from src.graphiti.rebuild import GraphRebuildError, GraphRebuildRepository
 from src.graphiti.relationship_policy import (
     RELATIONSHIP_VOCABULARY_FINGERPRINT,
     RelationshipQualityReport,
@@ -33,6 +34,11 @@ from src.graphiti.sync_models import (
     StableIdVerification,
 )
 from src.graphiti.sync_state import GraphSyncRepository
+from src.ingestion.chunk_manifest import (
+    ChunkingProfile,
+    build_chunk_manifest,
+    reconcile_document_manifest,
+)
 
 pytestmark = pytest.mark.integration
 MIGRATION_DIRECTORY = Path(__file__).resolve().parents[1] / "schemas" / "migrations"
@@ -82,6 +88,8 @@ async def state_store() -> AsyncGenerator[tuple[SchemaPostgres, GraphSyncReposit
         MIGRATION_DIRECTORY / "0003_graph_sync_provider_call_intents.sql",
         MIGRATION_DIRECTORY / "0006_graph_rebuild_operations.sql",
         MIGRATION_DIRECTORY / "0007_graph_relationship_quality.sql",
+        MIGRATION_DIRECTORY / "0008_canon_only_corpus.sql",
+        MIGRATION_DIRECTORY / "0009_full_run_controls.sql",
     ]
     if [path.name for path in migration_paths] != [
         "0001_graph_sync_lifecycle.sql",
@@ -89,33 +97,59 @@ async def state_store() -> AsyncGenerator[tuple[SchemaPostgres, GraphSyncReposit
         "0003_graph_sync_provider_call_intents.sql",
         "0006_graph_rebuild_operations.sql",
         "0007_graph_relationship_quality.sql",
+        "0008_canon_only_corpus.sql",
+        "0009_full_run_controls.sql",
     ]:
         raise RuntimeError("Graph sync integration migrations are unavailable or unexpected")
     schema_name = f"graph_sync_runtime_{uuid4().hex}"
     admin = await asyncpg.connect(**connect_args)
     episode_ids = [uuid4(), uuid4(), uuid4()]
+    document_ids = [uuid4(), uuid4(), uuid4()]
     try:
         await admin.execute(f'CREATE SCHEMA "{schema_name}"')
         await admin.execute(f'SET search_path TO "{schema_name}", public')
         await admin.execute("""
-            CREATE TABLE episodes (
+            CREATE TABLE lore_documents (
                 id UUID PRIMARY KEY,
+                source_file TEXT NOT NULL UNIQUE,
+                canonical BOOLEAN NOT NULL DEFAULT TRUE,
+                processing_status TEXT NOT NULL DEFAULT 'pending',
+                processed_at TIMESTAMPTZ,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+            )
+            """)
+        await admin.execute("""
+            CREATE TABLE episodes (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 text TEXT NOT NULL,
                 document_id UUID NOT NULL,
                 episode_index INTEGER NOT NULL,
                 graphiti_synced BOOLEAN NOT NULL DEFAULT FALSE,
                 graphiti_synced_at TIMESTAMPTZ,
+                embedding DOUBLE PRECISION[],
                 created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+                CONSTRAINT episodes_document_episode_unique
+                    UNIQUE (document_id, episode_index)
             )
             """)
+        await admin.executemany(
+            """
+            INSERT INTO lore_documents (id, source_file, canonical)
+            VALUES ($1, $2, TRUE)
+            """,
+            [
+                (document_id, f"canon/test/document-{index}.md")
+                for index, document_id in enumerate(document_ids)
+            ],
+        )
         await admin.executemany(
             """
             INSERT INTO episodes (id, text, document_id, episode_index)
             VALUES ($1, $2, $3, $4)
             """,
             [
-                (episode_id, f"Episode {index}", uuid4(), index)
+                (episode_id, f"Episode {index}", document_ids[index], index)
                 for index, episode_id in enumerate(episode_ids)
             ],
         )
@@ -137,12 +171,24 @@ async def state_store() -> AsyncGenerator[tuple[SchemaPostgres, GraphSyncReposit
                   'graph_sync_relationship_quality',
                   'graph_rebuild_operations',
                   'graph_sync_profile_state',
-                  'graph_rebuild_events'
+                  'graph_rebuild_events',
+                  'lore_documents',
+                  'document_chunk_manifests',
+                  'document_chunk_manifest_items',
+                  'episode_lifecycle_events',
+                  'graph_sync_priority_events',
+                  'graph_sync_run_events',
+                  'graph_rebuild_abort_events',
+                  'graph_sync_entity_stage_quality',
+                  'graph_semantic_audit_snapshots',
+                  'graph_semantic_audit_findings',
+                  'graph_entity_observations',
+                  'graph_entity_transitions'
               )
             """,
             schema_name,
         )
-        if table_count != 11:
+        if table_count != 23:
             raise RuntimeError("Graph sync integration schema was not created in isolation")
     except Exception:
         await admin.execute("SET search_path TO public")
@@ -215,7 +261,11 @@ async def test_single_writer_owns_run_claims_and_verified_success_projects(
         "matching_jobs": 3,
         "matching_eligible": 3,
         "matching_expired_leases": 0,
+        "matching_nonterminal": 3,
+        "matching_quarantined": 0,
         "non_synced_other_profile": 0,
+        "nonterminal_other_content_role_policy": 0,
+        "operation_mismatches": 0,
     }
     run = await repository.start_or_join_run(
         worker_id="worker-a", sync_profile_fingerprint=SYNC_PROFILE
@@ -241,20 +291,11 @@ async def test_single_writer_owns_run_claims_and_verified_success_projects(
         route_fingerprint="route:test",
         policy=policy,
     )
-    second = await repository.claim_jobs(
-        run_id=run.id,
-        worker_id="worker-a",
-        route_fingerprint="route:test",
-        policy=policy,
-    )
-
-    leases = [first[0], second[0]]
-    assert len({lease.episode_id for lease in leases}) == 2
-    assert all(lease.attempt_number == 1 for lease in leases)
-
-    assert await repository.record_provider_call(leases[0], _provider_call()) == 1
+    first_lease = first[0]
+    assert first_lease.attempt_number == 1
+    assert await repository.record_provider_call(first_lease, _provider_call()) == 1
     with pytest.raises(InvalidTransitionError, match="limit"):
-        await repository.record_provider_call(leases[0], _provider_call())
+        await repository.record_provider_call(first_lease, _provider_call())
 
     with pytest.raises(asyncpg.PostgresError):
         await postgres.execute(
@@ -269,8 +310,22 @@ async def test_single_writer_owns_run_claims_and_verified_success_projects(
                 'prompt:v1', 'schema:v1', clock_timestamp()
             )
             """,
-            leases[0].attempt_id,
+            first_lease.attempt_id,
         )
+
+    assert (
+        await repository.complete_verified_success(first_lease, _verification(first_lease))
+        is CompletionStatus.SYNCED
+    )
+    second = await repository.claim_jobs(
+        run_id=run.id,
+        worker_id="worker-a",
+        route_fingerprint="route:test",
+        policy=policy,
+    )
+    second_lease = second[0]
+    assert second_lease.episode_id != first_lease.episode_id
+    assert second_lease.attempt_number == 1
 
     with pytest.raises(asyncpg.PostgresError):
         await postgres.execute(
@@ -284,13 +339,8 @@ async def test_single_writer_owns_run_claims_and_verified_success_projects(
                 'Incorrect direct ledger count'
             )
             """,
-            leases[1].attempt_id,
+            second_lease.attempt_id,
         )
-
-    assert (
-        await repository.complete_verified_success(leases[0], _verification(leases[0]))
-        is CompletionStatus.SYNCED
-    )
     with pytest.raises(asyncpg.PostgresError):
         await postgres.execute(
             """
@@ -304,7 +354,7 @@ async def test_single_writer_owns_run_claims_and_verified_success_projects(
                 'prompt:v1', 'schema:v1', clock_timestamp()
             )
             """,
-            leases[0].attempt_id,
+            first_lease.attempt_id,
         )
     failure = FailureRecord.build(
         failure_class=FailureClass.MALFORMED_JSON,
@@ -312,7 +362,7 @@ async def test_single_writer_owns_run_claims_and_verified_success_projects(
         summary="unterminated response",
         disposition=FailureDisposition.RETRY,
     )
-    assert await repository.complete_failure(leases[1], failure) is CompletionStatus.RETRY_WAIT
+    assert await repository.complete_failure(second_lease, failure) is CompletionStatus.RETRY_WAIT
 
     projected = await postgres.fetchrow("""
         SELECT count(*) FILTER (WHERE graphiti_synced) AS synced,
@@ -475,6 +525,57 @@ async def test_systemic_failure_pauses_claims_until_readiness_verified(state_sto
     assert resumed.state.value == "running"
 
 
+async def test_operator_pause_drains_current_lease_and_resumes_with_audit_events(state_store):
+    _, repository, _ = state_store
+    run = await repository.start_or_join_run(
+        worker_id="worker-a",
+        sync_profile_fingerprint=SYNC_PROFILE,
+    )
+    lease = (
+        await repository.claim_jobs(
+            run_id=run.id,
+            worker_id="worker-a",
+            route_fingerprint="route:test",
+            policy=GraphSyncPolicy(),
+        )
+    )[0]
+
+    paused = await repository.pause_run(run.id, reason_code="maintenance")
+    assert paused.state.value == "paused_operator"
+    with pytest.raises(RunUnavailableError):
+        await repository.claim_jobs(
+            run_id=run.id,
+            worker_id="worker-a",
+            route_fingerprint="route:test",
+            policy=GraphSyncPolicy(),
+        )
+    assert await repository.active_run_lease_count(run.id) == 1
+    assert (
+        await repository.complete_verified_success(lease, _verification(lease))
+        is CompletionStatus.SYNCED
+    )
+    assert await repository.active_run_lease_count(run.id) == 0
+    resumed = await repository.resume_run(
+        run.id,
+        readiness_verified=True,
+        reason_code="provider_ready",
+    )
+    assert resumed.state.value == "running"
+    events = await repository.postgres.fetch(
+        """
+        SELECT event_type, reason_code
+        FROM graph_sync_run_events
+        WHERE run_id = $1
+        ORDER BY id
+        """,
+        run.id,
+    )
+    assert [(row["event_type"], row["reason_code"]) for row in events] == [
+        ("operator_paused", "maintenance"),
+        ("operator_resumed", "provider_ready"),
+    ]
+
+
 async def test_operator_attempt_chain_is_sanitized_and_contains_no_source_text(state_store):
     _, repository, _ = state_store
     run = await repository.start_or_join_run(
@@ -592,6 +693,93 @@ async def test_retry_waiting_selection_is_atomic_and_state_filters_are_validated
         await repository.list_jobs(states=["not-a-state"])
 
 
+async def test_document_priority_is_atomic_and_append_only(state_store):
+    postgres, repository, episode_ids = state_store
+    source_file = await postgres.fetchval(
+        """
+        SELECT document.source_file
+        FROM lore_documents AS document
+        JOIN episodes AS episode ON episode.document_id = document.id
+        WHERE episode.id = $1
+        """,
+        episode_ids[0],
+    )
+
+    result = await repository.prioritize_jobs(
+        priority=50,
+        reason_code="new_canon",
+        source_files=[source_file],
+    )
+
+    assert result == {"matched": 1, "changed": 1, "priority": 50}
+    row = await postgres.fetchrow(
+        """
+        SELECT job.priority,
+               event.previous_priority,
+               event.new_priority,
+               event.reason_code
+        FROM graph_sync_jobs AS job
+        JOIN graph_sync_priority_events AS event
+          ON event.episode_id = job.episode_id
+        WHERE job.episode_id = $1
+        """,
+        episode_ids[0],
+    )
+    assert dict(row) == {
+        "priority": 50,
+        "previous_priority": 0,
+        "new_priority": 50,
+        "reason_code": "new_canon",
+    }
+    with pytest.raises(asyncpg.PostgresError):
+        await postgres.execute("UPDATE graph_sync_priority_events SET reason_code = 'forged'")
+
+
+async def test_incomplete_rebuild_abort_is_terminal_and_append_only(state_store):
+    postgres, _, _ = state_store
+    repository = GraphRebuildRepository(postgres)
+    operation = await repository.prepare(
+        target_sync_profile_fingerprint="sync:replacement",
+        target_embedding_profile_fingerprint="embedding:replacement",
+        backup_reference="backups/integration-abort",
+        backup_created_at=datetime.now(UTC),
+        pre_audit_fingerprint="graph-audit:sha256:" + "e" * 64,
+        pre_postgres_episode_count=3,
+        pre_neo4j_node_count=3,
+        pre_neo4j_relationship_count=2,
+    )
+
+    aborted = await repository.abort(operation["id"], reason_code="quality_gate_failed")
+
+    assert aborted["state"] == "aborted"
+    assert aborted["abort_reason_code"] == "quality_gate_failed"
+    assert await repository.active_operation() is None
+    event = await postgres.fetchrow(
+        """
+        SELECT prior_state, reason_code, remaining_job_count
+        FROM graph_rebuild_abort_events
+        WHERE rebuild_operation_id = $1
+        """,
+        operation["id"],
+    )
+    assert dict(event) == {
+        "prior_state": "jobs_requeued",
+        "reason_code": "quality_gate_failed",
+        "remaining_job_count": 3,
+    }
+    with pytest.raises(GraphRebuildError, match="Terminal"):
+        await repository.abort(operation["id"], reason_code="retry_abort")
+    with pytest.raises(asyncpg.PostgresError):
+        await postgres.execute(
+            """
+            UPDATE graph_rebuild_abort_events
+            SET reason_code = 'forged'
+            WHERE rebuild_operation_id = $1
+            """,
+            operation["id"],
+        )
+
+
 async def test_reserved_provider_call_survives_worker_crash_without_false_completion(
     state_store,
 ):
@@ -702,6 +890,7 @@ async def test_run_summary_reconstructs_progress_throughput_and_failures_from_le
         "retry_wait": 1,
         "quarantined": 0,
         "synced": 1,
+        "retired": 0,
     }
     assert summary["progress"]["completion_percent"] == pytest.approx(33.333)
     assert summary["progress"]["remaining_jobs"] == 2
@@ -733,6 +922,157 @@ async def test_run_summary_reconstructs_progress_throughput_and_failures_from_le
 
     status = await repository.status_snapshot()
     assert status["latest_run_summary"]["run"]["id"] == run.id
+
+
+async def test_stage_anomaly_and_provider_fallback_have_distinct_success_outcomes(
+    state_store,
+):
+    postgres, repository, _ = state_store
+    run = await repository.start_or_join_run(
+        worker_id="quality-worker",
+        sync_profile_fingerprint=SYNC_PROFILE,
+    )
+    first = (
+        await repository.claim_jobs(
+            run_id=run.id,
+            worker_id="quality-worker",
+            route_fingerprint="route:test",
+            policy=GraphSyncPolicy(),
+        )
+    )[0]
+    anomaly = EntityStageQualityReport(
+        policy="observe_v1",
+        summary_expected_count=2,
+        summary_returned_count=1,
+        summary_missing_count=1,
+    )
+    assert (
+        await repository.complete_verified_success(
+            first,
+            _verification(first),
+            degraded=True,
+            entity_stage_quality=anomaly,
+        )
+        is CompletionStatus.SYNCED
+    )
+    second = (
+        await repository.claim_jobs(
+            run_id=run.id,
+            worker_id="quality-worker",
+            route_fingerprint="route:test",
+            policy=GraphSyncPolicy(),
+        )
+    )[0]
+    assert (
+        await repository.complete_verified_success(
+            second,
+            _verification(second),
+            degraded=True,
+            fallback_used=True,
+        )
+        is CompletionStatus.SYNCED
+    )
+
+    outcomes = await postgres.fetch(
+        """
+        SELECT outcome, degraded
+        FROM graph_sync_attempt_results
+        ORDER BY completed_at, attempt_id
+        """
+    )
+    assert {(row["outcome"], row["degraded"]) for row in outcomes} == {
+        ("degraded_success", True),
+        ("fallback_success", True),
+    }
+    run_summary = await repository.run_summary(run.id)
+    assert run_summary["attempts"]["outcomes"]["degraded_success"] == 1
+    assert run_summary["attempts"]["outcomes"]["fallback_success"] == 1
+    stage_report = await repository.entity_stage_quality_report(run.id)
+    assert stage_report["anomalous_attempts"] == 1
+    assert stage_report["counts"]["summary_missing"] == 1
+
+
+async def test_chunk_manifest_reconciliation_retires_obsolete_episode_with_evidence(
+    state_store,
+):
+    postgres, _, _ = state_store
+    profile = ChunkingProfile(
+        base_tokens=200,
+        min_tokens=100,
+        max_tokens=500,
+        overlap_percentage=0.25,
+        similarity_threshold=0.7,
+        complexity_factor=1.5,
+        embedding_model="test-embedding",
+        embedding_revision="revision-1",
+        tokenizer="test-tokenizer",
+        sentence_segmenter="test-segmenter",
+        content_role_policy="include_all_v1",
+    )
+    async with postgres.acquire() as connection:
+        async with connection.transaction():
+            document = await connection.fetchrow(
+                "SELECT * FROM lore_documents ORDER BY source_file LIMIT 1 FOR UPDATE"
+            )
+            first_manifest = build_chunk_manifest(
+                "# Lore\n\nFirst chunk. Second chunk.",
+                [{"text": "First chunk."}, {"text": "Second chunk."}],
+                profile,
+            )
+            first_result = await reconcile_document_manifest(
+                connection,
+                document,
+                first_manifest,
+            )
+            second_manifest = build_chunk_manifest(
+                "# Lore\n\nFirst chunk revised.",
+                [{"text": "First chunk revised."}],
+                profile,
+            )
+            second_result = await reconcile_document_manifest(
+                connection,
+                document,
+                second_manifest,
+            )
+
+    assert first_result["active"] == 2
+    assert first_result["created"] == 1
+    assert second_result["active"] == 1
+    assert second_result["retired"] == 1
+    retired = await postgres.fetchrow(
+        """
+        SELECT episode.retired_at,
+               episode.retirement_reason_code,
+               episode.embedding,
+               job.desired_operation,
+               job.state
+        FROM episodes AS episode
+        JOIN graph_sync_jobs AS job ON job.episode_id = episode.id
+        WHERE episode.document_id = $1 AND episode.episode_index = 1
+        """,
+        document["id"],
+    )
+    assert retired["retired_at"] is not None
+    assert retired["retirement_reason_code"] == "not_in_active_manifest"
+    assert retired["embedding"] is None
+    assert retired["desired_operation"] == "retire"
+    assert retired["state"] == "pending"
+    lifecycle = await postgres.fetch(
+        """
+        SELECT event_type, reason_code
+        FROM episode_lifecycle_events
+        WHERE episode_id = (
+            SELECT id FROM episodes
+            WHERE document_id = $1 AND episode_index = 1
+        )
+        ORDER BY id
+        """,
+        document["id"],
+    )
+    assert [(row["event_type"], row["reason_code"]) for row in lifecycle] == [
+        ("activated", "manifest_created"),
+        ("retired", "not_in_active_manifest"),
+    ]
 
 
 async def test_relationship_quality_is_append_only_and_reported_separately(state_store):
@@ -995,6 +1335,9 @@ async def test_rebuild_preserves_attempts_fences_runs_and_activates_profiles(sta
         )
 
     new_episode_id = uuid4()
+    canon_document_id = await postgres.fetchval(
+        "SELECT id FROM lore_documents ORDER BY source_file LIMIT 1"
+    )
     await postgres.execute(
         """
         INSERT INTO episodes (
@@ -1004,7 +1347,7 @@ async def test_rebuild_preserves_attempts_fences_runs_and_activates_profiles(sta
         VALUES ($1, 'New during rebuild', $2, 99, TRUE, clock_timestamp())
         """,
         new_episode_id,
-        uuid4(),
+        canon_document_id,
     )
     during_rebuild = await postgres.fetchrow(
         """
@@ -1122,6 +1465,9 @@ async def test_rebuild_preserves_attempts_fences_runs_and_activates_profiles(sta
         )
 
     post_rebuild_episode = uuid4()
+    canon_document_id = await postgres.fetchval(
+        "SELECT id FROM lore_documents ORDER BY source_file LIMIT 1"
+    )
     await postgres.execute(
         """
         INSERT INTO episodes (
@@ -1131,7 +1477,7 @@ async def test_rebuild_preserves_attempts_fences_runs_and_activates_profiles(sta
         VALUES ($1, 'New after rebuild', $2, 100, TRUE, clock_timestamp())
         """,
         post_rebuild_episode,
-        uuid4(),
+        canon_document_id,
     )
     after_rebuild = await postgres.fetchrow(
         """

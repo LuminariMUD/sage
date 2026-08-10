@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from src.db.postgres import PostgresDB
+from src.graphiti.entity_stage_quality import EntityStageQualityReport
 from src.graphiti.relationship_policy import RelationshipQualityReport
 from src.graphiti.sync_models import (
     AttemptOutcome,
@@ -16,9 +17,11 @@ from src.graphiti.sync_models import (
     FailureDisposition,
     FailureRecord,
     GraphCounts,
+    GraphRetirementVerification,
     GraphSyncPolicy,
     InvalidTransitionError,
     JobLease,
+    JobOperation,
     JobState,
     LeaseLostError,
     ProviderCallIntent,
@@ -69,9 +72,19 @@ class GraphSyncRepository:
             heartbeat_at=row["heartbeat_at"],
         )
 
-    async def profile_snapshot(self, sync_profile_fingerprint: str) -> dict[str, int]:
+    async def profile_snapshot(
+        self,
+        sync_profile_fingerprint: str,
+        *,
+        content_role_policy: str | None = None,
+    ) -> dict[str, int]:
         """Return profile compatibility counts without claiming or changing jobs."""
         fingerprint = validate_label(sync_profile_fingerprint, "Sync profile fingerprint")
+        if content_role_policy is not None:
+            content_role_policy = validate_label(
+                content_role_policy,
+                "Content role policy",
+            )
         row = await self.postgres.fetchrow(
             """
             SELECT count(*) FILTER (
@@ -93,12 +106,41 @@ class GraphSyncRepository:
                          AND lease_expires_at <= clock_timestamp()
                    ) AS matching_expired_leases,
                    count(*) FILTER (
+                       WHERE sync_profile_fingerprint = $1
+                         AND state NOT IN ('synced', 'retired')
+                   ) AS matching_nonterminal,
+                   count(*) FILTER (
+                       WHERE sync_profile_fingerprint = $1
+                         AND state = 'quarantined'
+                   ) AS matching_quarantined,
+                   count(*) FILTER (
                        WHERE sync_profile_fingerprint <> $1
-                         AND state <> 'synced'
-                   ) AS non_synced_other_profile
-            FROM graph_sync_jobs
+                         AND state NOT IN ('synced', 'retired')
+                   ) AS non_synced_other_profile,
+                   count(*) FILTER (
+                       WHERE $2::text IS NOT NULL
+                         AND episode.content_role_policy <> $2
+                         AND job.state NOT IN ('synced', 'retired')
+                   ) AS nonterminal_other_content_role_policy,
+                   count(*) FILTER (
+                       WHERE (
+                               job.desired_operation = 'sync'
+                               AND (
+                                   episode.retired_at IS NOT NULL
+                                   OR episode.graph_extraction_eligible IS FALSE
+                               )
+                             )
+                          OR (
+                               job.desired_operation = 'retire'
+                               AND episode.retired_at IS NULL
+                               AND episode.graph_extraction_eligible IS TRUE
+                             )
+                   ) AS operation_mismatches
+            FROM graph_sync_jobs AS job
+            JOIN episodes AS episode ON episode.id = job.episode_id
             """,
             fingerprint,
+            content_role_policy,
         )
         if row is None:
             raise RuntimeError("Graph sync queue summary returned no row")
@@ -147,7 +189,7 @@ class GraphSyncRepository:
                 rebuild = await connection.fetchrow("""
                     SELECT id, state, target_sync_profile_fingerprint
                     FROM graph_rebuild_operations
-                    WHERE state <> 'completed'
+                    WHERE state NOT IN ('completed', 'aborted')
                     ORDER BY created_at
                     LIMIT 1
                     FOR UPDATE
@@ -165,7 +207,12 @@ class GraphSyncRepository:
                             """
                             SELECT count(*)
                             FROM graph_sync_jobs
-                            WHERE state <> 'synced'
+                            WHERE (
+                                    desired_operation = 'sync' AND state <> 'synced'
+                                  )
+                               OR (
+                                    desired_operation = 'retire' AND state <> 'retired'
+                                  )
                                OR sync_profile_fingerprint <> $1
                             """,
                             sync_profile_fingerprint,
@@ -224,7 +271,7 @@ class GraphSyncRepository:
             """
             UPDATE graph_sync_runs
             SET heartbeat_at = clock_timestamp()
-            WHERE id = $1 AND state = 'running'
+            WHERE id = $1 AND state IN ('running', 'draining', 'paused_operator')
             RETURNING heartbeat_at
             """,
             run_id,
@@ -233,27 +280,114 @@ class GraphSyncRepository:
             raise RunUnavailableError("Run is not accepting heartbeats")
         return heartbeat
 
-    async def resume_run(self, run_id: UUID, *, readiness_verified: bool) -> RunRecord:
+    async def resume_run(
+        self,
+        run_id: UUID,
+        *,
+        readiness_verified: bool,
+        reason_code: str = "operator_resume",
+    ) -> RunRecord:
         """Resume a paused or draining run only after an external readiness proof."""
         if not readiness_verified:
             raise InvalidTransitionError("Run resume requires a successful readiness check")
+        reason_code = validate_failure_code(reason_code)
+        async with self.postgres.acquire() as connection:
+            async with connection.transaction():
+                previous_state = await connection.fetchval(
+                    "SELECT state FROM graph_sync_runs WHERE id = $1 FOR UPDATE",
+                    run_id,
+                )
+                row = await connection.fetchrow(
+                    """
+                    UPDATE graph_sync_runs
+                    SET state = 'running',
+                        heartbeat_at = clock_timestamp(),
+                        last_failure_class = NULL,
+                        last_failure_code = NULL,
+                        last_failure_summary = NULL,
+                        operator_pause_reason_code = NULL,
+                        operator_paused_at = NULL
+                    WHERE id = $1
+                      AND state IN ('paused_systemic', 'draining', 'paused_operator')
+                    RETURNING id, state, worker_id, sync_profile_fingerprint,
+                              started_at, heartbeat_at
+                    """,
+                    run_id,
+                )
+                if row is None:
+                    raise InvalidTransitionError("Run cannot be resumed from its current state")
+                if previous_state == RunState.PAUSED_OPERATOR.value:
+                    await connection.execute(
+                        """
+                        INSERT INTO graph_sync_run_events (run_id, event_type, reason_code)
+                        VALUES ($1, 'operator_resumed', $2)
+                        """,
+                        run_id,
+                        reason_code,
+                    )
+                return self._run_record(row)
+
+    async def pause_run(self, run_id: UUID, *, reason_code: str) -> RunRecord:
+        """Atomically stop new claims while allowing the current lease to finish."""
+        reason_code = validate_failure_code(reason_code)
+        async with self.postgres.acquire() as connection:
+            async with connection.transaction():
+                row = await connection.fetchrow(
+                    """
+                    UPDATE graph_sync_runs
+                    SET state = 'paused_operator',
+                        heartbeat_at = clock_timestamp(),
+                        operator_pause_reason_code = $2,
+                        operator_paused_at = clock_timestamp()
+                    WHERE id = $1 AND state = 'running'
+                    RETURNING id, state, worker_id, sync_profile_fingerprint,
+                              started_at, heartbeat_at
+                    """,
+                    run_id,
+                    reason_code,
+                )
+                if row is None:
+                    raise InvalidTransitionError("Run cannot enter operator pause")
+                await connection.execute(
+                    """
+                    INSERT INTO graph_sync_run_events (run_id, event_type, reason_code)
+                    VALUES ($1, 'operator_paused', $2)
+                    """,
+                    run_id,
+                    reason_code,
+                )
+                return self._run_record(row)
+
+    async def get_run(self, run_id: UUID) -> RunRecord:
+        """Read one run record for worker lifecycle coordination."""
         row = await self.postgres.fetchrow(
             """
-            UPDATE graph_sync_runs
-            SET state = 'running',
-                heartbeat_at = clock_timestamp(),
-                last_failure_class = NULL,
-                last_failure_code = NULL,
-                last_failure_summary = NULL
-            WHERE id = $1 AND state IN ('paused_systemic', 'draining')
-            RETURNING id, state, worker_id, sync_profile_fingerprint,
-                      started_at, heartbeat_at
+            SELECT id, state, worker_id, sync_profile_fingerprint,
+                   started_at, heartbeat_at
+            FROM graph_sync_runs
+            WHERE id = $1
             """,
             run_id,
         )
         if row is None:
-            raise InvalidTransitionError("Run cannot be resumed from its current state")
+            raise InvalidTransitionError("Graph sync run does not exist")
         return self._run_record(row)
+
+    async def active_run_lease_count(self, run_id: UUID) -> int:
+        """Return current leases owned by attempts from one run."""
+        return int(
+            await self.postgres.fetchval(
+                """
+                SELECT count(*)
+                FROM graph_sync_jobs AS job
+                JOIN graph_sync_attempts AS attempt
+                  ON attempt.id = job.last_attempt_id
+                WHERE attempt.run_id = $1
+                  AND job.state = 'leased'
+                """,
+                run_id,
+            )
+        )
 
     async def drain_run(self, run_id: UUID) -> RunRecord:
         """Stop new claims while allowing current leases to finish."""
@@ -302,9 +436,11 @@ class GraphSyncRepository:
                 stopped = await connection.fetchrow(
                     """
                     UPDATE graph_sync_runs
-                    SET state = 'stopped',
-                        stopped_at = clock_timestamp(),
-                        heartbeat_at = clock_timestamp()
+                        SET state = 'stopped',
+                            stopped_at = clock_timestamp(),
+                            heartbeat_at = clock_timestamp(),
+                            operator_pause_reason_code = NULL,
+                            operator_paused_at = NULL
                     WHERE id = $1
                     RETURNING id, state, worker_id, sync_profile_fingerprint,
                               started_at, heartbeat_at
@@ -328,7 +464,12 @@ class GraphSyncRepository:
                         """
                         SELECT count(*)
                         FROM graph_sync_jobs
-                        WHERE state <> 'synced'
+                        WHERE (
+                                desired_operation = 'sync' AND state <> 'synced'
+                              )
+                           OR (
+                                desired_operation = 'retire' AND state <> 'retired'
+                              )
                            OR sync_profile_fingerprint <> $1
                         """,
                         rebuild["target_sync_profile_fingerprint"],
@@ -373,11 +514,17 @@ class GraphSyncRepository:
         worker_id: str,
         route_fingerprint: str,
         policy: GraphSyncPolicy,
+        content_role_policy: str | None = None,
         limit: int = 1,
     ) -> list[JobLease]:
         """Atomically claim eligible jobs with row locks and database-time leases."""
         worker_id = validate_label(worker_id, "Worker ID")
         route_fingerprint = validate_label(route_fingerprint, "Route fingerprint")
+        if content_role_policy is not None:
+            content_role_policy = validate_label(
+                content_role_policy,
+                "Content role policy",
+            )
         if not 1 <= limit <= MAX_CLAIM_BATCH:
             raise ValueError(f"Claim limit must be between 1 and {MAX_CLAIM_BATCH}")
 
@@ -402,6 +549,8 @@ class GraphSyncRepository:
                     """
                     SELECT job.episode_id,
                            job.desired_source_fingerprint,
+                           job.desired_operation,
+                           job.priority,
                            job.job_attempt_count,
                            job.attempt_budget_count,
                            job.retry_generation,
@@ -410,6 +559,10 @@ class GraphSyncRepository:
                            episode.document_id,
                            episode.episode_index,
                            episode.created_at,
+                           episode.content_role,
+                           episode.content_role_policy,
+                           episode.graph_extraction_eligible,
+                           episode.retired_at,
                            graph_sync_source_fingerprint(episode.text)
                                AS current_source_fingerprint
                     FROM graph_sync_jobs AS job
@@ -424,6 +577,7 @@ class GraphSyncRepository:
                           )
                       )
                     ORDER BY
+                        job.priority DESC,
                         CASE WHEN job.state = 'pending' THEN 0 ELSE 1 END,
                         COALESCE(job.next_attempt_at, episode.created_at),
                         episode.created_at,
@@ -437,6 +591,24 @@ class GraphSyncRepository:
                 )
 
                 for candidate in candidates:
+                    expected_operation = (
+                        JobOperation.RETIRE
+                        if candidate["retired_at"] is not None
+                        or not candidate["graph_extraction_eligible"]
+                        else JobOperation.SYNC
+                    )
+                    operation = JobOperation(candidate["desired_operation"])
+                    if operation is not expected_operation:
+                        raise InvalidTransitionError(
+                            "Job operation does not match the episode lifecycle"
+                        )
+                    if (
+                        content_role_policy is not None
+                        and candidate["content_role_policy"] != content_role_policy
+                    ):
+                        raise InvalidTransitionError(
+                            "Episode content-role policy does not match the worker profile"
+                        )
                     if (
                         candidate["desired_source_fingerprint"]
                         != candidate["current_source_fingerprint"]
@@ -469,11 +641,12 @@ class GraphSyncRepository:
                             budget_attempt_number,
                             job_attempt_limit,
                             provider_call_limit,
-                            retry_delay_seconds
+                            retry_delay_seconds,
+                            operation
                         )
                         VALUES (
                             $1, $2, $3, $4, $5, $6, $7, $8, $9,
-                            $10, $11, $12, $13, $14
+                            $10, $11, $12, $13, $14, $15
                         )
                         """,
                         attempt_id,
@@ -490,6 +663,7 @@ class GraphSyncRepository:
                         policy.max_job_attempts,
                         policy.max_provider_calls,
                         retry_delay,
+                        candidate["desired_operation"],
                     )
                     updated = await connection.fetchrow(
                         """
@@ -535,6 +709,10 @@ class GraphSyncRepository:
                             document_id=candidate["document_id"],
                             episode_index=candidate["episode_index"],
                             created_at=candidate["created_at"],
+                            operation=operation,
+                            content_role=candidate["content_role"],
+                            content_role_policy=candidate["content_role_policy"],
+                            graph_extraction_eligible=candidate["graph_extraction_eligible"],
                         )
                     )
 
@@ -826,10 +1004,14 @@ class GraphSyncRepository:
         verification: StableIdVerification,
         *,
         degraded: bool = False,
+        fallback_used: bool = False,
         graph_counts: GraphCounts | None = None,
         relationship_quality: RelationshipQualityReport | None = None,
+        entity_stage_quality: EntityStageQualityReport | None = None,
     ) -> CompletionStatus:
         """Commit success only after exact cross-store and source/profile proof."""
+        if lease.operation is not JobOperation.SYNC:
+            raise InvalidTransitionError("A retirement lease cannot complete as a graph sync")
         if not verification.is_exact:
             raise InvalidTransitionError("Stable-ID verification is not exact")
         if verification.stable_id != str(lease.episode_id):
@@ -880,11 +1062,23 @@ class GraphSyncRepository:
                     raise LeaseLostError("Lease is no longer current")
                 if state["job_sync_profile"] != lease.sync_profile_fingerprint:
                     raise InvalidTransitionError("Job sync profile changed during the lease")
+                if state["desired_operation"] != JobOperation.SYNC.value:
+                    raise InvalidTransitionError("Job operation changed during the lease")
 
                 provider_call_count = await self._provider_call_count(connection, lease.attempt_id)
-                outcome = (
-                    AttemptOutcome.FALLBACK_SUCCESS if degraded else AttemptOutcome.PRIMARY_SUCCESS
+                stage_degraded = bool(
+                    entity_stage_quality is not None and entity_stage_quality.has_anomalies
                 )
+                if fallback_used:
+                    outcome = AttemptOutcome.FALLBACK_SUCCESS
+                elif degraded or stage_degraded:
+                    outcome = AttemptOutcome.DEGRADED_SUCCESS
+                else:
+                    outcome = AttemptOutcome.PRIMARY_SUCCESS
+                degraded = outcome in {
+                    AttemptOutcome.FALLBACK_SUCCESS,
+                    AttemptOutcome.DEGRADED_SUCCESS,
+                }
                 await connection.execute(
                     """
                     INSERT INTO graph_sync_attempt_results (
@@ -953,6 +1147,12 @@ class GraphSyncRepository:
                         relationship_quality.rejected_empty_fact,
                         relationship_quality.rejected_duplicate,
                     )
+                if entity_stage_quality is not None:
+                    await self._record_entity_stage_quality(
+                        connection,
+                        lease.attempt_id,
+                        entity_stage_quality,
+                    )
                 updated = await connection.execute(
                     """
                     UPDATE graph_sync_jobs
@@ -984,7 +1184,102 @@ class GraphSyncRepository:
                     raise LeaseLostError("Lease changed during success completion")
                 return CompletionStatus.SYNCED
 
-    async def complete_failure(self, lease: JobLease, failure: FailureRecord) -> CompletionStatus:
+    async def complete_verified_retirement(
+        self,
+        lease: JobLease,
+        verification: GraphRetirementVerification,
+    ) -> CompletionStatus:
+        """Commit retirement only after independently proving graph absence."""
+        if lease.operation is not JobOperation.RETIRE:
+            raise InvalidTransitionError("A sync lease cannot complete as retirement")
+        if not verification.is_exact:
+            raise InvalidTransitionError("Graph retirement verification is not exact")
+        if verification.stable_id != str(lease.episode_id):
+            raise InvalidTransitionError("Retirement verification targets another episode")
+        if verification.source_fingerprint != lease.captured_source_fingerprint:
+            raise InvalidTransitionError("Retirement source fingerprint does not match the lease")
+        if verification.sync_profile_fingerprint != lease.sync_profile_fingerprint:
+            raise InvalidTransitionError("Retirement sync profile does not match the lease")
+
+        async with self.postgres.acquire() as connection:
+            async with connection.transaction():
+                state = await self._completion_state(connection, lease)
+                if state["existing_outcome"] is not None:
+                    return CompletionStatus.ALREADY_COMPLETED
+                if self._source_changed(state, lease):
+                    await self._record_source_change(connection, lease, state)
+                    return CompletionStatus.SOURCE_CHANGED
+                if not self._lease_is_current(state, lease) or not state["lease_is_valid"]:
+                    if self._lease_is_current(state, lease):
+                        return await self._expire_current_attempt(connection, lease, state)
+                    raise LeaseLostError("Lease is no longer current")
+                if state["job_sync_profile"] != lease.sync_profile_fingerprint:
+                    raise InvalidTransitionError("Job sync profile changed during the lease")
+                if state["desired_operation"] != JobOperation.RETIRE.value:
+                    raise InvalidTransitionError("Job operation changed during the lease")
+
+                provider_call_count = await self._provider_call_count(
+                    connection,
+                    lease.attempt_id,
+                )
+                await connection.execute(
+                    """
+                    INSERT INTO graph_sync_attempt_results (
+                        attempt_id,
+                        outcome,
+                        degraded,
+                        provider_call_count,
+                        proposed_entity_count,
+                        accepted_entity_count,
+                        rejected_entity_count,
+                        proposed_edge_count,
+                        accepted_edge_count,
+                        rejected_edge_count
+                    )
+                    VALUES ($1, 'retire_success', FALSE, $2, 0, 0, 0, 0, 0, 0)
+                    """,
+                    lease.attempt_id,
+                    provider_call_count,
+                )
+                updated = await connection.execute(
+                    """
+                    UPDATE graph_sync_jobs
+                    SET state = 'retired',
+                        next_attempt_at = NULL,
+                        lease_owner = NULL,
+                        lease_token = NULL,
+                        lease_expires_at = NULL,
+                        last_error_class = NULL,
+                        last_error_code = NULL,
+                        last_error_summary = NULL,
+                        verified_source_fingerprint = $5,
+                        verified_sync_profile_fingerprint = $6,
+                        verified_at = clock_timestamp()
+                    WHERE episode_id = $1
+                      AND state = 'leased'
+                      AND desired_operation = 'retire'
+                      AND last_attempt_id = $2
+                      AND lease_token = $3
+                      AND lease_owner = $4
+                    """,
+                    lease.episode_id,
+                    lease.attempt_id,
+                    lease.lease_token,
+                    lease.lease_owner,
+                    lease.captured_source_fingerprint,
+                    lease.sync_profile_fingerprint,
+                )
+                if updated != "UPDATE 1":
+                    raise LeaseLostError("Lease changed during retirement completion")
+                return CompletionStatus.RETIRED
+
+    async def complete_failure(
+        self,
+        lease: JobLease,
+        failure: FailureRecord,
+        *,
+        entity_stage_quality: EntityStageQualityReport | None = None,
+    ) -> CompletionStatus:
         """Append a classified result and transition the token-fenced job."""
         async with self.postgres.acquire() as connection:
             async with connection.transaction():
@@ -1032,6 +1327,12 @@ class GraphSyncRepository:
                     failure.code,
                     failure.summary,
                 )
+                if entity_stage_quality is not None:
+                    await self._record_entity_stage_quality(
+                        connection,
+                        lease.attempt_id,
+                        entity_stage_quality,
+                    )
 
                 if failure.disposition is FailureDisposition.PAUSE_SYSTEMIC:
                     await connection.execute(
@@ -1264,6 +1565,86 @@ class GraphSyncRepository:
                 )
                 return int(result.split()[-1])
 
+    async def prioritize_jobs(
+        self,
+        *,
+        priority: int,
+        reason_code: str,
+        episode_ids: Sequence[UUID] = (),
+        source_files: Sequence[str] = (),
+    ) -> dict[str, int]:
+        """Set queue priority for explicit document or episode targets with audit rows."""
+        if (
+            isinstance(priority, bool)
+            or not isinstance(priority, int)
+            or not -100 <= priority <= 100
+        ):
+            raise ValueError("Priority must be an integer between -100 and 100")
+        reason_code = validate_failure_code(reason_code)
+        unique_ids = list(dict.fromkeys(episode_ids))
+        unique_sources = list(dict.fromkeys(source_files))
+        if not unique_ids and not unique_sources:
+            raise ValueError("At least one episode ID or source file is required")
+        if len(unique_ids) + len(unique_sources) > MAX_OPERATOR_BATCH:
+            raise ValueError(f"Priority accepts at most {MAX_OPERATOR_BATCH} targets")
+        for source_file in unique_sources:
+            validate_label(source_file, "Source file", maximum=1024)
+
+        async with self.postgres.acquire() as connection:
+            async with connection.transaction():
+                rows = await connection.fetch(
+                    """
+                    SELECT job.episode_id, job.priority, document.source_file
+                    FROM graph_sync_jobs AS job
+                    JOIN episodes AS episode ON episode.id = job.episode_id
+                    JOIN lore_documents AS document ON document.id = episode.document_id
+                    WHERE job.episode_id = ANY($1::uuid[])
+                       OR document.source_file = ANY($2::text[])
+                    ORDER BY document.source_file, episode.episode_index, job.episode_id
+                    FOR UPDATE OF job
+                    """,
+                    unique_ids,
+                    unique_sources,
+                )
+                found_ids = {row["episode_id"] for row in rows}
+                found_sources = {row["source_file"] for row in rows}
+                if set(unique_ids).difference(found_ids) or set(unique_sources).difference(
+                    found_sources
+                ):
+                    raise InvalidTransitionError("One or more priority targets do not exist")
+
+                changed = 0
+                for row in rows:
+                    previous = int(row["priority"])
+                    if previous == priority:
+                        continue
+                    await connection.execute(
+                        """
+                        UPDATE graph_sync_jobs
+                        SET priority = $2
+                        WHERE episode_id = $1
+                        """,
+                        row["episode_id"],
+                        priority,
+                    )
+                    await connection.execute(
+                        """
+                        INSERT INTO graph_sync_priority_events (
+                            episode_id,
+                            previous_priority,
+                            new_priority,
+                            reason_code
+                        )
+                        VALUES ($1, $2, $3, $4)
+                        """,
+                        row["episode_id"],
+                        previous,
+                        priority,
+                        reason_code,
+                    )
+                    changed += 1
+                return {"matched": len(rows), "changed": changed, "priority": priority}
+
     async def run_summary(
         self,
         run_id: UUID | None = None,
@@ -1335,6 +1716,7 @@ class GraphSyncRepository:
                    count(*) FILTER (WHERE state = 'retry_wait') AS retry_wait,
                    count(*) FILTER (WHERE state = 'quarantined') AS quarantined,
                    count(*) FILTER (WHERE state = 'synced') AS synced,
+                   count(*) FILTER (WHERE state = 'retired') AS retired,
                    count(*) FILTER (
                        WHERE state = 'pending'
                           OR (
@@ -1363,6 +1745,12 @@ class GraphSyncRepository:
                    count(*) FILTER (
                        WHERE result.outcome = 'fallback_success'
                    ) AS fallback_success,
+                   count(*) FILTER (
+                       WHERE result.outcome = 'degraded_success'
+                   ) AS degraded_success,
+                   count(*) FILTER (
+                       WHERE result.outcome = 'retire_success'
+                   ) AS retire_success,
                    count(*) FILTER (
                        WHERE result.outcome = 'retry_wait'
                    ) AS retry_wait,
@@ -1605,7 +1993,12 @@ class GraphSyncRepository:
                 JOIN graph_sync_attempt_results AS result
                   ON result.attempt_id = attempt.id
                 WHERE attempt.run_id = $1
-                  AND result.outcome IN ('primary_success', 'fallback_success')
+                  AND result.outcome IN (
+                      'primary_success',
+                      'fallback_success',
+                      'degraded_success',
+                      'retire_success'
+                  )
                   AND result.completed_at >= $2
                   AND result.completed_at <= $3
                 """,
@@ -1775,7 +2168,11 @@ class GraphSyncRepository:
                     LEFT JOIN graph_sync_relationship_quality AS quality
                       ON quality.attempt_id = attempt.id
                     WHERE attempt.run_id = $1
-                      AND result.outcome IN ('primary_success', 'fallback_success')
+                      AND result.outcome IN (
+                          'primary_success',
+                          'fallback_success',
+                          'degraded_success'
+                      )
                     """,
                     run["id"],
                 )
@@ -1844,6 +2241,105 @@ class GraphSyncRepository:
                     "rejected_self_edge",
                     "rejected_empty_fact",
                     "rejected_duplicate",
+                )
+            },
+        }
+
+    async def entity_stage_quality_report(
+        self,
+        run_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        """Aggregate content-free dedupe and summary completeness evidence."""
+        if run_id is not None and not isinstance(run_id, UUID):
+            raise ValueError("Run ID must be a UUID")
+        run = await self.postgres.fetchrow(
+            """
+            SELECT id, state, sync_profile_fingerprint, started_at, stopped_at,
+                   clock_timestamp() AS generated_at
+            FROM graph_sync_runs
+            WHERE $1::uuid IS NULL OR id = $1
+            ORDER BY started_at DESC
+            LIMIT 1
+            """,
+            run_id,
+        )
+        if run is None:
+            if run_id is not None:
+                raise InvalidTransitionError("Graph sync run does not exist")
+            return {"schema_version": 1, "status": "no_runs", "run": None}
+        metrics = await self.postgres.fetchrow(
+            """
+            SELECT count(*) AS extraction_attempts,
+                   count(quality.attempt_id) AS reported_attempts,
+                   count(*) FILTER (
+                       WHERE quality.dedupe_missing_count > 0
+                          OR quality.dedupe_duplicate_id_count > 0
+                          OR quality.dedupe_out_of_range_count > 0
+                          OR quality.dedupe_invalid_candidate_count > 0
+                          OR quality.summary_missing_count > 0
+                          OR quality.summary_unknown_count > 0
+                   ) AS anomalous_attempts,
+                   COALESCE(sum(quality.dedupe_expected_count), 0) AS dedupe_expected,
+                   COALESCE(sum(quality.dedupe_returned_count), 0) AS dedupe_returned,
+                   COALESCE(sum(quality.dedupe_missing_count), 0) AS dedupe_missing,
+                   COALESCE(sum(quality.dedupe_duplicate_id_count), 0)
+                       AS dedupe_duplicate_ids,
+                   COALESCE(sum(quality.dedupe_out_of_range_count), 0)
+                       AS dedupe_out_of_range,
+                   COALESCE(sum(quality.dedupe_invalid_candidate_count), 0)
+                       AS dedupe_invalid_candidates,
+                   COALESCE(sum(quality.summary_expected_count), 0) AS summary_expected,
+                   COALESCE(sum(quality.summary_returned_count), 0) AS summary_returned,
+                   COALESCE(sum(quality.summary_missing_count), 0) AS summary_missing,
+                   COALESCE(sum(quality.summary_unknown_count), 0) AS summary_unknown,
+                   COALESCE(
+                       array_agg(DISTINCT quality.policy)
+                           FILTER (WHERE quality.policy IS NOT NULL),
+                       ARRAY[]::text[]
+                   ) AS policies
+            FROM graph_sync_attempts AS attempt
+            JOIN graph_sync_attempt_results AS result ON result.attempt_id = attempt.id
+            LEFT JOIN graph_sync_entity_stage_quality AS quality
+              ON quality.attempt_id = attempt.id
+            WHERE attempt.run_id = $1
+              AND attempt.operation = 'sync'
+            """,
+            run["id"],
+        )
+        extraction_attempts = int(metrics["extraction_attempts"])
+        reported_attempts = int(metrics["reported_attempts"])
+        return {
+            "schema_version": 1,
+            "status": "available",
+            "generated_at": run["generated_at"],
+            "run": {
+                "id": run["id"],
+                "state": run["state"],
+                "sync_profile_fingerprint": run["sync_profile_fingerprint"],
+                "started_at": run["started_at"],
+                "stopped_at": run["stopped_at"],
+            },
+            "evidence": {
+                "extraction_attempts": extraction_attempts,
+                "reported_attempts": reported_attempts,
+                "missing_attempts": extraction_attempts - reported_attempts,
+                "coverage_percent": _percentage(reported_attempts, extraction_attempts),
+                "policies": list(metrics["policies"]),
+            },
+            "anomalous_attempts": int(metrics["anomalous_attempts"]),
+            "counts": {
+                name: int(metrics[name])
+                for name in (
+                    "dedupe_expected",
+                    "dedupe_returned",
+                    "dedupe_missing",
+                    "dedupe_duplicate_ids",
+                    "dedupe_out_of_range",
+                    "dedupe_invalid_candidates",
+                    "summary_expected",
+                    "summary_returned",
+                    "summary_missing",
+                    "summary_unknown",
                 )
             },
         }
@@ -1920,6 +2416,8 @@ class GraphSyncRepository:
             """
             SELECT episode_id,
                    state,
+                   desired_operation,
+                   priority,
                    job_attempt_count,
                    attempt_budget_count,
                    retry_generation,
@@ -2048,6 +2546,7 @@ class GraphSyncRepository:
                    job.lease_token AS job_lease_token,
                    job.lease_owner AS job_lease_owner,
                    job.desired_source_fingerprint,
+                   job.desired_operation,
                    job.sync_profile_fingerprint AS job_sync_profile,
                    job.lease_expires_at > clock_timestamp() AS lease_is_valid,
                    graph_sync_source_fingerprint(episode.text)
@@ -2217,4 +2716,44 @@ class GraphSyncRepository:
         return await connection.fetchval(
             "SELECT count(*) FROM graph_sync_provider_call_intents WHERE attempt_id = $1",
             attempt_id,
+        )
+
+    @staticmethod
+    async def _record_entity_stage_quality(
+        connection: Any,
+        attempt_id: UUID,
+        quality: EntityStageQualityReport,
+    ) -> None:
+        if quality.policy == "off":
+            raise InvalidTransitionError("Disabled entity-stage policy has no durable evidence")
+        await connection.execute(
+            """
+            INSERT INTO graph_sync_entity_stage_quality (
+                attempt_id,
+                policy,
+                dedupe_expected_count,
+                dedupe_returned_count,
+                dedupe_missing_count,
+                dedupe_duplicate_id_count,
+                dedupe_out_of_range_count,
+                dedupe_invalid_candidate_count,
+                summary_expected_count,
+                summary_returned_count,
+                summary_missing_count,
+                summary_unknown_count
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            """,
+            attempt_id,
+            quality.policy,
+            quality.dedupe_expected_count,
+            quality.dedupe_returned_count,
+            quality.dedupe_missing_count,
+            quality.dedupe_duplicate_id_count,
+            quality.dedupe_out_of_range_count,
+            quality.dedupe_invalid_candidate_count,
+            quality.summary_expected_count,
+            quality.summary_returned_count,
+            quality.summary_missing_count,
+            quality.summary_unknown_count,
         )

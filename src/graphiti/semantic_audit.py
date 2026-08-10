@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import unicodedata
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
@@ -36,12 +38,23 @@ def _entity_sample(entity: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _fingerprint(prefix: str, value: object) -> str:
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("ascii")
+    return f"{prefix}:sha256:{hashlib.sha256(payload).hexdigest()}"
+
+
 def build_semantic_graph_audit(
     episode_rows: Sequence[Mapping[str, Any]],
     document_rows: Sequence[Mapping[str, Any]],
     entity_rows: Sequence[Mapping[str, Any]],
     *,
     sample_limit: int = 20,
+    include_evidence: bool = False,
     generated_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Build deterministic review signals without treating aliases as errors."""
@@ -250,7 +263,7 @@ def build_semantic_graph_audit(
         if counts[category]:
             review_categories.append(category)
 
-    return {
+    report = {
         "schema_version": 1,
         "status": "review_required" if review_categories else "clean",
         "generated_at": (generated_at or datetime.now(UTC)).isoformat(),
@@ -296,3 +309,103 @@ def build_semantic_graph_audit(
             ],
         },
     }
+    if include_evidence:
+        findings: list[dict[str, str | None]] = []
+
+        def add_finding(
+            category: str,
+            *,
+            entity_uuid: str | None = None,
+            episode_id: str | None = None,
+            group: object | None = None,
+        ) -> None:
+            findings.append(
+                {
+                    "category": category,
+                    "entity_uuid": entity_uuid or None,
+                    "episode_id": episode_id or None,
+                    "group_fingerprint": (
+                        _fingerprint("semantic-group", group) if group is not None else None
+                    ),
+                }
+            )
+
+        for entity in missing_uuid_entities:
+            add_finding(
+                "entities_missing_uuid",
+                group=[entity["normalized_name"], entity["entity_types"]],
+            )
+        for category, members in (
+            ("entities_missing_name", missing_name_entities),
+            ("entities_missing_type", missing_type_entities),
+            ("entities_absent_from_canon", absent_from_canon),
+            ("entities_without_grounded_episode_links", entities_without_grounded_links),
+        ):
+            for entity in members:
+                add_finding(category, entity_uuid=entity["uuid"])
+        for category, groups in (
+            ("duplicate_entity_uuid_groups", duplicate_uuid_groups),
+            ("duplicate_name_groups", duplicate_name_groups),
+            ("conflicting_type_name_groups", conflicting_type_groups),
+        ):
+            for group in groups:
+                group_identity = {
+                    key: value
+                    for key, value in group.items()
+                    if key not in {"observed_names", "normalized_name"}
+                }
+                add_finding(category, group=group_identity)
+        for category, links in (
+            ("ungrounded_entity_episode_links", ungrounded_links),
+            ("missing_episode_source_links", missing_episode_source_links),
+        ):
+            for link in links:
+                add_finding(
+                    category,
+                    entity_uuid=str(link.get("entity_uuid") or "") or None,
+                    episode_id=str(link.get("episode_id") or "") or None,
+                )
+        for episode_id in synced_episodes_without_entities:
+            add_finding("synced_episodes_without_entities", episode_id=episode_id)
+
+        observations = []
+        for entity_uuid, members in sorted(uuid_groups.items()):
+            normalized_names = sorted(
+                {member["normalized_name"] for member in members},
+            )
+            entity_type_set = sorted(
+                {entity_type for member in members for entity_type in member["entity_types"]},
+                key=str.casefold,
+            )
+            linked_episode_set = {
+                episode_id for member in members for episode_id in member["episode_ids"]
+            }
+            observations.append(
+                {
+                    "entity_uuid": entity_uuid,
+                    "name_fingerprint": _fingerprint(
+                        "entity-name",
+                        normalized_names,
+                    ),
+                    "type_fingerprint": _fingerprint(
+                        "entity-types",
+                        entity_type_set,
+                    ),
+                    "entity_types": entity_type_set,
+                    "linked_episode_count": len(linked_episode_set),
+                }
+            )
+
+        report["evidence"] = {
+            "findings": sorted(
+                findings,
+                key=lambda finding: (
+                    str(finding["category"]),
+                    str(finding["entity_uuid"] or ""),
+                    str(finding["episode_id"] or ""),
+                    str(finding["group_fingerprint"] or ""),
+                ),
+            ),
+            "entity_observations": observations,
+        }
+    return report

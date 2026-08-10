@@ -20,6 +20,8 @@ def _run_summary(run_id: UUID) -> dict[str, object]:
         },
         "progress": {
             "synced_jobs": 8,
+            "retired_jobs": 0,
+            "completed_jobs": 8,
             "total_jobs": 10,
             "remaining_jobs": 2,
             "completion_percent": 80.0,
@@ -36,6 +38,8 @@ def _run_summary(run_id: UUID) -> dict[str, object]:
             "outcomes": {
                 "primary_success": 5,
                 "fallback_success": 0,
+                "degraded_success": 0,
+                "retire_success": 0,
                 "retry_wait": 1,
                 "quarantined": 0,
                 "paused_systemic": 0,
@@ -132,6 +136,98 @@ async def test_execute_rejects_unconfirmed_quarantine_retry():
         assert "--confirm" in str(error)
     else:
         raise AssertionError("Unconfirmed quarantine retry was accepted")
+
+
+async def test_prioritize_dispatches_explicit_document_and_episode_targets():
+    episode_id = UUID("11111111-1111-1111-1111-111111111111")
+    args = graph_sync.build_parser().parse_args(
+        [
+            "prioritize",
+            "--priority",
+            "25",
+            "--reason-code",
+            "new_canon",
+            "--source-file",
+            "canon/world/new.md",
+            "--episode-id",
+            str(episode_id),
+        ]
+    )
+    repository = AsyncMock()
+    repository.prioritize_jobs.return_value = {
+        "matched": 2,
+        "changed": 2,
+        "priority": 25,
+    }
+
+    result = await graph_sync.execute_command(args, repository)
+
+    assert result["changed"] == 2
+    repository.prioritize_jobs.assert_awaited_once_with(
+        priority=25,
+        reason_code="new_canon",
+        episode_ids=[episode_id],
+        source_files=["canon/world/new.md"],
+    )
+
+
+async def test_operator_pause_requires_exact_confirmation_and_waits_for_lease_drain():
+    run_id = UUID("22222222-2222-2222-2222-222222222222")
+    unconfirmed = graph_sync.build_parser().parse_args(
+        ["run-pause", str(run_id), "--reason-code", "maintenance"]
+    )
+    repository = AsyncMock()
+
+    try:
+        await graph_sync.execute_command(unconfirmed, repository)
+    except ValueError as error:
+        assert graph_sync.PAUSE_CONFIRMATION in str(error)
+    else:
+        raise AssertionError("Unconfirmed operator pause was accepted")
+
+    confirmed = graph_sync.build_parser().parse_args(
+        [
+            "run-pause",
+            str(run_id),
+            "--reason-code",
+            "maintenance",
+            "--wait-seconds",
+            "0",
+            "--confirm",
+            graph_sync.PAUSE_CONFIRMATION,
+        ]
+    )
+    repository.pause_run.return_value = {"id": run_id, "state": "paused_operator"}
+    repository.active_run_lease_count.return_value = 0
+
+    result = await graph_sync.execute_command(confirmed, repository)
+
+    assert result["lease_drain_complete"] is True
+    repository.pause_run.assert_awaited_once_with(run_id, reason_code="maintenance")
+    repository.active_run_lease_count.assert_awaited_once_with(run_id)
+
+
+async def test_operator_resume_forwards_explicit_readiness_gate():
+    run_id = UUID("22222222-2222-2222-2222-222222222222")
+    args = graph_sync.build_parser().parse_args(
+        [
+            "run-resume",
+            str(run_id),
+            "--readiness-verified",
+            "--reason-code",
+            "provider_ready",
+        ]
+    )
+    repository = AsyncMock()
+    repository.resume_run.return_value = {"id": run_id, "state": "running"}
+
+    await graph_sync.execute_command(args, repository)
+
+    repository.resume_run.assert_awaited_once_with(
+        run_id,
+        readiness_verified=True,
+        reason_code="provider_ready",
+    )
 
 
 def test_status_renderer_includes_zero_states_and_run_identity():

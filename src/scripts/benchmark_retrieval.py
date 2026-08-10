@@ -41,7 +41,7 @@ from src.retrieval.shadow_embeddings import (
 )
 
 BENCHMARK_CONFIRMATION = "RUN_RETRIEVAL_BENCHMARK"
-DEFAULT_CORPUS = Path("/app/benchmarks/episode_retrieval_v1.json")
+DEFAULT_CORPUS = Path("/app/benchmarks/episode_retrieval_v2.json")
 
 
 def _emit(report: Mapping[str, object], *, as_json: bool, error: bool = False) -> None:
@@ -255,7 +255,7 @@ async def run(
                 await postgres.disconnect()
             except Exception as cleanup_error:
                 print(
-                    "Retrieval benchmark cleanup warning " f"({type(cleanup_error).__name__})",
+                    f"Retrieval benchmark cleanup warning ({type(cleanup_error).__name__})",
                     file=sys.stderr,
                 )
 

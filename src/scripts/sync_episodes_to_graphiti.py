@@ -24,6 +24,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from src.db import close_postgres_db, get_postgres_db
 from src.db.postgres import PostgresDB
 from src.graphiti import initialize_graphiti
+from src.graphiti.heartbeat import heartbeat_path
 from src.graphiti.provider_config import create_graphiti_text_route_client
 from src.graphiti.sync_graph import GraphitiEpisodeProcessor
 from src.graphiti.sync_models import GraphSyncPolicy, sanitize_summary
@@ -35,6 +36,7 @@ from src.llm.provider_config import resolve_provider_settings
 from src.security import install_sensitive_logging
 
 RUN_CONFIRMATION = "RUN_DURABLE_GRAPH_SYNC"
+DEFAULT_MANAGED_POLL_SECONDS = 10
 
 
 class CanonCorpusViolation(RuntimeError):
@@ -81,6 +83,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--confirm", help=f"Required with --run: {RUN_CONFIRMATION}")
     parser.add_argument("--max-episodes", type=int, help="Stop after this many claimed episodes")
     parser.add_argument(
+        "--managed",
+        action="store_true",
+        help="Wait for delayed retries and operator resume until the queue is terminal",
+    )
+    parser.add_argument(
+        "--idle-poll-seconds",
+        type=int,
+        default=DEFAULT_MANAGED_POLL_SECONDS,
+        help="Managed-mode retry and pause poll interval (2-300 seconds)",
+    )
+    parser.add_argument(
         "--worker-id",
         default=f"{socket.gethostname()}:{os.getpid()}",
         help="Bounded operator-visible lease owner",
@@ -123,6 +136,7 @@ async def _run_worker(args: argparse.Namespace) -> int:
         graphiti = await initialize_graphiti(
             llm_client=route_client,
             entity_grounding_policy=profile.entity_grounding_policy,
+            entity_response_policy=profile.entity_response_policy,
             verbose=args.verbose,
         )
         repository = GraphSyncRepository(postgres)
@@ -134,12 +148,19 @@ async def _run_worker(args: argparse.Namespace) -> int:
             profile=profile,
             policy=policy,
             worker_id=args.worker_id,
+            service_heartbeat_path=(
+                heartbeat_path(os.environ) if os.getenv("SAGE_HEARTBEAT_FILE") else None
+            ),
         )
         loop = asyncio.get_running_loop()
         for signal_name in (signal.SIGINT, signal.SIGTERM):
             with suppress(NotImplementedError):
                 loop.add_signal_handler(signal_name, worker.request_shutdown)
-        summary = await worker.run(max_episodes=args.max_episodes)
+        summary = await worker.run(
+            max_episodes=args.max_episodes,
+            continuous=args.managed,
+            idle_poll_seconds=args.idle_poll_seconds,
+        )
         durable_run_summary = (
             await repository.run_summary(UUID(summary.run_id))
             if summary.run_id is not None
@@ -180,6 +201,9 @@ async def async_main(argv: list[str] | None = None) -> int:
         return 2
     if args.max_episodes is not None and args.max_episodes <= 0:
         print("error: --max-episodes must be positive", file=sys.stderr)
+        return 2
+    if not 2 <= args.idle_poll_seconds <= 300:
+        print("error: --idle-poll-seconds must be between 2 and 300", file=sys.stderr)
         return 2
     return await _run_worker(args)
 

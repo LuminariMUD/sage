@@ -5,6 +5,7 @@
 .PHONY: clear-graph clear-graph-force clear-all reset-all reset-sync reset-embeddings reset-documents
 .PHONY: semantic-reset semantic-pipeline
 .PHONY: graphiti-status status-graphiti graph-audit graph-audit-json graph-semantic-audit graph-semantic-audit-json graph-sync-status graph-sync-run-summary graph-sync-run-summary-json graph-quality-report graph-quality-report-json graph-sync-list graph-sync-recover-expired graph-sync-retry-waiting graph-sync-retry-quarantined graph-rebuild-status graph-rebuild-plan graph-rebuild-prepare graph-rebuild-finalize backup-provider-upgrade verify-provider-upgrade-backup db-migrate-status db-migrate-check db-migrate embedding-preflight embedding-preflight-json embedding-profile-activate embedding-space-initialize-empty embedding-shadow-status embedding-shadow-status-json embedding-shadow-register embedding-shadow-backfill embedding-shadow-recover-run embedding-shadow-build-index retrieval-corpus-check retrieval-corpus-check-json benchmark-retrieval benchmark-retrieval-json benchmark-shadow-retrieval benchmark-shadow-retrieval-json benchmark-graphiti benchmark-graphiti-openai provider-config-check provider-config-check-json provider-text-probe provider-embedding-probe operational-readiness operational-readiness-json
+.PHONY: graph-semantic-audit-persist graph-entity-quality-report graph-entity-quality-report-json graph-sync-prioritize graph-sync-supervisor-up graph-sync-pause graph-sync-resume graph-rebuild-abort
 
 # Capability-aware host launcher. It reuses the model-profile resolver and
 # applies the no-Ollama override only when every selected capability is cloud.
@@ -49,11 +50,17 @@ help:
 	@echo "  make graph-audit-json         - Emit machine-readable reconciliation JSON"
 	@echo "  make graph-semantic-audit     - Review entity grounding, names, and types"
 	@echo "  make graph-semantic-audit-json - Emit semantic review signals as JSON"
+	@echo "  make graph-semantic-audit-persist CONFIRM_SEMANTIC_AUDIT=PERSIST_SEMANTIC_AUDIT - Persist content-free evidence"
 	@echo "  make graph-sync-status        - Show durable graph job/run state (read-only)"
 	@echo "  make graph-sync-run-summary   - Show latest durable throughput/ETA/failures"
 	@echo "  make graph-sync-run-summary-json - Emit latest durable run summary as JSON"
 	@echo "  make graph-quality-report     - Show separate relationship-quality evidence"
 	@echo "  make graph-quality-report-json - Emit relationship-quality evidence as JSON"
+	@echo "  make graph-entity-quality-report - Show entity dedupe/summary completeness"
+	@echo "  make graph-sync-prioritize SOURCE_FILE=canon/... PRIORITY=... REASON_CODE=... - Audit queue priority"
+	@echo "  make graph-sync-supervisor-up - Start one managed worker, watchdog, and finalizer"
+	@echo "  make graph-sync-pause RUN_ID=... REASON_CODE=... CONFIRM_GRAPH_SYNC_PAUSE=... - Pause and stop managed roles"
+	@echo "  make graph-sync-resume RUN_ID=... - Readiness-gated resume of managed roles"
 	@echo "  make graph-sync-list          - List failed/active graph jobs (read-only)"
 	@echo "  make graph-sync-recover-expired - Requeue or quarantine expired leases"
 	@echo "  make graph-sync-retry-waiting EPISODE_IDS='...' - Retry waiting jobs"
@@ -62,6 +69,7 @@ help:
 	@echo "  make graph-rebuild-plan       - Check rebuild readiness without mutation"
 	@echo "  make graph-rebuild-prepare BACKUP_REFERENCE=... CONFIRM_GRAPH_REBUILD=... - Requeue and clear safely"
 	@echo "  make graph-rebuild-finalize CONFIRM_GRAPH_REBUILD_FINALIZE=... - Accept a clean rebuilt graph"
+	@echo "  make graph-rebuild-abort OPERATION_ID=... REASON_CODE=... CONFIRM_GRAPH_REBUILD_ABORT=... - Abort incomplete rebuild"
 	@echo "  make backup-provider-upgrade BACKUP_REFERENCE=... - Create verified DB backups"
 	@echo "  make verify-provider-upgrade-backup BACKUP_REFERENCE=... - Verify backup gate"
 	@echo "  make db-migrate-status        - Show immutable PostgreSQL migration status"
@@ -356,6 +364,15 @@ graph-semantic-audit-json:
 	@docker compose exec -T api python src/scripts/graph_semantic_audit.py --json \
 		--sample-limit "$(or $(SEMANTIC_AUDIT_SAMPLE_LIMIT),20)"
 
+.PHONY: graph-semantic-audit-persist
+graph-semantic-audit-persist:
+	@test "$(CONFIRM_SEMANTIC_AUDIT)" = "PERSIST_SEMANTIC_AUDIT" || \
+		(echo "CONFIRM_SEMANTIC_AUDIT=PERSIST_SEMANTIC_AUDIT is required" >&2; exit 2)
+	@docker compose exec -T api python src/scripts/graph_semantic_audit.py \
+		--persist --confirm "$(CONFIRM_SEMANTIC_AUDIT)" \
+		--sample-limit "$(or $(SEMANTIC_AUDIT_SAMPLE_LIMIT),20)" \
+		$(if $(strip $(RUN_ID)),--run-id "$(RUN_ID)",)
+
 .PHONY: graph-sync-status
 graph-sync-status:
 	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py status
@@ -382,6 +399,16 @@ graph-quality-report-json:
 	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
 		--json quality-report $(if $(strip $(RUN_ID)),--run-id "$(RUN_ID)",)
 
+.PHONY: graph-entity-quality-report
+graph-entity-quality-report:
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
+		entity-quality-report $(if $(strip $(RUN_ID)),--run-id "$(RUN_ID)",)
+
+.PHONY: graph-entity-quality-report-json
+graph-entity-quality-report-json:
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
+		--json entity-quality-report $(if $(strip $(RUN_ID)),--run-id "$(RUN_ID)",)
+
 .PHONY: graph-sync-list
 graph-sync-list:
 	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
@@ -406,6 +433,42 @@ graph-sync-retry-quarantined:
 		(echo "EPISODE_IDS is required" >&2; exit 2)
 	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py \
 		retry-quarantined --confirm $(EPISODE_IDS)
+
+.PHONY: graph-sync-prioritize
+graph-sync-prioritize:
+	@test -n "$(SOURCE_FILE)" || (echo "SOURCE_FILE is required" >&2; exit 2)
+	@test -n "$(PRIORITY)" || (echo "PRIORITY is required" >&2; exit 2)
+	@test -n "$(REASON_CODE)" || (echo "REASON_CODE is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py prioritize \
+		--source-file "$(SOURCE_FILE)" --priority "$(PRIORITY)" \
+		--reason-code "$(REASON_CODE)"
+
+.PHONY: graph-sync-supervisor-up
+graph-sync-supervisor-up:
+	@$(PROVIDER_COMPOSE) --profile graph-sync up -d --build \
+		graph-sync-worker graph-sync-watchdog graph-sync-finalizer
+
+.PHONY: graph-sync-pause
+graph-sync-pause:
+	@test -n "$(RUN_ID)" || (echo "RUN_ID is required" >&2; exit 2)
+	@test -n "$(REASON_CODE)" || (echo "REASON_CODE is required" >&2; exit 2)
+	@test "$(CONFIRM_GRAPH_SYNC_PAUSE)" = "PAUSE_DURABLE_GRAPH_SYNC" || \
+		(echo "CONFIRM_GRAPH_SYNC_PAUSE=PAUSE_DURABLE_GRAPH_SYNC is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py run-pause \
+		"$(RUN_ID)" --reason-code "$(REASON_CODE)" \
+		--wait-seconds "$(or $(GRAPH_SYNC_PAUSE_WAIT_SECONDS),900)" \
+		--confirm "$(CONFIRM_GRAPH_SYNC_PAUSE)"
+	@$(PROVIDER_COMPOSE) --profile graph-sync stop -t 30 \
+		graph-sync-worker graph-sync-watchdog graph-sync-finalizer
+
+.PHONY: graph-sync-resume
+graph-sync-resume:
+	@test -n "$(RUN_ID)" || (echo "RUN_ID is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api python src/scripts/operational_readiness.py --json >/dev/null
+	@docker compose run --rm --no-deps api python src/scripts/graph_sync.py run-resume \
+		"$(RUN_ID)" --readiness-verified \
+		--reason-code "$(or $(REASON_CODE),operator_resume)"
+	@$(MAKE) graph-sync-supervisor-up
 
 .PHONY: graph-rebuild-status
 graph-rebuild-status:
@@ -436,6 +499,16 @@ graph-rebuild-finalize:
 	@docker compose run --rm --no-deps api \
 		python src/scripts/graph_rebuild.py finalize \
 		--confirm "$(CONFIRM_GRAPH_REBUILD_FINALIZE)"
+
+.PHONY: graph-rebuild-abort
+graph-rebuild-abort:
+	@test -n "$(OPERATION_ID)" || (echo "OPERATION_ID is required" >&2; exit 2)
+	@test -n "$(REASON_CODE)" || (echo "REASON_CODE is required" >&2; exit 2)
+	@test "$(CONFIRM_GRAPH_REBUILD_ABORT)" = "ABORT_INCOMPLETE_GRAPH_REBUILD" || \
+		(echo "CONFIRM_GRAPH_REBUILD_ABORT=ABORT_INCOMPLETE_GRAPH_REBUILD is required" >&2; exit 2)
+	@docker compose run --rm --no-deps api python src/scripts/graph_rebuild.py abort \
+		--operation-id "$(OPERATION_ID)" --reason-code "$(REASON_CODE)" \
+		--confirm "$(CONFIRM_GRAPH_REBUILD_ABORT)"
 
 .PHONY: backup-provider-upgrade
 backup-provider-upgrade:
@@ -644,6 +717,8 @@ benchmark-graphiti:
 		python src/scripts/benchmark_graphiti.py \
 		--candidate "$(or $(GRAPHITI_BENCHMARK_CANDIDATE),primary)" \
 		--concurrency "$(or $(GRAPHITI_BENCHMARK_CONCURRENCY),1)" \
+		--trials "$(or $(GRAPHITI_BENCHMARK_TRIALS),3)" \
+		--seed "$(or $(GRAPHITI_BENCHMARK_SEED),0)" \
 		$(GRAPHITI_BENCHMARK_MAX_CALLS_FLAG) \
 		--confirm "$(CONFIRM_GRAPHITI_BENCHMARK)"
 

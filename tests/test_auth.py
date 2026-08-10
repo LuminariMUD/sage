@@ -9,6 +9,8 @@ it works correctly before deployment.
 import os
 import sys
 
+import pytest
+
 # Add project root to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -58,50 +60,27 @@ def test_multikey_auth(monkeypatch):
     print("\n3. Testing key validation:")
 
     # Valid key should pass
-    try:
-        result = auth.verify_key(test_api_key, KeyType.BACKEND_API)
-        assert result
-        print("   ✅ Valid key verification passed")
-    except Exception as e:
-        print(f"   ❌ Valid key verification failed: {e}")
-        return False
+    result = auth.verify_key(test_api_key, KeyType.BACKEND_API)
+    assert result
+    print("   ✅ Valid key verification passed")
 
     # Invalid key should fail
-    try:
+    with pytest.raises(InvalidAPIKeyError):
         auth.verify_key("invalid_key", KeyType.BACKEND_API)
-        print("   ❌ Invalid key should have failed")
-        return False
-    except InvalidAPIKeyError:
-        print("   ✅ Invalid key properly rejected")
-    except Exception as e:
-        print(f"   ❌ Unexpected error: {e}")
-        return False
+    print("   ✅ Invalid key properly rejected")
 
     # Missing key should fail
-    try:
+    with pytest.raises(MissingAPIKeyError):
         auth.verify_key(None, KeyType.BACKEND_API)
-        print("   ❌ Missing key should have failed")
-        return False
-    except MissingAPIKeyError:
-        print("   ✅ Missing key properly rejected")
-    except Exception as e:
-        print(f"   ❌ Unexpected error: {e}")
-        return False
+    print("   ✅ Missing key properly rejected")
 
     # Test 4: Wrong key type should fail
     print("\n4. Testing key type isolation:")
-    try:
+    with pytest.raises(InvalidAPIKeyError):
         auth.verify_key(test_api_key, KeyType.MCP_OPERATIONS)  # Wrong type
-        print("   ❌ Wrong key type should have failed")
-        return False
-    except InvalidAPIKeyError:
-        print("   ✅ Key type isolation working")
-    except Exception as e:
-        print(f"   ❌ Unexpected error: {e}")
-        return False
+    print("   ✅ Key type isolation working")
 
     print("\n🎉 All authentication tests passed!")
-    return True
 
 
 def test_environment_keys(monkeypatch):
@@ -130,13 +109,8 @@ def test_environment_keys(monkeypatch):
     monkeypatch.setenv("DISABLE_AUTH", "true")
     auth_disabled = MultiKeyAuth()
 
-    if auth_disabled.is_auth_disabled():
-        print("✅ DISABLE_AUTH=true properly detected")
-    else:
-        print("❌ DISABLE_AUTH=true not working")
-        return False
-
-    return True
+    assert auth_disabled.is_auth_disabled()
+    print("✅ DISABLE_AUTH=true properly detected")
 
 
 def main():
@@ -149,12 +123,10 @@ def main():
 
     try:
         # Test core functionality
-        if not test_multikey_auth():
-            success = False
+        test_multikey_auth()
 
         # Test environment integration
-        if not test_environment_keys():
-            success = False
+        test_environment_keys()
 
     except Exception as e:
         print(f"\n❌ Unexpected test failure: {e}")

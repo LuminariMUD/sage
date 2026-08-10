@@ -8,7 +8,14 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any
 
-GRAPH_SYNC_STATES = ("pending", "leased", "retry_wait", "quarantined", "synced")
+GRAPH_SYNC_STATES = (
+    "pending",
+    "leased",
+    "retry_wait",
+    "quarantined",
+    "synced",
+    "retired",
+)
 
 
 def source_content_fingerprint(text: str) -> str:
@@ -37,13 +44,22 @@ def build_graph_audit(
     generated_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic cross-store reconciliation report from query rows."""
-    episodes: dict[str, dict[str, Any]] = {}
+    stored_episodes: dict[str, dict[str, Any]] = {}
     for row in episode_rows:
         stable_id = str(row["stable_id"])
-        episodes[stable_id] = {
+        retired = row.get("retired_at") is not None
+        graph_eligible = row.get("graph_extraction_eligible", True) is not False
+        active = not retired and graph_eligible
+        stored_episodes[stable_id] = {
             "graphiti_synced": bool(row.get("graphiti_synced")),
             "source_fingerprint": source_content_fingerprint(str(row.get("text") or "")),
+            "active": active,
+            "retired": retired,
+            "graph_eligible": graph_eligible,
         }
+    episodes = {
+        stable_id: episode for stable_id, episode in stored_episodes.items() if episode["active"]
+    }
 
     jobs: dict[str, Mapping[str, Any]] = {}
     if job_rows is not None:
@@ -67,7 +83,9 @@ def build_graph_audit(
         authoritative_synced_ids = {
             stable_id
             for stable_id, job in jobs.items()
-            if stable_id in episodes and job.get("state") == "synced"
+            if stable_id in episodes
+            and job.get("state") == "synced"
+            and job.get("desired_operation", "sync") == "sync"
         }
 
     populated_nodes: list[dict[str, Any]] = []
@@ -168,12 +186,12 @@ def build_graph_audit(
     job_verified_source_fingerprints = 0
     job_sync_profile_fingerprints = 0
     if job_rows is not None:
-        for stable_id in sorted(set(jobs) - set(episodes)):
+        for stable_id in sorted(set(jobs) - set(stored_episodes)):
             incorrectly_synchronized_jobs.append(
                 {"stable_id": stable_id, "reason": "job_without_source_episode"}
             )
 
-        for stable_id, episode in episodes.items():
+        for stable_id, episode in stored_episodes.items():
             episode_job = jobs.get(stable_id)
             if episode_job is None:
                 incorrectly_synchronized_jobs.append(
@@ -182,6 +200,8 @@ def build_graph_audit(
                 continue
 
             state = str(episode_job.get("state") or "")
+            desired_operation = str(episode_job.get("desired_operation") or "sync")
+            expected_operation = "sync" if episode["active"] else "retire"
             legacy_synced = episode["graphiti_synced"]
             desired_fingerprint = _string(episode_job.get("desired_source_fingerprint"))
             verified_source_fingerprint = _string(episode_job.get("verified_source_fingerprint"))
@@ -197,6 +217,10 @@ def build_graph_audit(
                 incorrectly_synchronized_jobs.append(
                     {"stable_id": stable_id, "reason": "invalid_job_state"}
                 )
+            if desired_operation != expected_operation:
+                incorrectly_synchronized_jobs.append(
+                    {"stable_id": stable_id, "reason": "job_operation_mismatch"}
+                )
             if state == "synced" and not legacy_synced:
                 incorrectly_synchronized_jobs.append(
                     {"stable_id": stable_id, "reason": "synced_job_legacy_flag_false"}
@@ -206,9 +230,9 @@ def build_graph_audit(
                     {"stable_id": stable_id, "reason": "non_synced_job_legacy_flag_true"}
                 )
 
-            if state == "synced" and episode_job.get("verified_at") is None:
+            if state in {"synced", "retired"} and episode_job.get("verified_at") is None:
                 incorrectly_synchronized_jobs.append(
-                    {"stable_id": stable_id, "reason": "synced_job_missing_verified_at"}
+                    {"stable_id": stable_id, "reason": "terminal_job_missing_verified_at"}
                 )
 
             if desired_fingerprint != episode["source_fingerprint"]:
@@ -220,7 +244,7 @@ def build_graph_audit(
                     }
                 )
 
-            if state == "synced":
+            if state in {"synced", "retired"}:
                 if verified_source_fingerprint != episode["source_fingerprint"]:
                     verified_source_fingerprint_mismatches.append(
                         {
@@ -287,6 +311,15 @@ def build_graph_audit(
             "postgres_total": len(episodes),
             "postgres_synced": len(authoritative_synced_ids),
             "postgres_non_synced": len(episodes) - len(authoritative_synced_ids),
+            "postgres_stored_total": len(stored_episodes),
+            "postgres_retired": sum(
+                bool(episode["retired"]) for episode in stored_episodes.values()
+            ),
+            "postgres_graph_ineligible": sum(
+                not bool(episode["retired"]) and not bool(episode["graph_eligible"])
+                for episode in stored_episodes.values()
+            ),
+            "postgres_graph_excluded": len(stored_episodes) - len(episodes),
             "neo4j_total": len(neo4j_rows),
             "neo4j_populated_stable_ids": len(populated_nodes),
             "neo4j_distinct_stable_ids": len(neo4j_ids),

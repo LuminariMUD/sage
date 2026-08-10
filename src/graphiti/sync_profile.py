@@ -11,14 +11,17 @@ from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
 from src.graphiti.entity_grounding_policy import resolve_entity_grounding_policy
+from src.graphiti.entity_stage_quality import resolve_entity_response_policy
 from src.graphiti.relationship_policy import RELATIONSHIP_VOCABULARY_FINGERPRINT
 from src.graphiti.sync_models import validate_label
+from src.ingestion.chunk_manifest import resolve_content_role_policy
 from src.llm.provider_config import resolve_provider_settings
 
 SYNC_IMPLEMENTATION_VERSION = "sage-graph-sync:v1"
 EXTRACTION_INSTRUCTIONS_VERSION = "lore-extraction:v1"
 OUTPUT_SCHEMA_VERSION = "graphiti-core-output:v1"
 NORMALIZATION_RULES_VERSION = "graphiti-core-defaults:v1"
+WRITER_POLICIES = frozenset({"owner_only_v1", "database_serial_v1"})
 
 
 def canonical_fingerprint(namespace: str, payload: dict[str, Any]) -> str:
@@ -79,6 +82,9 @@ class GraphSyncExecutionProfile:
     model_revision: str | None = None
     relationship_vocabulary_fingerprint: str = RELATIONSHIP_VOCABULARY_FINGERPRINT
     entity_grounding_policy: str = "off"
+    entity_response_policy: str = "off"
+    content_role_policy: str = "include_all_v1"
+    writer_policy: str = "owner_only_v1"
 
     def __post_init__(self) -> None:
         for value, label in (
@@ -95,6 +101,9 @@ class GraphSyncExecutionProfile:
                 "Relationship vocabulary fingerprint",
             ),
             (self.entity_grounding_policy, "Entity grounding policy"),
+            (self.entity_response_policy, "Entity response policy"),
+            (self.content_role_policy, "Content-role policy"),
+            (self.writer_policy, "Writer policy"),
         ):
             validate_label(value, label)
         if self.model_revision is not None:
@@ -105,6 +114,15 @@ class GraphSyncExecutionProfile:
             raise ValueError("Entity grounding policy must use its canonical identifier")
         if self.max_entities <= 0 or self.max_relationships <= 0:
             raise ValueError("Graph extraction limits must be positive")
+        if (
+            resolve_entity_response_policy(self.entity_response_policy)
+            != self.entity_response_policy
+        ):
+            raise ValueError("Entity response policy must use its canonical identifier")
+        if resolve_content_role_policy(self.content_role_policy) != self.content_role_policy:
+            raise ValueError("Content-role policy must use its canonical identifier")
+        if self.writer_policy not in WRITER_POLICIES:
+            raise ValueError("Writer policy is unsupported")
 
     @classmethod
     def from_environment(cls) -> GraphSyncExecutionProfile:
@@ -133,6 +151,13 @@ class GraphSyncExecutionProfile:
         entity_grounding_policy = resolve_entity_grounding_policy(
             os.getenv("GRAPH_ENTITY_GROUNDING_POLICY")
         )
+        entity_response_policy = resolve_entity_response_policy(
+            os.getenv("GRAPH_ENTITY_RESPONSE_POLICY")
+        )
+        content_role_policy = resolve_content_role_policy(os.getenv("GRAPH_CONTENT_ROLE_POLICY"))
+        writer_policy = (os.getenv("GRAPH_SYNC_WRITER_POLICY") or "owner_only_v1").strip().lower()
+        if writer_policy not in WRITER_POLICIES:
+            raise ValueError("Writer policy is unsupported")
 
         embedding_fingerprint = embedding_profile.fingerprint
         candidate_fingerprint = candidate.fingerprint
@@ -159,6 +184,12 @@ class GraphSyncExecutionProfile:
         # Any enabled policy becomes explicit profile provenance.
         if entity_grounding_policy != "off":
             sync_payload["entity_grounding_policy"] = entity_grounding_policy
+        if entity_response_policy != "off":
+            sync_payload["entity_response_policy"] = entity_response_policy
+        if content_role_policy != "include_all_v1":
+            sync_payload["content_role_policy"] = content_role_policy
+        if writer_policy != "owner_only_v1":
+            sync_payload["writer_policy"] = writer_policy
         sync_fingerprint = canonical_fingerprint("sync", sync_payload)
         configured_fingerprint = os.getenv("GRAPH_SYNC_PROFILE_FINGERPRINT")
         if configured_fingerprint and configured_fingerprint != sync_fingerprint:
@@ -178,6 +209,9 @@ class GraphSyncExecutionProfile:
             max_relationships=max_relationships,
             relationship_vocabulary_fingerprint=RELATIONSHIP_VOCABULARY_FINGERPRINT,
             entity_grounding_policy=entity_grounding_policy,
+            entity_response_policy=entity_response_policy,
+            content_role_policy=content_role_policy,
+            writer_policy=writer_policy,
         )
 
     def sanitized_summary(self) -> dict[str, str | int | None]:
@@ -196,4 +230,7 @@ class GraphSyncExecutionProfile:
             "max_relationships": self.max_relationships,
             "relationship_vocabulary_fingerprint": self.relationship_vocabulary_fingerprint,
             "entity_grounding_policy": self.entity_grounding_policy,
+            "entity_response_policy": self.entity_response_policy,
+            "content_role_policy": self.content_role_policy,
+            "writer_policy": self.writer_policy,
         }

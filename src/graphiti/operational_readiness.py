@@ -219,6 +219,27 @@ def summarize_relationship_quality(report: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def summarize_entity_stage_quality(report: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Keep only content-free dedupe and summary completeness counters."""
+    if report is None:
+        return {"schema_version": 1, "status": "not_collected", "run": None}
+    evidence = report.get("evidence")
+    counts = report.get("counts")
+    return {
+        "schema_version": 1,
+        "status": str(report.get("status") or "unavailable"),
+        "reason": report.get("reason"),
+        "run": report.get("run") if isinstance(report.get("run"), Mapping) else None,
+        "evidence": dict(evidence) if isinstance(evidence, Mapping) else {},
+        "anomalous_attempts": _count(report.get("anomalous_attempts")),
+        "counts": (
+            {str(name): _count(value) for name, value in counts.items()}
+            if isinstance(counts, Mapping)
+            else {}
+        ),
+    }
+
+
 def _safe_run_summary(summary: Mapping[str, Any]) -> dict[str, Any]:
     run = summary.get("run")
     if not isinstance(run, Mapping):
@@ -320,6 +341,7 @@ def build_operational_readiness(
     relationship_quality: Mapping[str, Any],
     graph_audit: Mapping[str, Any],
     embedding_preflight: Mapping[str, Any],
+    entity_stage_quality: Mapping[str, Any] | None = None,
     thresholds: OperationalThresholds | None = None,
     baseline_report: Mapping[str, Any] | None = None,
     generated_at: datetime | None = None,
@@ -333,6 +355,7 @@ def build_operational_readiness(
     safe_audit = summarize_graph_audit(graph_audit)
     safe_embedding = summarize_embedding_preflight(embedding_preflight)
     safe_quality = summarize_relationship_quality(relationship_quality)
+    safe_entity_quality = summarize_entity_stage_quality(entity_stage_quality)
     alerts: list[dict[str, Any]] = []
 
     def add_alert(
@@ -501,6 +524,49 @@ def build_operational_readiness(
             message="Relationship-quality evidence cannot be inspected",
         )
 
+    entity_quality_status = safe_entity_quality["status"]
+    if entity_quality_status == "available":
+        evidence = safe_entity_quality["evidence"]
+        policies = list(evidence.get("policies") or [])
+        missing_attempts = _count(evidence.get("missing_attempts"))
+        anomalous_attempts = _count(safe_entity_quality.get("anomalous_attempts"))
+        if policies and missing_attempts:
+            add_alert(
+                "entity_stage_evidence_incomplete",
+                severity="critical",
+                source="entity_stage_quality",
+                observed=missing_attempts,
+                threshold=0,
+                message="Policy-enabled extraction attempts lack entity-stage evidence",
+            )
+        if anomalous_attempts:
+            add_alert(
+                "entity_stage_anomalies_present",
+                severity="critical",
+                source="entity_stage_quality",
+                observed=anomalous_attempts,
+                threshold=0,
+                message="Entity dedupe or summary responses were incomplete",
+            )
+        if len(policies) > 1:
+            add_alert(
+                "entity_stage_policy_mixed",
+                severity="critical",
+                source="entity_stage_quality",
+                observed=policies,
+                threshold="one_policy",
+                message="A run contains more than one entity-stage response policy",
+            )
+    elif entity_quality_status not in {"no_runs", "not_collected"}:
+        add_alert(
+            "entity_stage_quality_unavailable",
+            severity="critical",
+            source="entity_stage_quality",
+            observed=entity_quality_status,
+            threshold="available_or_no_runs",
+            message="Entity-stage quality evidence cannot be inspected",
+        )
+
     audit_status = safe_audit["status"]
     audit_drift_count = _count(safe_audit["counts"].get("drift_findings"))
     if audit_status == "drift" or audit_drift_count:
@@ -595,6 +661,7 @@ def build_operational_readiness(
             **safe_sync,
             "latest_run": safe_run,
             "relationship_quality": safe_quality,
+            "entity_stage_quality": safe_entity_quality,
         },
         "graph_audit": safe_audit,
         "embedding_preflight": safe_embedding,

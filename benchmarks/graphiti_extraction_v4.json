@@ -1,0 +1,124 @@
+{
+  "schema_version": 4,
+  "corpus_id": "luminari-graphiti-extraction:v4",
+  "description": "Replicated grounded extraction, type consistency, episode-112 recall, prompt-leak, and content-role exclusion gates.",
+  "thresholds": {
+    "entity_recall": 0.8,
+    "entity_type_recall": 0.8,
+    "relationship_recall": 0.66
+  },
+  "cases": [
+    {
+      "id": "crimson_guard",
+      "episode": "The Order of the Crimson Loom protects the Crimson Spindle.",
+      "expect_parse_success": true,
+      "expect_schema_success": true,
+      "content_role": "world_lore",
+      "graph_extraction_eligible": true,
+      "expected_entities": [
+        {"id": "crimson_loom", "aliases": ["Order of the Crimson Loom", "Crimson Loom"], "types": ["Organization"]},
+        {"id": "crimson_spindle", "aliases": ["Crimson Spindle"], "types": ["Location"]}
+      ],
+      "forbidden_entities": [
+        {"id": "aan_conference", "aliases": ["AAN conference"], "types": []},
+        {"id": "amara_osei", "aliases": ["Dr. Amara Osei", "Amara Osei"], "types": []},
+        {"id": "osei_colleague", "aliases": ["Dr. Osei's colleague", "Osei's colleague"], "types": []}
+      ],
+      "expected_relationships": [
+        {"source": "crimson_loom", "target": "crimson_spindle", "types": ["Protects"]}
+      ]
+    },
+    {
+      "id": "blade_creation",
+      "episode": "The Emberglass Blade was created by the Phoenix Smiths.",
+      "expect_parse_success": true,
+      "expect_schema_success": true,
+      "content_role": "world_lore",
+      "graph_extraction_eligible": true,
+      "expected_entities": [
+        {"id": "emberglass_blade", "aliases": ["Emberglass Blade"], "types": ["Artifact"]},
+        {"id": "phoenix_smiths", "aliases": ["Phoenix Smiths", "Phoenix Smith"], "types": ["Organization"]}
+      ],
+      "forbidden_entities": [
+        {"id": "aan_conference", "aliases": ["AAN conference"], "types": []},
+        {"id": "amara_osei", "aliases": ["Dr. Amara Osei", "Amara Osei"], "types": []},
+        {"id": "osei_colleague", "aliases": ["Dr. Osei's colleague", "Osei's colleague"], "types": []}
+      ],
+      "expected_relationships": [
+        {"source": "emberglass_blade", "target": "phoenix_smiths", "types": ["CreatedBy"]}
+      ]
+    },
+    {
+      "id": "sworn_service",
+      "episode": "Aldra serves under the Sundered Dawn.",
+      "expect_parse_success": true,
+      "expect_schema_success": true,
+      "content_role": "world_lore",
+      "graph_extraction_eligible": true,
+      "expected_entities": [
+        {"id": "aldra", "aliases": ["Aldra"], "types": ["Person"]},
+        {"id": "sundered_dawn", "aliases": ["Sundered Dawn", "Order of the Sundered Dawn"], "types": ["Organization"]}
+      ],
+      "forbidden_entities": [
+        {"id": "aan_conference", "aliases": ["AAN conference"], "types": []},
+        {"id": "amara_osei", "aliases": ["Dr. Amara Osei", "Amara Osei"], "types": []},
+        {"id": "osei_colleague", "aliases": ["Dr. Osei's colleague", "Osei's colleague"], "types": []}
+      ],
+      "expected_relationships": [
+        {"source": "aldra", "target": "sundered_dawn", "types": ["ServesUnder"]}
+      ]
+    },
+    {
+      "id": "crystal_dwarf_prompt_leak_regression",
+      "episode": "The Crystal Dwarves of Nagburim were thought to be legend until rediscovery made myth truth. Their meticulous records carried knowledge of forgotten magics, relics of the Darklings and Luminari, and designs for the first arcana golems, of which only crude imitations walk Lumia today. They are scholars and guardians of Arcanite.",
+      "expect_parse_success": true,
+      "expect_schema_success": true,
+      "content_role": "world_lore",
+      "graph_extraction_eligible": true,
+      "expected_entities": [
+        {"id": "crystal_dwarves", "aliases": ["Crystal Dwarves of Nagburim", "Crystal Dwarves"], "types": ["Race"]},
+        {"id": "arcanite", "aliases": ["Arcanite"], "types": ["Concept"]},
+        {"id": "lumia", "aliases": ["Lumia"], "types": ["Location"]}
+      ],
+      "forbidden_entities": [
+        {"id": "aan_conference", "aliases": ["AAN conference"], "types": []},
+        {"id": "amara_osei", "aliases": ["Dr. Amara Osei", "Amara Osei"], "types": []},
+        {"id": "osei_colleague", "aliases": ["Dr. Osei's colleague", "Osei's colleague"], "types": []}
+      ],
+      "expected_relationships": [
+        {"source": "crystal_dwarves", "target": "arcanite", "types": ["Protects"]}
+      ]
+    },
+    {
+      "id": "episode_112_trader_recall",
+      "episode": "You know that price is never the whole cost. Reputation, scarcity, time, danger, beauty, and the buyer's need all sit invisibly on the scale. Perhaps you craft what you sell. Perhaps you connect distant makers to people who need their work. Either way, your true inventory is relationship: who pays fairly, who delivers in winter, who cheats only strangers, and who keeps a promise after profit disappears. I remember every favor as carefully as other traders remember coin.",
+      "expect_parse_success": true,
+      "expect_schema_success": true,
+      "content_role": "world_lore",
+      "graph_extraction_eligible": true,
+      "expected_entities": [
+        {"id": "trader", "aliases": ["Trader", "traders"], "types": ["Concept"]}
+      ],
+      "forbidden_entities": [
+        {"id": "aan_conference", "aliases": ["AAN conference"], "types": []},
+        {"id": "amara_osei", "aliases": ["Dr. Amara Osei", "Amara Osei"], "types": []}
+      ],
+      "expected_relationships": []
+    },
+    {
+      "id": "homeland_runtime_contract_exclusion",
+      "episode": "## Homeland Data Contract\nEvery implementation record derived from this canon must carry a legacy runtime value, stable Homeland ID, display name, card summary, media key, mechanical-purpose summary, canon version, approval status, and source references. Runtime mechanics remain authoritative for what a language proficiency enables.",
+      "expect_parse_success": true,
+      "expect_schema_success": true,
+      "content_role": "runtime_contract",
+      "graph_extraction_eligible": false,
+      "expected_entities": [],
+      "forbidden_entities": [
+        {"id": "stable_homeland_id", "aliases": ["stable Homeland ID"], "types": []},
+        {"id": "media_key", "aliases": ["media key"], "types": []},
+        {"id": "card_summary", "aliases": ["card summary"], "types": []}
+      ],
+      "expected_relationships": []
+    }
+  ]
+}

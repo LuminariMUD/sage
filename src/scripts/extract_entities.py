@@ -421,6 +421,8 @@ class GraphitiEntityProcessor:
             FROM episodes e
             JOIN lore_documents d ON e.document_id = d.id
             WHERE e.graphiti_synced = false
+              AND e.retired_at IS NULL
+              AND e.graph_extraction_eligible IS TRUE
               AND length(e.text) > 50
               AND d.canonical IS TRUE
               AND d.source_file LIKE 'canon/%'

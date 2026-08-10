@@ -40,6 +40,41 @@ DOCUMENT_TYPE_MAP = {
 # Default document type for unmapped directories
 DEFAULT_DOCUMENT_TYPE = "lore"
 
+REQUIRED_LORE_DOCUMENT_COLUMNS = frozenset(
+    {
+        "id",
+        "stable_id",
+        "title",
+        "document_type",
+        "source_file",
+        "body_md",
+        "summary",
+        "canonical",
+        "metadata",
+        "graphiti_content_hash",
+        "graphiti_status",
+        "processing_status",
+        "processed_at",
+        "updated_at",
+    }
+)
+REQUIRED_LORE_DOCUMENT_COLUMN_TYPES = {
+    "id": frozenset({"uuid"}),
+    "stable_id": frozenset({"text", "varchar"}),
+    "title": frozenset({"text", "varchar"}),
+    "document_type": frozenset({"document_type"}),
+    "source_file": frozenset({"text", "varchar"}),
+    "body_md": frozenset({"text", "varchar"}),
+    "summary": frozenset({"text", "varchar"}),
+    "canonical": frozenset({"bool"}),
+    "metadata": frozenset({"jsonb"}),
+    "graphiti_content_hash": frozenset({"text", "varchar"}),
+    "graphiti_status": frozenset({"text", "varchar"}),
+    "processing_status": frozenset({"text", "varchar"}),
+    "processed_at": frozenset({"timestamptz"}),
+    "updated_at": frozenset({"timestamptz"}),
+}
+
 
 class DocumentLoader:
     """Load canon Markdown documents into the lore database."""
@@ -132,6 +167,65 @@ class DocumentLoader:
             console.print(f"[dim]Found {len(md_files)} markdown files in {canon_dir}[/dim]")
 
         return md_files
+
+    async def preflight(self, db, markdown_files: list[Path]) -> dict[str, object]:
+        """Validate inferred types and the complete write shape before mutation."""
+        inferred_types = {self.get_document_type(path) for path in markdown_files}
+        enum_rows = await db.fetch(
+            """
+            SELECT enum_value.enumlabel
+            FROM pg_attribute AS attribute
+            JOIN pg_class AS relation
+              ON relation.oid = attribute.attrelid
+            JOIN pg_namespace AS namespace
+              ON namespace.oid = relation.relnamespace
+            JOIN pg_type AS enum_type
+              ON enum_type.oid = attribute.atttypid
+            JOIN pg_enum AS enum_value
+              ON enum_value.enumtypid = enum_type.oid
+            WHERE relation.relname = 'lore_documents'
+              AND namespace.nspname = current_schema()
+              AND attribute.attname = 'document_type'
+              AND attribute.attnum > 0
+              AND NOT attribute.attisdropped
+            ORDER BY enum_value.enumsortorder
+            """
+        )
+        deployed_types = {str(row["enumlabel"]) for row in enum_rows}
+        if not deployed_types:
+            raise RuntimeError("Document loader preflight could not inspect document_type")
+        unsupported_types = sorted(inferred_types - deployed_types)
+        if unsupported_types:
+            raise RuntimeError("Document loader inferred a type absent from the deployed enum")
+
+        column_rows = await db.fetch(
+            """
+            SELECT column_name, udt_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'lore_documents'
+            ORDER BY ordinal_position
+            """
+        )
+        deployed_columns = {str(row["column_name"]) for row in column_rows}
+        missing_columns = sorted(REQUIRED_LORE_DOCUMENT_COLUMNS - deployed_columns)
+        if missing_columns:
+            raise RuntimeError("Document loader write columns are absent from the deployed schema")
+        incompatible_columns = sorted(
+            str(row["column_name"])
+            for row in column_rows
+            if str(row["column_name"]) in REQUIRED_LORE_DOCUMENT_COLUMN_TYPES
+            and str(row["udt_name"])
+            not in REQUIRED_LORE_DOCUMENT_COLUMN_TYPES[str(row["column_name"])]
+        )
+        if incompatible_columns:
+            raise RuntimeError("Document loader write columns have incompatible deployed types")
+        return {
+            "files": len(markdown_files),
+            "inferred_types": sorted(inferred_types),
+            "deployed_types": sorted(deployed_types),
+            "required_columns": len(REQUIRED_LORE_DOCUMENT_COLUMNS),
+        }
 
     def canon_relative_path(self, file_path: Path) -> Path:
         """Return a canonical source path or reject path/symlink escape attempts."""
@@ -279,7 +373,14 @@ class DocumentLoader:
 
         # Find all markdown files
         md_files = self.find_markdown_files()
+        preflight = await self.preflight(db, md_files)
         console.print(f"\n[cyan]Found {len(md_files)} markdown files to process[/cyan]")
+        if self.verbose:
+            console.print(
+                "[dim]Preflight passed: "
+                f"types={','.join(preflight['inferred_types'])}, "
+                f"columns={preflight['required_columns']}[/dim]"
+            )
 
         # Process files with progress bar
         with Progress(

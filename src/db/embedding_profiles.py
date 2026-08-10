@@ -227,19 +227,25 @@ def _safe_identifier(value: str) -> str:
 
 def _coverage_count_query(table_name: str, column_name: str) -> str:
     """Build the only dynamic coverage query after strict identifier validation."""
-    template = "SELECT count(*) AS total_rows, " "count({column}) AS embedded_rows FROM {table}"
+    predicate = " WHERE retired_at IS NULL" if table_name == "episodes" else ""
+    template = (
+        "SELECT count(*) AS total_rows, count({column}) AS embedded_rows FROM {table}{predicate}"
+    )
     return template.format(  # nosec B608
         table=_safe_identifier(table_name),
         column=_safe_identifier(column_name),
+        predicate=predicate,
     )
 
 
 def _nonnull_count_query(table_name: str, column_name: str) -> str:
     """Build a validated identifier-only non-null count query."""
-    template = "SELECT count({column}) FROM {table}"
+    predicate = " WHERE retired_at IS NULL" if table_name == "episodes" else ""
+    template = "SELECT count({column}) FROM {table}{predicate}"
     return template.format(  # nosec B608
         table=_safe_identifier(table_name),
         column=_safe_identifier(column_name),
+        predicate=predicate,
     )
 
 

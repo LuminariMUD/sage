@@ -1,0 +1,1 @@
+"""Durable canon ingestion contracts."""

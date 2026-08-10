@@ -72,13 +72,15 @@ class GraphRebuildRepository:
 
     async def active_operation(self) -> dict[str, Any] | None:
         """Return the active rebuild without changing it."""
-        return _record(await self.postgres.fetchrow("""
+        return _record(
+            await self.postgres.fetchrow("""
                 SELECT *
                 FROM graph_rebuild_operations
-                WHERE state <> 'completed'
+                WHERE state NOT IN ('completed', 'aborted')
                 ORDER BY created_at
                 LIMIT 1
-                """))
+                """)
+        )
 
     async def status_snapshot(self, operation_id: UUID | None = None) -> dict[str, Any]:
         """Return sanitized rebuild, active-profile, and event state."""
@@ -101,6 +103,7 @@ class GraphRebuildRepository:
             WHERE scope = 'graphiti'
             """)
         events: list[dict[str, Any]] = []
+        abort_evidence: dict[str, Any] | None = None
         event_count = 0
         if operation is not None:
             event_count = int(
@@ -130,6 +133,16 @@ class GraphRebuildRepository:
                 MAX_STATUS_EVENTS,
             )
             events = [dict(row) for row in event_rows]
+            abort_evidence = _record(
+                await self.postgres.fetchrow(
+                    """
+                    SELECT prior_state, reason_code, remaining_job_count, recorded_at
+                    FROM graph_rebuild_abort_events
+                    WHERE rebuild_operation_id = $1
+                    """,
+                    operation["id"],
+                )
+            )
         return {
             "schema_version": 1,
             "operation": _record(operation),
@@ -137,6 +150,7 @@ class GraphRebuildRepository:
             "event_count": event_count,
             "events_truncated": event_count > len(events),
             "events": events,
+            "abort_evidence": abort_evidence,
         }
 
     async def prepare(
@@ -178,7 +192,9 @@ class GraphRebuildRepository:
                     raise GraphRebuildError("An active graph sync run blocks rebuild preparation")
                 if await connection.fetchval("""
                     SELECT EXISTS (
-                        SELECT 1 FROM graph_rebuild_operations WHERE state <> 'completed'
+                        SELECT 1
+                        FROM graph_rebuild_operations
+                        WHERE state NOT IN ('completed', 'aborted')
                     )
                     """):
                     raise GraphRebuildError("A graph rebuild is already active")
@@ -409,7 +425,19 @@ class GraphRebuildRepository:
                 inventory = await connection.fetchrow(
                     """
                     SELECT count(*) AS jobs,
-                           count(*) FILTER (WHERE state <> 'synced') AS non_synced,
+                           count(*) FILTER (
+                               WHERE (
+                                       desired_operation = 'sync'
+                                       AND state <> 'synced'
+                                     )
+                                  OR (
+                                       desired_operation = 'retire'
+                                       AND state <> 'retired'
+                                     )
+                           ) AS nonterminal,
+                           count(*) FILTER (
+                               WHERE desired_operation = 'sync'
+                           ) AS active_jobs,
                            count(*) FILTER (
                                WHERE sync_profile_fingerprint <> $1
                            ) AS profile_mismatches,
@@ -423,13 +451,14 @@ class GraphRebuildRepository:
                     operation["target_sync_profile_fingerprint"],
                 )
                 jobs = int(inventory["jobs"])
-                if jobs != audited_count or jobs != await connection.fetchval(
+                active_jobs = int(inventory["active_jobs"])
+                if active_jobs != audited_count or jobs != await connection.fetchval(
                     "SELECT count(*) FROM episodes"
                 ):
                     raise GraphRebuildError("Final audit inventory changed")
                 if any(
                     int(inventory[key])
-                    for key in ("non_synced", "profile_mismatches", "stale_sources")
+                    for key in ("nonterminal", "profile_mismatches", "stale_sources")
                 ):
                     raise GraphRebuildError("Graph rebuild jobs are not completely synchronized")
 
@@ -482,6 +511,82 @@ class GraphRebuildRepository:
                     operation_id,
                     next_sequence,
                     audit,
-                    jobs,
+                    active_jobs,
                 )
                 return dict(completed)
+
+    async def abort(self, operation_id: UUID, *, reason_code: str) -> dict[str, Any]:
+        """Terminate one stopped incomplete rebuild with append-only evidence."""
+        reason_code = validate_label(reason_code, "Abort reason code", maximum=64)
+        if not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", reason_code):
+            raise ValueError("Abort reason code is invalid")
+
+        async with self.postgres.acquire() as connection:
+            async with connection.transaction():
+                await connection.execute("SELECT pg_advisory_xact_lock($1)", RUN_START_LOCK_ID)
+                operation = await connection.fetchrow(
+                    """
+                    SELECT *
+                    FROM graph_rebuild_operations
+                    WHERE id = $1
+                    FOR UPDATE
+                    """,
+                    operation_id,
+                )
+                if operation is None:
+                    raise GraphRebuildError("Graph rebuild operation does not exist")
+                if operation["state"] in {"completed", "aborted"}:
+                    raise GraphRebuildError("Terminal graph rebuild cannot be aborted")
+                if await connection.fetchval(
+                    "SELECT EXISTS (SELECT 1 FROM graph_sync_runs WHERE state <> 'stopped')"
+                ):
+                    raise GraphRebuildError("An active graph sync run blocks rebuild abort")
+                if await connection.fetchval(
+                    "SELECT EXISTS (SELECT 1 FROM graph_sync_jobs WHERE state = 'leased')"
+                ):
+                    raise GraphRebuildError("Leased graph jobs block rebuild abort")
+
+                remaining = int(
+                    await connection.fetchval(
+                        """
+                        SELECT count(*)
+                        FROM graph_sync_jobs
+                        WHERE (
+                                desired_operation = 'sync' AND state <> 'synced'
+                              )
+                           OR (
+                                desired_operation = 'retire' AND state <> 'retired'
+                              )
+                           OR sync_profile_fingerprint <> $1
+                        """,
+                        operation["target_sync_profile_fingerprint"],
+                    )
+                )
+                aborted = await connection.fetchrow(
+                    """
+                    UPDATE graph_rebuild_operations
+                    SET state = 'aborted',
+                        abort_reason_code = $2,
+                        aborted_at = clock_timestamp()
+                    WHERE id = $1
+                    RETURNING *
+                    """,
+                    operation_id,
+                    reason_code,
+                )
+                await connection.execute(
+                    """
+                    INSERT INTO graph_rebuild_abort_events (
+                        rebuild_operation_id,
+                        prior_state,
+                        reason_code,
+                        remaining_job_count
+                    )
+                    VALUES ($1, $2, $3, $4)
+                    """,
+                    operation_id,
+                    operation["state"],
+                    reason_code,
+                    remaining,
+                )
+                return dict(aborted)

@@ -21,7 +21,7 @@ from src.agents.relationship_corrector import RelationshipCorrector
 
 def test_semantic_standardization():
     """Test semantic type standardization logic."""
-    corrector = RelationshipCorrector(openai_api_key="dummy")
+    corrector = RelationshipCorrector()
 
     test_cases = [
         ("Protects", "PROTECTS"),
@@ -34,22 +34,17 @@ def test_semantic_standardization():
     ]
 
     print("🧪 Testing semantic type standardization:")
-    all_passed = True
-
     for input_type, expected in test_cases:
         result = corrector.standardize_semantic_type(input_type)
         passed = result == expected
         status = "✅" if passed else "❌"
         print(f"  {status} '{input_type}' → '{result}' (expected: '{expected}')")
-        if not passed:
-            all_passed = False
-
-    return all_passed
+        assert passed
 
 
 def test_duplicate_selection():
     """Test duplicate relationship selection logic."""
-    corrector = RelationshipCorrector(openai_api_key="dummy")
+    corrector = RelationshipCorrector()
 
     # Mock relationships with different completeness levels
     relationships = [
@@ -85,16 +80,12 @@ def test_duplicate_selection():
     print(f"  To delete: {[rel['id'] for rel in to_delete]} (should be [rel1, rel2])")
 
     # rel3 should be selected as best (most complete)
-    passed = (
+    assert (
         best["id"] == "rel3"
         and len(to_delete) == 2
         and {rel["id"] for rel in to_delete} == {"rel1", "rel2"}
     )
-
-    status = "✅" if passed else "❌"
-    print(f"  {status} Duplicate selection logic")
-
-    return passed
+    print("  ✅ Duplicate selection logic")
 
 
 async def test_dry_run_functionality():
@@ -123,39 +114,33 @@ async def test_dry_run_functionality():
         },
     ]
 
-    try:
-        corrector = RelationshipCorrector(openai_api_key="dummy")
+    corrector = RelationshipCorrector()
 
-        # Test dry run (should not make any database changes)
-        corrections = await corrector.apply_corrections(
-            relationships=mock_relationships,
-            correct_duplicates=True,
-            standardize_semantics=True,
-            confidence_threshold=0.8,
-            max_corrections=10,
-            dry_run=True,  # Important: dry run mode
-        )
+    # Test dry run (should not make any database changes)
+    corrections = await corrector.apply_corrections(
+        relationships=mock_relationships,
+        correct_duplicates=True,
+        standardize_semantics=True,
+        confidence_threshold=0.8,
+        max_corrections=10,
+        dry_run=True,
+    )
 
-        print(f"  ✅ Dry run completed with {len(corrections)} potential corrections")
+    print(f"  ✅ Dry run completed with {len(corrections)} potential corrections")
 
-        for correction in corrections:
-            print(f"    - {correction.correction_type}: {correction.reasoning}")
+    for correction in corrections:
+        print(f"    - {correction.correction_type}: {correction.reasoning}")
 
-        # Should find both deduplication and standardization opportunities
-        dedup_corrections = [c for c in corrections if c.correction_type == "DEDUPLICATION"]
-        standardization_corrections = [
-            c for c in corrections if c.correction_type == "SEMANTIC_STANDARDIZATION"
-        ]
+    # Should find both deduplication and standardization opportunities
+    dedup_corrections = [c for c in corrections if c.correction_type == "DEDUPLICATION"]
+    standardization_corrections = [
+        c for c in corrections if c.correction_type == "SEMANTIC_STANDARDIZATION"
+    ]
 
-        print(
-            f"  📊 Found {len(dedup_corrections)} deduplication and {len(standardization_corrections)} standardization corrections"
-        )
-
-        return len(corrections) > 0
-
-    except Exception as e:
-        print(f"  ❌ Dry run test failed: {e}")
-        return False
+    print(
+        f"  📊 Found {len(dedup_corrections)} deduplication and {len(standardization_corrections)} standardization corrections"
+    )
+    assert corrections
 
 
 def print_test_summary(results: dict[str, bool]):
@@ -189,13 +174,16 @@ async def main():
     results = {}
 
     # Test 1: Semantic standardization
-    results["Semantic Standardization"] = test_semantic_standardization()
+    test_semantic_standardization()
+    results["Semantic Standardization"] = True
 
     # Test 2: Duplicate selection
-    results["Duplicate Selection Logic"] = test_duplicate_selection()
+    test_duplicate_selection()
+    results["Duplicate Selection Logic"] = True
 
     # Test 3: Dry run functionality
-    results["Dry Run Functionality"] = await test_dry_run_functionality()
+    await test_dry_run_functionality()
+    results["Dry Run Functionality"] = True
 
     # Print summary
     all_passed = print_test_summary(results)

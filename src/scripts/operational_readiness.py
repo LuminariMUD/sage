@@ -101,6 +101,18 @@ async def collect_report(
             "reason": "relationship_quality_migration_pending",
             "run": None,
         }
+    entity_quality_table_available = await postgres.fetchval(
+        "SELECT to_regclass('public.graph_sync_entity_stage_quality') IS NOT NULL"
+    )
+    if entity_quality_table_available:
+        entity_stage_quality = await repository.entity_stage_quality_report()
+    else:
+        entity_stage_quality = {
+            "schema_version": 1,
+            "status": "unavailable",
+            "reason": "entity_stage_quality_migration_pending",
+            "run": None,
+        }
 
     audit = await collect_graph_audit(
         postgres,
@@ -121,6 +133,7 @@ async def collect_report(
         relationship_quality=relationship_quality,
         graph_audit=audit,
         embedding_preflight=embedding,
+        entity_stage_quality=entity_stage_quality,
         thresholds=thresholds,
         baseline_report=baseline_report,
     )
@@ -136,6 +149,7 @@ def render_human(report: Mapping[str, Any]) -> str:
     audit = report["graph_audit"]
     embedding = report["embedding_preflight"]
     quality = graph_sync["relationship_quality"]
+    entity_quality = graph_sync["entity_stage_quality"]
     alerts = report["alerts"]
     lines = [
         f"Operational readiness: {str(report['status']).upper()}",
@@ -150,6 +164,7 @@ def render_human(report: Mapping[str, Any]) -> str:
         f"(drift={audit['counts'].get('drift_findings', 0)})",
         f"Embedding preflight: {str(embedding['status']).upper()}",
         f"Relationship quality: {str(quality.get('status', 'unavailable')).upper()}",
+        f"Entity-stage quality: {str(entity_quality.get('status', 'unavailable')).upper()}",
     ]
     if isinstance(run, Mapping):
         progress = latest_run.get("progress") or {}
@@ -158,7 +173,8 @@ def render_human(report: Mapping[str, Any]) -> str:
             (
                 f"Latest run: {run.get('state')} ({run.get('sync_profile_fingerprint')})",
                 "Run completion: "
-                f"{progress.get('synced_jobs', 0)}/{progress.get('total_jobs', 0)} "
+                f"{progress.get('completed_jobs', progress.get('synced_jobs', 0))}/"
+                f"{progress.get('total_jobs', 0)} "
                 f"({progress.get('completion_percent', 0)}%)",
                 "Provider calls: "
                 f"{provider_calls.get('completed', 0)}/{provider_calls.get('reserved', 0)} "

@@ -984,6 +984,7 @@ async def rag_query(request: RAGQueryRequest):
         FROM episodes e
         JOIN lore_documents d ON e.document_id = d.id
         WHERE e.embedding IS NOT NULL
+            AND e.retired_at IS NULL
             AND d.canonical IS TRUE
             AND d.source_file LIKE 'canon/%'
             AND 1 - (e.embedding <=> $1::vector) > $2
@@ -1009,6 +1010,7 @@ async def rag_query(request: RAGQueryRequest):
         FROM episodes e
         JOIN lore_documents d ON e.document_id = d.id
         WHERE to_tsvector('english', e.text) @@ plainto_tsquery('english', $1)
+            AND e.retired_at IS NULL
             AND d.canonical IS TRUE
             AND d.source_file LIKE 'canon/%'
         ORDER BY ts_rank(to_tsvector('english', e.text), plainto_tsquery('english', $1)) DESC
@@ -1125,6 +1127,7 @@ async def rag_query(request: RAGQueryRequest):
             JOIN lore_documents d ON d.id = e.document_id
             WHERE e.document_id = $1
               AND e.episode_index = ANY($2::int[])
+              AND e.retired_at IS NULL
               AND d.canonical IS TRUE
               AND d.source_file LIKE 'canon/%'
             """,
@@ -1639,6 +1642,7 @@ async def validate_lore(request: ValidationRequest):
         FROM episodes e
         JOIN lore_documents d ON e.document_id = d.id
         WHERE e.embedding IS NOT NULL
+          AND e.retired_at IS NULL
           AND d.canonical IS TRUE
           AND d.source_file LIKE 'canon/%'
           AND 1 - (e.embedding <=> $1::vector) > 0.5
@@ -1969,6 +1973,7 @@ async def get_statistics():
         JOIN lore_documents AS document ON document.id = episode.document_id
         WHERE document.canonical IS TRUE
           AND document.source_file LIKE 'canon/%'
+          AND episode.retired_at IS NULL
     """)
 
     # Get entity stats from Neo4j

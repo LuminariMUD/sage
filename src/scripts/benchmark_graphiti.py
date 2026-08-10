@@ -27,7 +27,7 @@ from src.llm.provider_config import (
 )
 
 BENCHMARK_CONFIRMATION = "RUN_GRAPHITI_BENCHMARK"
-DEFAULT_CORPUS = Path("/app/benchmarks/graphiti_extraction_v3.json")
+DEFAULT_CORPUS = Path("/app/benchmarks/graphiti_extraction_v4.json")
 
 
 def _emit(report: Mapping[str, object], *, as_json: bool, error: bool = False) -> None:
@@ -67,11 +67,14 @@ def _emit(report: Mapping[str, object], *, as_json: bool, error: bool = False) -
             "Candidate: "
             f"{result['provider']}:{result['requested_model']} "
             f"status={result['status']} cases={result['case_count']} "
-            f"structured={result['schema_success_cases']}/{result['case_count']} "
+            f"trials={result.get('trial_count', 1)} "
+            f"structured={result['schema_success_cases']}/"
+            f"{result.get('case_trial_count', result['case_count'])} "
             f"entity_recall={float(result['entity_recall']):.3f} "
             "forbidden_entity_matches="
             f"{result.get('matched_forbidden_entities', 0)} "
             f"relationship_recall={float(result['relationship_recall']):.3f} "
+            f"entity_type_recall={float(result.get('entity_type_recall', 1.0)):.3f} "
             "entity_grounding_policy="
             f"{result.get('entity_grounding_policy', 'off')} "
             "entity_grounding_acceptance="
@@ -100,6 +103,8 @@ async def run(
     benchmark_runner: BenchmarkRunner = benchmark_candidate,
 ) -> int:
     """Refuse by default, then run only the in-memory extraction boundary."""
+    trials = getattr(args, "trials", 3)
+    seed = getattr(args, "seed", 0)
     if args.confirm != BENCHMARK_CONFIRMATION:
         report = {
             "schema_version": 1,
@@ -180,10 +185,13 @@ async def run(
                         profile.relationship_vocabulary_fingerprint
                     ),
                     entity_grounding_policy=profile.entity_grounding_policy,
+                    content_role_policy=profile.content_role_policy,
                     max_entities=profile.max_entities,
                     max_relationships=profile.max_relationships,
                     maximum_provider_calls=maximum_provider_calls,
                     concurrency=args.concurrency,
+                    trials=trials,
+                    seed=seed,
                 )
             )
     except Exception as error:
@@ -212,6 +220,8 @@ async def run(
         "entity_grounding_policy": profile.entity_grounding_policy,
         "candidate_selection": args.candidate,
         "concurrency": args.concurrency,
+        "trials": trials,
+        "seed": seed,
         "maximum_provider_calls_per_case": maximum_provider_calls,
         "candidates": results,
     }
@@ -232,6 +242,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--concurrency", type=int, default=1)
     parser.add_argument("--max-provider-calls", type=int)
+    parser.add_argument("--trials", type=int, default=3)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--confirm", default="")
     return parser
 

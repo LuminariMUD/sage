@@ -18,6 +18,33 @@ The graph-sync ledger is intentionally evidence-preserving. There is no automate
 down migration that drops attempt history. Rollback uses the verified pre-migration
 database backup and the documented application rollback procedure.
 
+## Full-run operational controls
+
+Migration `0009_full_run_controls` adds the durable schema used by the full-run
+follow-up work: episode retirement and chunk manifests, audited queue priority,
+database-enforced single-writer ownership, entity-stage quality evidence,
+content-free semantic-audit snapshots and entity mutation events, operator pause
+state, and an auditable incomplete-rebuild abort transition.
+
+Applying this migration changes lifecycle constraints and backfills manifest and
+active-episode metadata, but does not resume a graph run, call a provider, alter
+Neo4j, or finalize a rebuild. Before applying it to an environment with an active
+or paused rebuild, first let that operation reach a safe terminal state and capture
+fresh verified PostgreSQL and Neo4j backups. Inspect the pending checksum and SQL
+through the standard fail-closed workflow:
+
+```bash
+make db-migrate-status
+make db-migrate-check
+# After the backup and operation-state gates are satisfied:
+make db-migrate
+```
+
+The managed worker, watchdog, and finalizer are exposed through the checked-in
+`graph-sync` Compose profile. Operator pause/resume, priority changes, semantic
+snapshot persistence, and rebuild aborts remain separate confirmation-gated Make
+targets; migration application never invokes them implicitly.
+
 ## Canon-only corpus boundary
 
 Migration `0008_canon_only_corpus` makes `lore_docs/canon` the fail-closed

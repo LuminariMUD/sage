@@ -265,7 +265,7 @@ class RelationshipCorrector(BaseValidator):
             List of corrections that were applied (or would be applied in dry_run)
         """
         corrections: list[CorrectionRecord] = []
-        neo4j_db = await get_neo4j_db()
+        neo4j_db = None if dry_run else await get_neo4j_db()
 
         # 1. Handle duplicate removal
         if correct_duplicates:
@@ -288,6 +288,8 @@ class RelationshipCorrector(BaseValidator):
 
                     # Apply correction if not dry run
                     if not dry_run:
+                        if neo4j_db is None:
+                            raise RuntimeError("Neo4j correction client is unavailable")
                         backup_data = await self.delete_relationship_with_backup(
                             neo4j_db, duplicate["id"]
                         )
@@ -320,6 +322,8 @@ class RelationshipCorrector(BaseValidator):
 
                 # Apply correction if not dry run
                 if not dry_run:
+                    if neo4j_db is None:
+                        raise RuntimeError("Neo4j correction client is unavailable")
                     backup_data = await self.update_relationship_semantic_type(
                         neo4j_db, rel["id"], standardized_semantic
                     )

@@ -42,12 +42,19 @@ class JobState(str, Enum):
     RETRY_WAIT = "retry_wait"
     QUARANTINED = "quarantined"
     SYNCED = "synced"
+    RETIRED = "retired"
+
+
+class JobOperation(str, Enum):
+    SYNC = "sync"
+    RETIRE = "retire"
 
 
 class RunState(str, Enum):
     RUNNING = "running"
     DRAINING = "draining"
     PAUSED_SYSTEMIC = "paused_systemic"
+    PAUSED_OPERATOR = "paused_operator"
     STOPPED = "stopped"
 
 
@@ -81,6 +88,8 @@ class FailureDisposition(str, Enum):
 class AttemptOutcome(str, Enum):
     PRIMARY_SUCCESS = "primary_success"
     FALLBACK_SUCCESS = "fallback_success"
+    DEGRADED_SUCCESS = "degraded_success"
+    RETIRE_SUCCESS = "retire_success"
     RETRY_WAIT = "retry_wait"
     QUARANTINED = "quarantined"
     PAUSED_SYSTEMIC = "paused_systemic"
@@ -101,6 +110,7 @@ class CompletionStatus(str, Enum):
     PAUSED_SYSTEMIC = "paused_systemic"
     SOURCE_CHANGED = "source_changed"
     ALREADY_COMPLETED = "already_completed"
+    RETIRED = "retired"
 
 
 _SAFE_CODE = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,127}$")
@@ -207,6 +217,10 @@ class JobLease:
     document_id: UUID
     episode_index: int
     created_at: datetime
+    operation: JobOperation = JobOperation.SYNC
+    content_role: str = "world_lore"
+    content_role_policy: str = "include_all_v1"
+    graph_extraction_eligible: bool = True
 
 
 @dataclass(frozen=True)
@@ -403,6 +417,27 @@ class StableIdVerification:
             and embedding_is_exact
             and self.exact_count == 1
         )
+
+
+@dataclass(frozen=True)
+class GraphRetirementVerification:
+    """Proof that no Neo4j episode identity remains for a retired source row."""
+
+    stable_id: str
+    candidate_count: int
+    source_fingerprint: str
+    sync_profile_fingerprint: str
+
+    def __post_init__(self) -> None:
+        validate_label(self.stable_id, "Stable ID")
+        validate_label(self.source_fingerprint, "Source fingerprint")
+        validate_label(self.sync_profile_fingerprint, "Sync profile fingerprint")
+        if self.candidate_count < 0:
+            raise ValueError("Retirement verification count cannot be negative")
+
+    @property
+    def is_exact(self) -> bool:
+        return self.candidate_count == 0
 
 
 @dataclass(frozen=True)

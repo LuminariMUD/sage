@@ -11,8 +11,16 @@ from src.scripts import graph_audit
 NOW = datetime(2026, 8, 7, tzinfo=UTC)
 
 
-def _episode(stable_id: str, *, synced: bool = True, text: str = "Lore") -> dict:
-    return {"stable_id": stable_id, "text": text, "graphiti_synced": synced}
+def _episode(
+    stable_id: str,
+    *,
+    synced: bool = True,
+    text: str = "Lore",
+    **overrides,
+) -> dict:
+    values = {"stable_id": stable_id, "text": text, "graphiti_synced": synced}
+    values.update(overrides)
+    return values
 
 
 def _node(stable_id: str | None, **overrides) -> dict:
@@ -42,6 +50,7 @@ def test_clean_legacy_projection_is_reported_without_requiring_new_metadata():
         "retry_wait": 0,
         "quarantined": 0,
         "synced": 1,
+        "retired": 0,
     }
     assert report["counts"]["drift_findings"] == 0
 
@@ -123,6 +132,25 @@ def test_durable_jobs_replace_boolean_as_authoritative_state():
     assert report["status"] == "clean"
     assert report["state_source"] == "graph_sync_jobs"
     assert report["counts"]["postgres_synced"] == 1
+
+
+def test_stored_lifecycle_counts_distinguish_retired_from_graph_ineligible():
+    report = build_graph_audit(
+        [
+            _episode("active"),
+            _episode("retired", synced=False, retired_at=NOW),
+            _episode("excluded", synced=False, graph_extraction_eligible=False),
+        ],
+        [_node("active")],
+        generated_at=NOW,
+    )
+
+    assert report["status"] == "clean"
+    assert report["counts"]["postgres_total"] == 1
+    assert report["counts"]["postgres_stored_total"] == 3
+    assert report["counts"]["postgres_retired"] == 1
+    assert report["counts"]["postgres_graph_ineligible"] == 1
+    assert report["counts"]["postgres_graph_excluded"] == 2
 
 
 def test_durable_job_projection_and_fingerprint_errors_are_drift():

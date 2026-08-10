@@ -10,9 +10,16 @@ from graphiti_core.nodes import EpisodeType
 
 from src.graphiti.edge_types import EDGE_TYPES
 from src.graphiti.entity_grounding_policy import EntityGroundingReport
+from src.graphiti.entity_stage_quality import EntityStageQualityReport
 from src.graphiti.entity_types import ENTITY_TYPES
 from src.graphiti.relationship_policy import RelationshipQualityReport
-from src.graphiti.sync_models import GraphCounts, JobLease, StableIdVerification
+from src.graphiti.sync_models import (
+    GraphCounts,
+    GraphRetirementVerification,
+    JobLease,
+    JobOperation,
+    StableIdVerification,
+)
 from src.graphiti.sync_profile import GraphSyncExecutionProfile
 
 
@@ -30,12 +37,14 @@ class GraphVerificationError(GraphEpisodeError):
 
 @dataclass(frozen=True)
 class GraphProcessingResult:
-    verification: StableIdVerification
+    verification: StableIdVerification | GraphRetirementVerification
     graph_counts: GraphCounts
     reused_existing: bool
     degraded: bool = False
     relationship_quality: RelationshipQualityReport | None = None
     entity_grounding_quality: EntityGroundingReport | None = None
+    entity_stage_quality: EntityStageQualityReport | None = None
+    retired: bool = False
 
 
 @dataclass(frozen=True)
@@ -89,6 +98,8 @@ class GraphitiEpisodeProcessor:
 
     async def process(self, lease: JobLease) -> GraphProcessingResult:
         """Reuse, adopt, or create one node and return independently queried proof."""
+        if lease.operation is JobOperation.RETIRE:
+            return await self._retire_episode(lease)
         stable_id = str(lease.episode_id)
         state = await self._inspect(lease)
         if state.candidate_count > 1 or state.stable_id_conflict_count:
@@ -102,6 +113,7 @@ class GraphitiEpisodeProcessor:
         if verification.is_exact:
             relationship_quality = self._consume_relationship_quality(stable_id)
             grounding_quality = self._consume_entity_grounding_quality(stable_id)
+            stage_quality = self._consume_entity_stage_quality(stable_id)
             return GraphProcessingResult(
                 verification=verification,
                 graph_counts=self._graph_counts(
@@ -112,6 +124,8 @@ class GraphitiEpisodeProcessor:
                 reused_existing=True,
                 relationship_quality=relationship_quality,
                 entity_grounding_quality=grounding_quality,
+                entity_stage_quality=stage_quality,
+                degraded=stage_quality.has_anomalies if stage_quality is not None else False,
             )
 
         add_result = None
@@ -137,6 +151,7 @@ class GraphitiEpisodeProcessor:
         quality_key = self._created_episode_uuid(add_result) or stable_id
         relationship_quality = self._consume_relationship_quality(quality_key)
         grounding_quality = self._consume_entity_grounding_quality(quality_key)
+        stage_quality = self._consume_entity_stage_quality(quality_key)
         return GraphProcessingResult(
             verification=verification,
             graph_counts=self._graph_counts(
@@ -147,6 +162,53 @@ class GraphitiEpisodeProcessor:
             reused_existing=reused_existing,
             relationship_quality=relationship_quality,
             entity_grounding_quality=grounding_quality,
+            entity_stage_quality=stage_quality,
+            degraded=stage_quality.has_anomalies if stage_quality is not None else False,
+        )
+
+    async def _retire_episode(self, lease: JobLease) -> GraphProcessingResult:
+        """Delete one unambiguous graph episode and independently prove absence."""
+        initial = await self._inspect(lease)
+        if initial.candidate_count > 1 or initial.stable_id_conflict_count:
+            raise GraphIdentityConflictError("Neo4j retirement identity is ambiguous")
+        stable_id = str(lease.episode_id)
+        if initial.candidate_count == 1:
+            await self.graphiti.driver.execute_query(
+                """
+                /* graph_sync:retire_episode */
+                MATCH (ep:Episodic)
+                WHERE ep.uuid = $stable_id
+                   OR ep.stable_id = $stable_id
+                   OR ep.source_description = $source_description
+                OPTIONAL MATCH (ep)-[:MENTIONS]->(entity:Entity)
+                WITH ep, collect(DISTINCT entity) AS mentioned_entities
+                DETACH DELETE ep
+                WITH mentioned_entities
+                UNWIND mentioned_entities AS entity
+                WITH DISTINCT entity
+                WHERE entity IS NOT NULL
+                  AND NOT (entity)<-[:MENTIONS]-(:Episodic)
+                DETACH DELETE entity
+                """,
+                {
+                    "stable_id": stable_id,
+                    "source_description": f"episode_{stable_id}",
+                },
+            )
+        verified = await self._inspect(lease)
+        verification = GraphRetirementVerification(
+            stable_id=stable_id,
+            candidate_count=verified.candidate_count,
+            source_fingerprint=lease.captured_source_fingerprint,
+            sync_profile_fingerprint=lease.sync_profile_fingerprint,
+        )
+        if not verification.is_exact:
+            raise GraphVerificationError("Neo4j episode retirement could not be verified")
+        return GraphProcessingResult(
+            verification=verification,
+            graph_counts=GraphCounts(),
+            reused_existing=initial.candidate_count == 0,
+            retired=True,
         )
 
     async def _inspect(self, lease: JobLease) -> _EpisodeState:
@@ -276,6 +338,7 @@ class GraphitiEpisodeProcessor:
             f"Extract at most {self.profile.max_entities} entities and at most "
             f"{self.profile.max_relationships} relationships. "
             "Do not repeat equivalent entities or relationships."
+            " Treat Lumia as a world-scale Location, never as a Person."
         )
         return await self.graphiti.graphiti.add_episode(
             name=f"episode_{stable_id}",
@@ -313,6 +376,14 @@ class GraphitiEpisodeProcessor:
         consume_quality = getattr(
             self.graphiti.graphiti,
             "consume_entity_grounding_quality",
+            None,
+        )
+        return consume_quality(stable_id) if callable(consume_quality) else None
+
+    def _consume_entity_stage_quality(self, stable_id: str) -> EntityStageQualityReport | None:
+        consume_quality = getattr(
+            self.graphiti.graphiti,
+            "consume_entity_stage_quality",
             None,
         )
         return consume_quality(stable_id) if callable(consume_quality) else None

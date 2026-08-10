@@ -116,6 +116,7 @@ ENV GRAPHITI_TELEMETRY_ENABLED=false
 ENV HF_HUB_DISABLE_TELEMETRY=1
 
 # Switch to non-root user
+RUN mkdir -p /run/sage && chown sage:sage /run/sage
 USER sage
 
 # Role-aware health check: API containers use HTTP; one-off graph workers do not

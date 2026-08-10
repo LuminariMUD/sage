@@ -27,6 +27,9 @@ from src.retrieval.benchmark import (
 from src.scripts import benchmark_retrieval
 
 CORPUS_PATH = Path(__file__).resolve().parents[2] / "benchmarks" / "episode_retrieval_v1.json"
+CURRENT_CORPUS_PATH = (
+    Path(__file__).resolve().parents[2] / "benchmarks" / "episode_retrieval_v2.json"
+)
 SOURCE_A = "sha256:v1:" + "a" * 64
 SOURCE_B = "sha256:v1:" + "b" * 64
 
@@ -110,6 +113,19 @@ def test_checked_in_corpus_is_versioned_and_has_graded_portable_judgments():
     assert corpus.source_snapshot.document_count == 14
     assert corpus.fingerprint.startswith("corpus:sha256:")
     assert all(case.expected_entities and case.judgments for case in corpus.cases)
+
+
+def test_current_corpus_refresh_preserves_baseline_and_covers_full_canon_snapshot():
+    current = load_retrieval_corpus(CURRENT_CORPUS_PATH)
+
+    assert CORPUS_PATH.exists()
+    assert benchmark_retrieval.DEFAULT_CORPUS.name == CURRENT_CORPUS_PATH.name
+    assert current.corpus_id == "luminari-episode-retrieval:v2"
+    assert current.source_snapshot.episode_count == 2429
+    assert current.source_snapshot.document_count == 26
+    assert len(current.cases) == 12
+    assert current.judgment_count == 32
+    assert current.expected_entity_count == 39
 
 
 def test_corpus_loader_rejects_duplicate_judgments(tmp_path):

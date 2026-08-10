@@ -47,6 +47,7 @@ _SHADOW_SEARCH_QUERY_TEMPLATE = """
       ON job.episode_id = episode.id
      AND job.desired_source_fingerprint = shadow.source_fingerprint
     WHERE shadow.profile_fingerprint = {fingerprint}
+      AND episode.retired_at IS NULL
     ORDER BY shadow.embedding::vector({dimensions}) <=> $1::vector({dimensions}),
              document.stable_id,
              episode.episode_index
@@ -72,6 +73,7 @@ SOURCE_SNAPSHOT_QUERY = """
       ON document.id = episode.document_id
     LEFT JOIN graph_sync_jobs AS job
       ON job.episode_id = episode.id
+    WHERE episode.retired_at IS NULL
     ORDER BY document.stable_id, episode.episode_index
 """
 
@@ -90,8 +92,11 @@ PENDING_EPISODES_QUERY = """
     LEFT JOIN episode_embedding_shadows AS shadow
       ON shadow.profile_fingerprint = $1
      AND shadow.episode_id = episode.id
-    WHERE shadow.episode_id IS NULL
-       OR shadow.source_fingerprint <> job.desired_source_fingerprint
+    WHERE episode.retired_at IS NULL
+      AND (
+          shadow.episode_id IS NULL
+          OR shadow.source_fingerprint <> job.desired_source_fingerprint
+      )
     ORDER BY document.stable_id, episode.episode_index
     LIMIT $2
 """
@@ -770,6 +775,7 @@ class ShadowEmbeddingRepository:
                     FROM episodes AS episode
                     JOIN graph_sync_jobs AS job ON job.episode_id = episode.id
                     WHERE episode.id = ANY($1::uuid[])
+                      AND episode.retired_at IS NULL
                     """,
                     episode_ids,
                 )
@@ -895,6 +901,7 @@ class ShadowEmbeddingRepository:
                     FROM episodes AS episode
                     JOIN graph_sync_jobs AS job ON job.episode_id = episode.id
                     WHERE episode.id = ANY($1::uuid[])
+                      AND episode.retired_at IS NULL
                     """,
                     episode_ids,
                 )

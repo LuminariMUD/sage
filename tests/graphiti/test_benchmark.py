@@ -329,6 +329,8 @@ async def test_provider_call_budget_counts_usage_and_rejects_before_second_netwo
         "usage": {"completion_tokens": 2, "prompt_tokens": 3, "total_tokens": 5},
         "actual_models": [candidate.model],
         "upstream_providers": ["offline-test"],
+        "seed_requested": None,
+        "provider_latency_ms": [0],
     }
 
 
@@ -798,4 +800,4 @@ def test_legacy_benchmark_is_inert_and_corpus_is_mounted_read_only():
     assert "UPDATE episodes" not in legacy
     assert "docker exec" not in legacy
     assert "./benchmarks:/app/benchmarks:ro" in compose
-    assert benchmark_graphiti.DEFAULT_CORPUS.name == "graphiti_extraction_v3.json"
+    assert benchmark_graphiti.DEFAULT_CORPUS.name == "graphiti_extraction_v4.json"

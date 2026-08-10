@@ -140,6 +140,7 @@ services:
 
   # FastAPI application
   api:
+    image: ${SAGE_DEV_IMAGE:-luminari-sage:dev}
     build:
       context: .
       dockerfile: Dockerfile
@@ -193,6 +194,10 @@ services:
       GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS: ${GRAPHITI_EXTRACTION_MAX_PROVIDER_CALLS:-}
       GRAPH_SYNC_PROFILE_FINGERPRINT: ${GRAPH_SYNC_PROFILE_FINGERPRINT:-}
       GRAPH_SYNC_PROMPT_VERSION: ${GRAPH_SYNC_PROMPT_VERSION:-lore-extraction:v1}
+      GRAPH_ENTITY_GROUNDING_POLICY: ${GRAPH_ENTITY_GROUNDING_POLICY:-off}
+      GRAPH_ENTITY_RESPONSE_POLICY: ${GRAPH_ENTITY_RESPONSE_POLICY:-off}
+      GRAPH_CONTENT_ROLE_POLICY: ${GRAPH_CONTENT_ROLE_POLICY:-include_all_v1}
+      GRAPH_SYNC_WRITER_POLICY: ${GRAPH_SYNC_WRITER_POLICY:-single_writer_v1}
       GRAPH_SYNC_SCHEMA_VERSION: ${GRAPH_SYNC_SCHEMA_VERSION:-graphiti-core-output:v1}
       GRAPH_SYNC_LEASE_SECONDS: ${GRAPH_SYNC_LEASE_SECONDS:-900}
       GRAPH_SYNC_MAX_JOB_ATTEMPTS: ${GRAPH_SYNC_MAX_JOB_ATTEMPTS:-3}
@@ -324,6 +329,123 @@ services:
       - luminari-network
     restart: "no"
 
+  graph-sync-worker:
+    image: ${SAGE_DEV_IMAGE:-luminari-sage:dev}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_DEV: "true"
+    profiles: ["graph-sync"]
+    container_name: luminari-graph-sync-worker
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      NEO4J_URI: bolt://neo4j:7687
+      OLLAMA_BASE_URL: http://ollama:11434
+      SAGE_CONTAINER_ROLE: graph-worker
+      SAGE_HEARTBEAT_FILE: /run/sage/graph-worker.heartbeat
+      SAGE_HEARTBEAT_MAX_AGE_SECONDS: ${GRAPH_SYNC_HEARTBEAT_MAX_AGE_SECONDS:-120}
+    command:
+      - python
+      - src/scripts/sync_episodes_to_graphiti.py
+      - --run
+      - --confirm
+      - RUN_DURABLE_GRAPH_SYNC
+      - --worker-id
+      - graph-sync-primary
+      - --managed
+      - --idle-poll-seconds
+      - ${GRAPH_SYNC_WORKER_POLL_SECONDS:-10}
+    volumes:
+      - ./src:/app/src:ro
+      - ./lore_docs/canon:/app/lore_docs/canon:ro
+      - graph_sync_runtime:/run/sage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "src/scripts/container_healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    networks: [luminari-network]
+    restart: "on-failure:10"
+    deploy:
+      replicas: 1
+
+  graph-sync-watchdog:
+    image: ${SAGE_DEV_IMAGE:-luminari-sage:dev}
+    profiles: ["graph-sync"]
+    container_name: luminari-graph-sync-watchdog
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      SAGE_CONTAINER_ROLE: graph-watchdog
+      SAGE_HEARTBEAT_FILE: /run/sage/graph-watchdog.heartbeat
+      SAGE_HEARTBEAT_MAX_AGE_SECONDS: ${GRAPH_SYNC_HEARTBEAT_MAX_AGE_SECONDS:-120}
+    command: ["python", "src/scripts/graph_sync_supervisor.py", "watchdog"]
+    volumes:
+      - ./src:/app/src:ro
+      - graph_sync_runtime:/run/sage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "src/scripts/container_healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks: [luminari-network]
+    restart: "on-failure:10"
+
+  graph-sync-finalizer:
+    image: ${SAGE_DEV_IMAGE:-luminari-sage:dev}
+    profiles: ["graph-sync"]
+    container_name: luminari-graph-sync-finalizer
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      NEO4J_URI: bolt://neo4j:7687
+      SAGE_CONTAINER_ROLE: graph-finalizer
+      SAGE_HEARTBEAT_FILE: /run/sage/graph-finalizer.heartbeat
+      SAGE_HEARTBEAT_MAX_AGE_SECONDS: ${GRAPH_SYNC_HEARTBEAT_MAX_AGE_SECONDS:-120}
+      GRAPH_REBUILD_AUTO_FINALIZE: ${GRAPH_REBUILD_AUTO_FINALIZE:-}
+    command: ["python", "src/scripts/graph_sync_supervisor.py", "finalizer"]
+    volumes:
+      - ./src:/app/src:ro
+      - graph_sync_runtime:/run/sage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "src/scripts/container_healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks: [luminari-network]
+    restart: "on-failure:10"
+
   # Static developer chat UI
   ui:
     image: python:3.13-slim-bookworm
@@ -365,4 +487,6 @@ volumes:
   ollama_models:
     driver: local
   api_logs:
+    driver: local
+  graph_sync_runtime:
     driver: local

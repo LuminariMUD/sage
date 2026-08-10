@@ -57,8 +57,10 @@ def derive_run_progress(
 
     total_jobs = sum(counts.values())
     synced_jobs = counts[JobState.SYNCED.value]
-    remaining_jobs = total_jobs - synced_jobs
-    completion_percent = 100.0 if total_jobs == 0 else (synced_jobs / total_jobs) * 100
+    retired_jobs = counts[JobState.RETIRED.value]
+    completed_jobs = synced_jobs + retired_jobs
+    remaining_jobs = total_jobs - completed_jobs
+    completion_percent = 100.0 if total_jobs == 0 else (completed_jobs / total_jobs) * 100
     elapsed_seconds = max(0.0, (measured_at - started_at).total_seconds())
     rolling_window_seconds = max(
         0.0,
@@ -72,8 +74,8 @@ def derive_run_progress(
     if remaining_jobs == 0:
         eta_status = "complete"
         approximate_eta_seconds = 0
-    elif state is RunState.PAUSED_SYSTEMIC:
-        eta_status = "paused_systemic"
+    elif state in {RunState.PAUSED_SYSTEMIC, RunState.PAUSED_OPERATOR}:
+        eta_status = state.value
     elif counts[JobState.QUARANTINED.value] > 0:
         eta_status = "blocked_quarantine"
     elif state is RunState.STOPPED:
@@ -90,6 +92,8 @@ def derive_run_progress(
         "job_counts": counts,
         "total_jobs": total_jobs,
         "synced_jobs": synced_jobs,
+        "retired_jobs": retired_jobs,
+        "completed_jobs": completed_jobs,
         "remaining_jobs": remaining_jobs,
         "completion_percent": round(completion_percent, 3),
         "run_elapsed_seconds": round(elapsed_seconds, 3),
