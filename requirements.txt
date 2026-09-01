@@ -33,7 +33,7 @@ langsmith==0.10.12  # LangSmith observability and tracing
 spacy==3.8.14  # NER framework
 dateparser==1.4.1  # Temporal entity parsing
 python-dateutil==2.9.0.post0  # Date utilities
-nltk==3.10.0  # Natural language toolkit
+nltk==3.10.3  # Natural language toolkit
 
 # ===========================================
 # Databases
