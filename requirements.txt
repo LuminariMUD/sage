@@ -139,7 +139,7 @@ flower==2.0.1  # Celery monitoring (optional)
 # ===========================================
 python-magic==0.4.27  # File type detection
 pillow==12.3.0  # Image processing
-pypdf==6.15.0  # PDF processing
+pypdf==6.19.0  # PDF processing
 
 # ===========================================
 # System Requirements
