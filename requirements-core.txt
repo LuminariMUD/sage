@@ -18,7 +18,7 @@ tiktoken==0.13.0
 numpy==2.5.1
 spacy==3.8.14
 graphiti-core==0.29.3
-pydantic-ai-slim[openai]==2.20.0
+pydantic-ai-slim[openai]==2.53.0
 langchain-core==1.5.2
 langchain-openai==1.4.1
 langchain-ollama==1.1.0
