@@ -62,7 +62,7 @@ itsdangerous==2.2.0  # Secure tokens
 # ===========================================
 # API & Web
 # ===========================================
-strawberry-graphql[fastapi]==0.323.2  # GraphQL
+strawberry-graphql[fastapi]==0.327.2  # GraphQL
 python-dotenv==1.2.2  # Environment variables
 pyyaml==6.0.3  # YAML parsing
 python-json-logger==4.1.0  # Structured logging
