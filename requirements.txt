@@ -97,7 +97,7 @@ pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 pytest-mock==3.15.1
 faker==40.36.0  # Mock data generation
-black==26.5.1  # Code formatting
+black==26.10.1  # Code formatting
 isort==8.0.1  # Import sorting
 ruff==0.16.0  # Linting
 mypy==2.3.0  # Type checking
