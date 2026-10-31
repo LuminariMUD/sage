@@ -26,7 +26,7 @@ openai==2.50.0  # For PydanticAI agents
 langchain-core==1.5.2  # LangChain core abstractions
 langchain-openai==1.4.1  # OpenAI integration layer
 langchain-ollama==1.1.0  # Ollama chat models (replaces deprecated langchain-community.ChatOllama)
-langgraph==1.2.10  # Stateful agent orchestration for ReAct
+langgraph==1.2.14  # Stateful agent orchestration for ReAct
 langsmith==0.10.12  # LangSmith observability and tracing
 
 # NER and Entity Extraction

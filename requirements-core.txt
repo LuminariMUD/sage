@@ -22,7 +22,7 @@ pydantic-ai-slim[openai]==2.20.0
 langchain-core==1.5.2
 langchain-openai==1.4.1
 langchain-ollama==1.1.0
-langgraph==1.2.10
+langgraph==1.2.14
 langsmith==0.10.12
 
 # Database drivers
