@@ -55,7 +55,7 @@ redis==8.0.1
 # Authentication & Security
 # ===========================================
 passlib[bcrypt]==1.7.4  # Password hashing
-authlib==1.7.2  # OAuth
+authlib==1.9.1  # OAuth
 httpx==0.28.1  # OAuth HTTP client / test client
 itsdangerous==2.2.0  # Secure tokens
 
